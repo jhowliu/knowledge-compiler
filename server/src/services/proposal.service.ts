@@ -1,5 +1,6 @@
 import type { ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
+import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -15,6 +16,7 @@ export class ProposalService {
   constructor(
     private readonly proposalRepository: ProposalRepository,
     private readonly knowledgeRepository: KnowledgeRepository,
+    private readonly noteLinkRepository: NoteLinkRepository,
   ) {}
 
   async listRecentProposals() {
@@ -90,6 +92,7 @@ export class ProposalService {
 
       const structuredData = asRecord(payload.structuredData);
       const concepts = Array.isArray(structuredData.concepts) ? structuredData.concepts : [];
+      const conceptNames: string[] = [];
       for (const concept of concepts) {
         const conceptRecord = asRecord(concept);
         const name = stringValue(conceptRecord, "name");
@@ -97,6 +100,7 @@ export class ProposalService {
         if (!name) {
           continue;
         }
+        conceptNames.push(name);
         const savedConcept = await this.knowledgeRepository.upsertConcept({
           userId: proposal.userId,
           name,
@@ -112,6 +116,14 @@ export class ProposalService {
           source: "approved_proposal",
         });
       }
+
+      await this.suggestLinksForCompiledNote({
+        proposal,
+        compiledNoteId: compiledNote.id,
+        title: compiledNote.title,
+        bodyMarkdown: compiledNote.bodyMarkdown,
+        conceptNames,
+      });
       return;
     }
 
@@ -155,6 +167,39 @@ export class ProposalService {
         area: stringValue(payload, "area", "Coding"),
         status: stringValue(payload, "status", "Needs Review") as never,
         rationale: stringValue(payload, "rationale"),
+      });
+    }
+  }
+
+  private async suggestLinksForCompiledNote(input: {
+    proposal: ProposalWithItems;
+    compiledNoteId: string;
+    title: string;
+    bodyMarkdown: string;
+    conceptNames: string[];
+  }) {
+    const relatedNotes = await this.knowledgeRepository.searchRelated({
+      query: `${input.title}\n${input.bodyMarkdown}`,
+      conceptNames: input.conceptNames,
+      limit: 8,
+    });
+
+    const compiledMatches = relatedNotes
+      .filter((note) => note.targetType === "compiled_note" && note.id !== input.compiledNoteId)
+      .slice(0, 4);
+
+    for (const match of compiledMatches) {
+      await this.noteLinkRepository.createSuggestion({
+        userId: input.proposal.userId,
+        sourceNoteType: "compiled_note",
+        sourceNoteId: input.compiledNoteId,
+        targetNoteType: "compiled_note",
+        targetNoteId: match.id,
+        relationType: "related_concept",
+        confidence: input.proposal.confidence,
+        rationale: match.title
+          ? `Agent found overlap with "${match.title}" while applying proposal ${input.proposal.id}.`
+          : `Agent found concept overlap while applying proposal ${input.proposal.id}.`,
       });
     }
   }

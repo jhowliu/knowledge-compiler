@@ -52,4 +52,45 @@ describe("CodingCompilerService", () => {
       ]),
     );
   });
+
+  test("keeps algorithm decision guides as review maps", () => {
+    const service = new CodingCompilerService();
+    const rawNote = {
+      id: "raw-note-2",
+      userId: null,
+      domain: null,
+      sourceType: "manual",
+      title: "Shortest Path Decision Guide",
+      bodyMarkdown: [
+        "Shortest Path",
+        "1. Weight = 1 => BFS",
+        "2. Weight > 0 => Dijkstra",
+        "3. Negative weights => Bellman-Ford",
+        "4. All pairs => Floyd-Warshall",
+        "Common trap: negative cycles need one extra relaxation pass.",
+      ].join("\n"),
+      extractedData: {},
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+    };
+
+    const extraction = service.extract(rawNote);
+    const proposal = service.draftProposal(rawNote, extraction, []);
+
+    expect(extraction.knowledgeType).toBe("review_map");
+    expect(extraction.reviewMapName).toBe("Shortest Path Decision Guide");
+    expect(extraction.decisionRules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ signal: "Weight = 1", recommendation: "BFS" }),
+        expect.objectContaining({ signal: "All pairs", recommendation: "Floyd-Warshall" }),
+      ]),
+    );
+    expect(extraction.mistakes).toHaveLength(0);
+    expect(proposal.items[0].payload.noteType).toBe("review_map");
+    expect(proposal.items.some((item) => item.actionType === "create_mistake")).toBe(false);
+    expect(
+      proposal.items.some(
+        (item) => item.actionType === "upsert_compiled_note" && item.payload.noteType === "algorithm",
+      ),
+    ).toBe(true);
+  });
 });

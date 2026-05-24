@@ -62,6 +62,19 @@ function detectProblem(text: string) {
   };
 }
 
+function detectReviewMapName(rawTitle: string | null, text: string) {
+  if (rawTitle?.trim()) {
+    return rawTitle.trim();
+  }
+
+  return (
+    text
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line && !line.match(/^\s*(?:[-*]|\d+[.)])?\s*.+(?:=>|->|→).+$/)) ?? null
+  );
+}
+
 function detectAlgorithms(text: string) {
   return ALGORITHM_KEYWORDS.filter((algorithm) => includesTerm(text, algorithm));
 }
@@ -83,16 +96,52 @@ function detectKnowledgeType(text: string, problemNumber: string | null): Coding
     return "problem_reflection";
   }
 
-  if (/\b(if|when).*(=>|->|then)|decision|guide|map/i.test(text)) {
+  if (/\b(if|when).*(=>|->|then)|(?:=>|->|→)|decision|guide|map/i.test(text)) {
     return "review_map";
   }
 
   return "general_coding_note";
 }
 
-function extractSentences(text: string, matcher: RegExp, fallback: string) {
+function extractSentences(text: string, matcher: RegExp, fallback?: string) {
   const sentences = sentenceSplit(text).filter((sentence) => matcher.test(sentence));
-  return sentences.length > 0 ? sentences : [fallback];
+  if (sentences.length > 0) {
+    return sentences;
+  }
+
+  return fallback ? [fallback] : [];
+}
+
+function cleanRulePart(value: string) {
+  return value
+    .replace(/^\s*(?:[-*]|\d+[.)])\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractDecisionRules(text: string) {
+  return text
+    .split("\n")
+    .map((line) => {
+      const normalized = cleanRulePart(line);
+      const match = normalized.match(/^(.+?)\s*(?:=>|->|→|then)\s*(.+)$/i);
+      if (!match) {
+        return null;
+      }
+
+      return {
+        signal: cleanRulePart(match[1]),
+        recommendation: cleanRulePart(match[2]),
+        confidence: "high" as const,
+      };
+    })
+    .filter((rule): rule is NonNullable<typeof rule> => Boolean(rule));
+}
+
+function extractCommonTraps(text: string) {
+  return sentenceSplit(text).filter((sentence) =>
+    /\b(trap|avoid|remember|do not|don't|edge case|negative cycle|overflow)\b/i.test(sentence),
+  );
 }
 
 function buildConcepts(extraction: Omit<CodingExtraction, "concepts">): ExtractedConcept[] {
@@ -107,7 +156,11 @@ function buildConcepts(extraction: Omit<CodingExtraction, "concepts">): Extracte
   }
 
   if (extraction.problemTitle) {
-    concepts.push({ name: extraction.problemTitle, conceptType: "problem", confidence: "medium" });
+    concepts.push({
+      name: extraction.problemTitle,
+      conceptType: extraction.knowledgeType === "review_map" ? "review_map" : "problem",
+      confidence: "medium",
+    });
   }
 
   for (const mistake of extraction.mistakes) {
@@ -118,6 +171,10 @@ function buildConcepts(extraction: Omit<CodingExtraction, "concepts">): Extracte
 }
 
 function noteTitle(rawNote: RawNote, extraction: CodingExtraction) {
+  if (extraction.knowledgeType === "review_map") {
+    return rawNote.title ?? extraction.reviewMapName ?? extraction.problemTitle ?? "Coding Review Map";
+  }
+
   if (extraction.problemNumber && extraction.problemTitle) {
     return `${extraction.problemNumber}. ${extraction.problemTitle}`;
   }
@@ -125,7 +182,24 @@ function noteTitle(rawNote: RawNote, extraction: CodingExtraction) {
   return rawNote.title ?? extraction.problemTitle ?? "Coding Practice Note";
 }
 
-function problemNoteBody(extraction: CodingExtraction) {
+function compiledNoteBody(extraction: CodingExtraction) {
+  if (extraction.knowledgeType === "review_map") {
+    const rules = extraction.decisionRules.length
+      ? extraction.decisionRules.map((rule) => `- ${rule.signal} -> ${rule.recommendation}`).join("\n")
+      : "- No explicit decision rules detected yet";
+
+    const sections = [
+      `Review Map Name: ${extraction.reviewMapName ?? extraction.problemTitle ?? "Coding Review Map"}`,
+      `Core Question: Which approach should I choose?`,
+      `Decision Rules:\n${rules}`,
+      `Linked Algorithms: ${extraction.algorithms.join(", ") || "Unknown"}`,
+      `Common Traps: ${extraction.commonTraps.join(" ") || "None recorded"}`,
+      `Pre-interview Check: ${extraction.reviewActions.join(" ") || "Review this guide aloud."}`,
+    ];
+
+    return sections.join("\n");
+  }
+
   const sections = [
     `Problem: ${extraction.problemTitle ?? "Unknown"}`,
     `Pattern: ${extraction.patterns.join(", ") || "Unknown"}`,
@@ -144,36 +218,52 @@ export class CodingCompilerService {
   extract(rawNote: RawNote): CodingExtraction {
     const text = rawNote.bodyMarkdown;
     const { problemNumber, problemTitle } = detectProblem(text);
+    const reviewMapName = detectReviewMapName(rawNote.title, text);
     const algorithms = detectAlgorithms(text);
     const patterns = detectPatterns(text, algorithms);
     const knowledgeType = detectKnowledgeType(text, problemNumber);
+    const decisionRules = knowledgeType === "review_map" ? extractDecisionRules(text) : [];
+    const commonTraps = knowledgeType === "review_map" ? extractCommonTraps(text) : [];
     const mistakes = extractSentences(
       text,
       /\b(miss|missed|mistake|wrong|forgot|did not|didn't|not realize|weak|struggle)/i,
-      "Needs review based on this practice note.",
+      knowledgeType === "review_map" ? undefined : "Needs review based on this practice note.",
     );
-    const keyInsights = extractSentences(
-      text,
-      /\b(realize|realized|insight|key|should|use|pattern|approach|idea)/i,
-      "Convert this practice note into reusable pattern knowledge.",
-    );
+    const keyInsights =
+      knowledgeType === "review_map" && decisionRules.length
+        ? decisionRules.map((rule) => `${rule.signal} -> ${rule.recommendation}`)
+        : extractSentences(
+            text,
+            /\b(realize|realized|insight|key|should|use|pattern|approach|idea)/i,
+            "Convert this practice note into reusable pattern knowledge.",
+          );
     const implementationDetails = sentenceSplit(text).filter((sentence) =>
       /\b(tuple|list|array|map|set|heap|mutable|immutable|edge case|complexity|implementation)/i.test(
         sentence,
       ),
     );
-    const reviewActions = patterns.length
-      ? [`Practice 2 more ${patterns[0]} problems and explain the recognition signal aloud.`]
-      : ["Review this note and identify the reusable pattern before the next practice session."];
-    const recognitionSignals = patterns.length
-      ? [`Look for ${patterns[0].toLowerCase()} cues in the problem statement.`]
-      : ["Look for the decision signal that should trigger the chosen approach."];
+    const reviewActions =
+      knowledgeType === "review_map"
+        ? [
+            `Use ${reviewMapName ?? "this review map"} as a pre-interview decision sheet and test each rule with one representative problem.`,
+          ]
+        : patterns.length
+          ? [`Practice 2 more ${patterns[0]} problems and explain the recognition signal aloud.`]
+          : ["Review this note and identify the reusable pattern before the next practice session."];
+    const recognitionSignals = decisionRules.length
+      ? decisionRules.map((rule) => rule.signal)
+      : patterns.length
+        ? [`Look for ${patterns[0].toLowerCase()} cues in the problem statement.`]
+        : ["Look for the decision signal that should trigger the chosen approach."];
 
     const partialExtraction = {
       domain: "coding" as const,
       knowledgeType,
       problemNumber,
       problemTitle,
+      reviewMapName: knowledgeType === "review_map" ? reviewMapName : null,
+      decisionRules,
+      commonTraps,
       patterns,
       algorithms,
       recognitionSignals,
@@ -181,7 +271,8 @@ export class CodingCompilerService {
       mistakes,
       implementationDetails,
       reviewActions,
-      confidence: patterns.length || algorithms.length || problemNumber ? ("high" as const) : ("medium" as const),
+      confidence:
+        patterns.length || algorithms.length || problemNumber ? ("high" as const) : ("medium" as const),
     };
 
     return {
@@ -201,13 +292,48 @@ export class CodingCompilerService {
         domain: "coding",
         noteType: extraction.knowledgeType === "review_map" ? "review_map" : "problem_note",
         title,
-        bodyMarkdown: problemNoteBody(extraction),
+        bodyMarkdown: compiledNoteBody(extraction),
         structuredData: extraction,
       },
       rationale: "Save the structured coding reflection as compiled knowledge.",
     });
 
-    for (const pattern of extraction.patterns.slice(0, 2)) {
+    if (extraction.knowledgeType === "review_map") {
+      for (const algorithm of extraction.algorithms.slice(0, 4)) {
+        const matchingRules = extraction.decisionRules.filter((rule) =>
+          includesTerm(rule.recommendation, algorithm),
+        );
+        const selectionSignals =
+          matchingRules.map((rule) => rule.signal).join(" ") || `See ${title} for selection signals.`;
+
+        items.push({
+          actionType: "upsert_compiled_note",
+          targetType: "compiled_note",
+          payload: {
+            domain: "coding",
+            noteType: "algorithm",
+            title: algorithm,
+            bodyMarkdown: [
+              `Algorithm Name: ${algorithm}`,
+              `When to Use: ${selectionSignals}`,
+              `Review Map: ${title}`,
+            ].join("\n"),
+            structuredData: {
+              algorithm,
+              reviewMap: title,
+              decisionRules: matchingRules,
+              concepts: extraction.concepts,
+            },
+          },
+          rationale: `Link ${algorithm} to the review map without expanding the map into problem notes.`,
+        });
+      }
+    }
+
+    const patternsForProposal =
+      extraction.knowledgeType === "review_map" ? [] : extraction.patterns.slice(0, 2);
+
+    for (const pattern of patternsForProposal) {
       items.push({
         actionType: "upsert_compiled_note",
         targetType: "compiled_note",

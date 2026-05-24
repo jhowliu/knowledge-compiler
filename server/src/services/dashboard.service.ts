@@ -7,6 +7,10 @@ export class DashboardService {
     return this.knowledgeRepository.listCompiledNotes(50);
   }
 
+  async listReviewMaps() {
+    return this.knowledgeRepository.listReviewMaps(25);
+  }
+
   async listMistakes() {
     return this.knowledgeRepository.listMistakes(50);
   }

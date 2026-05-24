@@ -67,6 +67,10 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.compiledNotes;
   }
 
+  async listReviewMaps(): Promise<CompiledNote[]> {
+    return this.compiledNotes.filter((note) => note.noteType === "review_map");
+  }
+
   async upsertMistake(input: {
     userId?: string | null;
     domain: string;

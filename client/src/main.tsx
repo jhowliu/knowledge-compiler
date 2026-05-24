@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Check,
@@ -219,10 +219,12 @@ function LeftNavigation({
   pendingCount,
   weakCount,
   reviewMapCount,
+  onCaptureClick,
 }: {
   pendingCount: number
   weakCount: number
   reviewMapCount: number
+  onCaptureClick: () => void
 }) {
   return (
     <aside className="flex h-screen w-[252px] shrink-0 flex-col gap-[18px] bg-ink px-[18px] py-6 text-white">
@@ -231,7 +233,11 @@ function LeftNavigation({
         <p className="text-lg font-bold leading-5">Compiler</p>
       </div>
 
-      <button className="flex h-11 items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white">
+      <button
+        className="flex h-11 items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white"
+        onClick={onCaptureClick}
+        type="button"
+      >
         <Plus size={18} />
         Capture raw note
       </button>
@@ -398,6 +404,7 @@ function KnowledgeCanvas({
   onTitleChange,
   onBodyChange,
   onSubmit,
+  titleInputRef,
 }: {
   data: WorkspaceData
   title: string
@@ -406,6 +413,7 @@ function KnowledgeCanvas({
   onTitleChange: (value: string) => void
   onBodyChange: (value: string) => void
   onSubmit: (event: React.FormEvent) => void
+  titleInputRef: React.RefObject<HTMLInputElement | null>
 }) {
   const primaryPattern = data.compiledNotes.find((note) => note.noteType === 'pattern')
   const primaryProblem = data.compiledNotes.find((note) => note.noteType === 'problem_note')
@@ -537,6 +545,7 @@ function KnowledgeCanvas({
           className="mb-2 h-10 w-full rounded-md border border-gray-300 bg-slate-50 px-3 text-[13px] outline-none focus:border-violet focus:ring-2 focus:ring-indigo-100"
           onChange={(event) => onTitleChange(event.target.value)}
           placeholder="1334. Find the City..."
+          ref={titleInputRef}
           value={title}
         />
         <textarea
@@ -659,6 +668,7 @@ function ProposalInspector({
 }
 
 function App() {
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
@@ -666,6 +676,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const selectedProposal = useMemo(() => {
     return (
@@ -715,9 +726,16 @@ function App() {
       setTitle('')
       setBodyMarkdown('')
       setSelectedProposalId(result.proposal?.id ?? null)
+      setNotice(
+        result.proposal
+          ? 'Raw note captured. Review the generated update proposal.'
+          : 'Raw note captured.',
+      )
+      setError(null)
       await refresh()
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
+      setNotice(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -734,6 +752,10 @@ function App() {
   return (
     <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
       <LeftNavigation
+        onCaptureClick={() => {
+          titleInputRef.current?.focus()
+          titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }}
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
         weakCount={weakCount}
@@ -749,6 +771,11 @@ function App() {
             {error}
           </div>
         ) : null}
+        {notice ? (
+          <div className="mx-6 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+            {notice}
+          </div>
+        ) : null}
         <div className="flex min-h-0 flex-1">
           <KnowledgeCanvas
             bodyMarkdown={bodyMarkdown}
@@ -758,6 +785,7 @@ function App() {
             onSubmit={submitRawNote}
             onTitleChange={setTitle}
             title={title}
+            titleInputRef={titleInputRef}
           />
           <ProposalInspector
             onApprove={(proposalId) => void decideProposal(proposalId, 'approve')}

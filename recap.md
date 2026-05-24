@@ -21,6 +21,7 @@
 - Improved the coding compiler so decision-guide notes like `Weight = 1 => BFS` become `review_map` compiled notes with structured decision rules, common traps, linked algorithms, and no fake mistake record.
 - Updated the web canvas to load review maps from the API and show their decision rules in the Heptabase-like map card.
 - Added server tests for review-map extraction/proposal behavior and the `/review-maps` dashboard route.
+- Fixed the raw-note capture UX: the left-nav `Capture raw note` button now focuses the input form, and successful compile shows a visible confirmation message.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -47,6 +48,7 @@
 - Vite may choose `5174` when `5173` is occupied; server CORS now allows localhost/127.0.0.1 dev origins on any port.
 - The Pencil source file is named `deisgn.pen` in the repo and remains untracked unless intentionally added.
 - A Vite process from before this phase was still running as PID 76042 during cleanup; the Phase 2 smoke-test dev servers were stopped.
+- Local raw-note smoke tests inserted sample notes into the development database.
 
 ## Next Target
 - Add richer review-map editing and approval UX, including a dedicated review-map list/detail mode.

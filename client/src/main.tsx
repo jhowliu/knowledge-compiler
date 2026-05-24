@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import {
   Check,
   Download,
+  Eye,
   Filter,
   GitBranch,
   Layers3,
@@ -201,6 +202,114 @@ function statusTone(status: string) {
 
 function actionLabel(actionType: string) {
   return actionType.replaceAll('_', ' ')
+}
+
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g)
+
+  return parts.map((part, index) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code className="rounded bg-[#303030] px-1.5 py-0.5 text-[13px] text-amber-100" key={index}>
+          {part.slice(1, -1)}
+        </code>
+      )
+    }
+
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>
+    }
+
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>
+    }
+
+    return part
+  })
+}
+
+function MarkdownPreview({ markdown }: { markdown: string }) {
+  const lines = markdown.split('\n')
+  const blocks: React.ReactNode[] = []
+  let codeLines: string[] = []
+  let inCodeBlock = false
+
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        blocks.push(
+          <pre
+            className="my-4 overflow-x-auto rounded-lg border border-[#333333] bg-[#151515] p-4 text-xs leading-5 text-gray-200"
+            key={`code-${index}`}
+          >
+            <code>{codeLines.join('\n')}</code>
+          </pre>,
+        )
+        codeLines = []
+      }
+      inCodeBlock = !inCodeBlock
+      return
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line)
+      return
+    }
+
+    if (!line.trim()) {
+      blocks.push(<div className="h-3" key={`space-${index}`} />)
+      return
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/)
+    if (heading) {
+      const level = heading[1].length
+      const className =
+        level === 1
+          ? 'mt-2 text-2xl font-bold text-white'
+          : level === 2
+            ? 'mt-2 text-xl font-bold text-white'
+            : 'mt-2 text-base font-bold text-gray-100'
+      blocks.push(
+        <div className={className} key={`heading-${index}`}>
+          {renderInlineMarkdown(heading[2])}
+        </div>,
+      )
+      return
+    }
+
+    const quote = line.match(/^>\s+(.+)$/)
+    if (quote) {
+      blocks.push(
+        <blockquote
+          className="border-l-2 border-violet pl-3 text-[14px] italic leading-7 text-gray-300"
+          key={`quote-${index}`}
+        >
+          {renderInlineMarkdown(quote[1])}
+        </blockquote>,
+      )
+      return
+    }
+
+    const listItem = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.+)$/)
+    if (listItem) {
+      blocks.push(
+        <div className="flex gap-2 text-[14px] leading-7 text-gray-200" key={`list-${index}`}>
+          <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-gray-500" />
+          <p>{renderInlineMarkdown(listItem[1])}</p>
+        </div>,
+      )
+      return
+    }
+
+    blocks.push(
+      <p className="text-[14px] leading-7 text-gray-200" key={`paragraph-${index}`}>
+        {renderInlineMarkdown(line)}
+      </p>,
+    )
+  })
+
+  return <div className="space-y-1">{blocks}</div>
 }
 
 function IconButton({ label, children }: { label: string; children: React.ReactNode }) {
@@ -535,6 +644,7 @@ function KnowledgeCanvas({
 
 function RawNoteEditorPage({
   rawNotes,
+  selectedRawNoteId,
   title,
   bodyMarkdown,
   isSubmitting,
@@ -543,9 +653,12 @@ function RawNoteEditorPage({
   titleInputRef,
   onTitleChange,
   onBodyChange,
+  onNewNote,
+  onSelectRawNote,
   onSubmit,
 }: {
   rawNotes: RawNote[]
+  selectedRawNoteId: string | null
   title: string
   bodyMarkdown: string
   isSubmitting: boolean
@@ -554,8 +667,12 @@ function RawNoteEditorPage({
   titleInputRef: React.RefObject<HTMLInputElement | null>
   onTitleChange: (value: string) => void
   onBodyChange: (value: string) => void
+  onNewNote: () => void
+  onSelectRawNote: (note: RawNote) => void
   onSubmit: (event: React.FormEvent) => void
 }) {
+  const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
+
   return (
     <section className="flex min-h-0 flex-1 bg-[#181818] text-white">
       <aside className="flex w-[304px] shrink-0 flex-col border-r border-[#2B2B2B] bg-[#181818] px-5 py-6">
@@ -578,9 +695,15 @@ function RawNoteEditorPage({
         <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
           {rawNotes.length ? (
             rawNotes.slice(0, 12).map((note) => (
-              <article
-                className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3"
+              <button
+                className={`w-full rounded-md border p-3 text-left transition ${
+                  note.id === selectedRawNoteId
+                    ? 'border-violet bg-[#252039]'
+                    : 'border-[#2B2B2B] bg-[#202020] hover:border-[#3A3A3A]'
+                }`}
                 key={note.id}
+                onClick={() => onSelectRawNote(note)}
+                type="button"
               >
                 <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
                   {note.title ?? 'Untitled raw note'}
@@ -588,7 +711,7 @@ function RawNoteEditorPage({
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
                   {note.bodyMarkdown}
                 </p>
-              </article>
+              </button>
             ))
           ) : (
             <p className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3 text-xs leading-5 text-gray-400">
@@ -602,19 +725,31 @@ function RawNoteEditorPage({
         <header className="flex h-[78px] items-center justify-between gap-4 border-b border-[#303030] px-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              New raw note
+              {selectedRawNote ? 'Saved raw note' : 'New raw note'}
             </p>
-            <h2 className="text-[15px] font-bold text-gray-100">Capture interview evidence</h2>
+            <h2 className="text-[15px] font-bold text-gray-100">
+              {selectedRawNote?.title ?? 'Capture interview evidence'}
+            </h2>
           </div>
 
-          <button
-            className="flex h-10 items-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            <Sparkles size={16} />
-            {isSubmitting ? 'Compiling' : 'Compile note'}
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              className="flex h-10 items-center gap-2 rounded-lg border border-[#3A3A3A] px-3.5 text-[13px] font-bold text-gray-200 hover:bg-[#2A2A2A]"
+              onClick={onNewNote}
+              type="button"
+            >
+              <Plus size={16} />
+              New note
+            </button>
+            <button
+              className="flex h-10 items-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              <Sparkles size={16} />
+              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile as new' : 'Compile note'}
+            </button>
+          </div>
         </header>
 
         {error ? (
@@ -628,22 +763,41 @@ function RawNoteEditorPage({
           </div>
         ) : null}
 
-        <div className="flex min-h-0 flex-1 flex-col px-8 py-7">
-          <input
-            aria-label="Raw note title"
-            className="mb-5 h-14 w-full border-0 bg-transparent text-3xl font-semibold tracking-normal text-white outline-none placeholder:text-gray-600"
-            onChange={(event) => onTitleChange(event.target.value)}
-            placeholder="Untitled raw note"
-            ref={titleInputRef}
-            value={title}
-          />
-          <textarea
-            aria-label="Raw practice note"
-            className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
-            onChange={(event) => onBodyChange(event.target.value)}
-            placeholder="Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile."
-            value={bodyMarkdown}
-          />
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(360px,1fr)_minmax(320px,0.9fr)] gap-0">
+          <div className="flex min-h-0 flex-col px-8 py-7">
+            <input
+              aria-label="Raw note title"
+              className="mb-5 h-14 w-full border-0 bg-transparent text-3xl font-semibold tracking-normal text-white outline-none placeholder:text-gray-600"
+              onChange={(event) => onTitleChange(event.target.value)}
+              placeholder="Untitled raw note"
+              ref={titleInputRef}
+              value={title}
+            />
+            <textarea
+              aria-label="Raw practice note"
+              className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
+              onChange={(event) => onBodyChange(event.target.value)}
+              placeholder="Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile."
+              value={bodyMarkdown}
+            />
+          </div>
+
+          <aside className="min-h-0 overflow-y-auto border-l border-[#303030] bg-[#1B1B1B] px-7 py-7">
+            <div className="mb-5 flex items-center gap-2 text-[13px] font-bold text-gray-300">
+              <Eye size={16} className="text-gray-500" />
+              Preview
+            </div>
+            {title.trim() ? (
+              <h2 className="mb-5 text-2xl font-bold tracking-normal text-white">{title}</h2>
+            ) : null}
+            {bodyMarkdown.trim() ? (
+              <MarkdownPreview markdown={bodyMarkdown} />
+            ) : (
+              <div className="rounded-lg border border-dashed border-[#3A3A3A] p-4 text-sm leading-6 text-gray-500">
+                Nothing to preview yet.
+              </div>
+            )}
+          </aside>
         </div>
       </form>
     </section>
@@ -762,6 +916,7 @@ function App() {
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
+  const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -820,6 +975,7 @@ function App() {
       })
       setTitle('')
       setBodyMarkdown('')
+      setSelectedRawNoteId(null)
       setSelectedProposalId(result.proposal?.id ?? null)
       setNotice(
         result.proposal
@@ -836,10 +992,35 @@ function App() {
     }
   }
 
-  function openRawNoteEditor() {
+  function openRawNotesView() {
     setActiveView('raw_note_editor')
     setNotice(null)
     setError(null)
+  }
+
+  function openNewRawNoteEditor() {
+    setTitle('')
+    setBodyMarkdown('')
+    setSelectedRawNoteId(null)
+    openRawNotesView()
+  }
+
+  function selectRawNote(rawNote: RawNote) {
+    setSelectedRawNoteId(rawNote.id)
+    setTitle(rawNote.title ?? '')
+    setBodyMarkdown(rawNote.bodyMarkdown)
+    setNotice(null)
+    setError(null)
+  }
+
+  function updateDraftTitle(value: string) {
+    setSelectedRawNoteId(null)
+    setTitle(value)
+  }
+
+  function updateDraftBody(value: string) {
+    setSelectedRawNoteId(null)
+    setBodyMarkdown(value)
   }
 
   async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
@@ -854,9 +1035,9 @@ function App() {
     <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
       <LeftNavigation
         activeView={activeView}
-        onCaptureClick={openRawNoteEditor}
+        onCaptureClick={openNewRawNoteEditor}
         onKnowledgeMapClick={() => setActiveView('knowledge_map')}
-        onRawNotesClick={openRawNoteEditor}
+        onRawNotesClick={openRawNotesView}
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
         weakCount={weakCount}
@@ -894,10 +1075,13 @@ function App() {
             error={error}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
-            onBodyChange={setBodyMarkdown}
+            onBodyChange={updateDraftBody}
+            onNewNote={openNewRawNoteEditor}
+            onSelectRawNote={selectRawNote}
             onSubmit={submitRawNote}
-            onTitleChange={setTitle}
+            onTitleChange={updateDraftTitle}
             rawNotes={workspaceData.rawNotes}
+            selectedRawNoteId={selectedRawNoteId}
             title={title}
             titleInputRef={titleInputRef}
           />

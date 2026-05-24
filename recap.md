@@ -23,6 +23,7 @@
 - Added server tests for review-map extraction/proposal behavior and the `/review-maps` dashboard route.
 - Fixed the raw-note capture UX: the left-nav `Capture raw note` button now focuses the input form, and successful compile shows a visible confirmation message.
 - Replaced the inline raw-note capture card with a dedicated dark raw-note editor page; clicking `Capture raw note` or `Raw notes` now navigates to that page.
+- Made recent raw notes clickable in the raw-note editor and added an on-the-fly Markdown preview pane for the current draft or selected note.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.

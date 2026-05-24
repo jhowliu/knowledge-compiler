@@ -14,3 +14,15 @@ export const createNoteLinkSchema = z.object({
   confidence: z.enum(["low", "medium", "high"]).optional(),
   rationale: z.string().min(1).nullable().optional(),
 });
+
+export const updateNoteLinkSchema = z.object({
+  relationType: z.enum([
+    "related_concept",
+    "prerequisite",
+    "example_of",
+    "contrasts_with",
+    "part_of",
+  ]),
+  confidence: z.enum(["low", "medium", "high"]).optional(),
+  rationale: z.string().min(1).nullable().optional(),
+});

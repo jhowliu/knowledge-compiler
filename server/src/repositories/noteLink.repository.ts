@@ -80,6 +80,12 @@ export interface NoteLinkRepository {
     statuses: NoteLinkStatus[];
     limit: number;
   }): Promise<NoteLink[]>;
+  updateRelation(input: {
+    id: string;
+    relationType: string;
+    confidence?: Confidence;
+    rationale?: string | null;
+  }): Promise<NoteLink | null>;
   setStatus(id: string, status: NoteLinkStatus): Promise<NoteLink | null>;
 }
 
@@ -226,6 +232,39 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
     );
 
     return result.rows.map(mapNoteLink);
+  }
+
+  async updateRelation(input: {
+    id: string;
+    relationType: string;
+    confidence?: Confidence;
+    rationale?: string | null;
+  }) {
+    const result = await pool.query<NoteLinkRow>(
+      `
+        with updated as (
+          update note_links
+          set relation_type = $2,
+              confidence = coalesce($3, confidence),
+              rationale = coalesce($4, rationale),
+              updated_at = now()
+          where id = $1
+          returning *
+        )
+        select
+          updated.*,
+          source_compiled.title as source_title,
+          target_compiled.title as target_title
+        from updated
+        left join compiled_notes source_compiled on updated.source_note_type = 'compiled_note'
+          and source_compiled.id = updated.source_note_id
+        left join compiled_notes target_compiled on updated.target_note_type = 'compiled_note'
+          and target_compiled.id = updated.target_note_id
+      `,
+      [input.id, input.relationType, input.confidence ?? null, input.rationale ?? null],
+    );
+
+    return result.rows[0] ? mapNoteLink(result.rows[0]) : null;
   }
 
   async setStatus(id: string, status: NoteLinkStatus) {

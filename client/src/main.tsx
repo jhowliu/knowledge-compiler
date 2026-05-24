@@ -130,6 +130,13 @@ type WorkspaceData = {
   readinessItems: ReadinessItem[]
 }
 
+type RelatedNoteMatch = {
+  note: CompiledNote
+  score: number
+  reason: string
+  link?: NoteLink
+}
+
 const relationOptions = [
   ['related_concept', 'Related concept'],
   ['prerequisite', 'Prerequisite'],
@@ -638,15 +645,33 @@ function relationLabel(relationType: string) {
   return relationType.replaceAll('_', ' ')
 }
 
+function relationOptionLabel(relationType: string) {
+  return relationOptions.find(([value]) => value === relationType)?.[1] ?? relationLabel(relationType)
+}
+
+function edgePath(start: { x: number; y: number }, end: { x: number; y: number }) {
+  const dx = end.x - start.x
+  const bend = Math.max(8, Math.min(22, Math.abs(dx) * 0.45))
+  const direction = dx >= 0 ? 1 : -1
+  const c1x = start.x + bend * direction
+  const c2x = end.x - bend * direction
+  return `M ${start.x} ${start.y} C ${c1x} ${start.y}, ${c2x} ${end.y}, ${end.x} ${end.y}`
+}
+
 function KnowledgeCanvas({
   data,
   onCreateNoteLink,
   onDecideNoteLink,
+  onRemoveNoteLink,
+  onUpdateNoteLink,
 }: {
   data: WorkspaceData
   onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
+  onRemoveNoteLink: (linkId: string) => void
+  onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
+  const canvasRef = useRef<HTMLElement | null>(null)
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -655,6 +680,18 @@ function KnowledgeCanvas({
   const [manualRelationType, setManualRelationType] = useState<(typeof relationOptions)[number][0]>(
     'related_concept',
   )
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [dragState, setDragState] = useState<{
+    noteId: string
+    startClientX: number
+    startClientY: number
+    origin: { x: number; y: number }
+  } | null>(null)
+  const [connectState, setConnectState] = useState<{
+    sourceNoteId: string
+    start: { x: number; y: number }
+    current: { x: number; y: number }
+  } | null>(null)
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) ??
     data.reviewMaps[0] ??
@@ -684,10 +721,8 @@ function KnowledgeCanvas({
           }
         : null
     })
-    .filter((match): match is { note: CompiledNote; score: number; reason: string; link: NoteLink } =>
-      Boolean(match),
-    )
-  const inferredRelatedNotes = notes
+    .filter((match): match is RelatedNoteMatch & { link: NoteLink } => Boolean(match))
+  const inferredRelatedNotes: RelatedNoteMatch[] = notes
     .filter((note) => note.id !== selectedNote?.id)
     .filter((note) => !approvedLinkedNotes.some((match) => match.note.id === note.id))
     .map((note) => {
@@ -732,13 +767,22 @@ function KnowledgeCanvas({
   ]
   const graphNodes = visibleGraphNotes.map((note, index) => ({
     note,
-    position: graphPositions[index] ?? graphPositions[0],
+    position: nodePositions[note.id] ?? graphPositions[index] ?? graphPositions[0],
     relation:
       note.id === selectedNote?.id
         ? 'center'
         : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
+    link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
   const centerNode = graphNodes.find((node) => node.note.id === selectedNote?.id) ?? graphNodes[0]
+  const approvedLinkRows = selectedNoteLinks
+    .filter((link) => link.status === 'approved')
+    .map((link) => {
+      const otherId = selectedNote ? connectedNoteId(link, selectedNote.id) : null
+      const note = otherId ? noteById.get(otherId) : null
+      return note ? { link, note } : null
+    })
+    .filter((row): row is { link: NoteLink; note: CompiledNote } => Boolean(row))
   const rawEvidence = data.rawNotes
     .filter((note) => {
       const haystack = `${note.title ?? ''} ${note.bodyMarkdown}`.toLowerCase()
@@ -781,9 +825,75 @@ function KnowledgeCanvas({
     setManualRelationType('related_concept')
   }
 
+  function pointFromEvent(event: React.PointerEvent) {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return { x: 50, y: 50 }
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 100,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
+    }
+  }
+
+  function startDrag(event: React.PointerEvent, noteId: string, position: { x: number; y: number }) {
+    const target = event.target as HTMLElement
+    if (target.closest('[data-link-handle="true"]')) {
+      return
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectedNoteId(noteId)
+    setDragState({
+      noteId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      origin: position,
+    })
+  }
+
+  function movePointer(event: React.PointerEvent) {
+    if (connectState) {
+      setConnectState({ ...connectState, current: pointFromEvent(event) })
+      return
+    }
+
+    if (!dragState) {
+      return
+    }
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) {
+      return
+    }
+    const nextPosition = {
+      x: Math.min(86, Math.max(14, dragState.origin.x + ((event.clientX - dragState.startClientX) / rect.width) * 100)),
+      y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / rect.height) * 100)),
+    }
+    setNodePositions((positions) => ({ ...positions, [dragState.noteId]: nextPosition }))
+  }
+
+  function finishPointer(event: React.PointerEvent) {
+    if (connectState) {
+      const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null
+      const targetCard = target?.closest('[data-note-id]') as HTMLElement | null
+      const targetNoteId = targetCard?.dataset.noteId
+      if (targetNoteId && targetNoteId !== connectState.sourceNoteId) {
+        onCreateNoteLink({
+          sourceNoteId: connectState.sourceNoteId,
+          targetNoteId,
+          relationType: 'related_concept',
+        })
+      }
+    }
+    setConnectState(null)
+    setDragState(null)
+  }
+
   return (
     <section className="flex min-h-0 flex-1 bg-canvas">
-      <main className="relative min-h-0 flex-1 overflow-hidden">
+      <main
+        className="relative min-h-0 flex-1 overflow-hidden"
+        onPointerMove={movePointer}
+        onPointerUp={finishPointer}
+        ref={canvasRef}
+      >
         <div
           className="absolute inset-0 opacity-70"
           style={{
@@ -802,21 +912,53 @@ function KnowledgeCanvas({
         </div>
 
         {centerNode ? (
-          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
             {graphNodes
               .filter((node) => node.note.id !== centerNode.note.id)
-              .map((node) => (
-                <line
-                  key={`${centerNode.note.id}-${node.note.id}`}
-                  x1={`${centerNode.position.x}%`}
-                  y1={`${centerNode.position.y}%`}
-                  x2={`${node.position.x}%`}
-                  y2={`${node.position.y}%`}
-                  stroke="rgba(99, 102, 241, 0.32)"
-                  strokeDasharray={node.relation === 'Nearby note' ? '5 7' : undefined}
-                  strokeWidth="2"
-                />
-              ))}
+              .map((node) => {
+                const labelX = (centerNode.position.x + node.position.x) / 2
+                const labelY = (centerNode.position.y + node.position.y) / 2
+                return (
+                  <g key={`${centerNode.note.id}-${node.note.id}`}>
+                    <path
+                      d={edgePath(centerNode.position, node.position)}
+                      fill="none"
+                      stroke="rgba(99, 102, 241, 0.34)"
+                      strokeDasharray={node.link ? undefined : '5 7'}
+                      strokeWidth="0.45"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {node.link ? (
+                      <text
+                        dominantBaseline="middle"
+                        fill="rgba(99, 102, 241, 0.88)"
+                        fontSize="2.3"
+                        fontWeight="700"
+                        textAnchor="middle"
+                        x={labelX}
+                        y={labelY}
+                      >
+                        {relationOptionLabel(node.link.relationType)}
+                      </text>
+                    ) : null}
+                  </g>
+                )
+              })}
+            {connectState ? (
+              <path
+                d={edgePath(connectState.start, connectState.current)}
+                fill="none"
+                stroke="rgba(124, 58, 237, 0.82)"
+                strokeDasharray="4 4"
+                strokeWidth="0.7"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
           </svg>
         ) : null}
 
@@ -829,11 +971,27 @@ function KnowledgeCanvas({
                 className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
                   isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
                 } ${isCenter ? 'w-[232px]' : ''}`}
+                data-note-id={node.note.id}
                 key={node.note.id}
                 onClick={() => setSelectedNoteId(node.note.id)}
+                onPointerDown={(event) => startDrag(event, node.note.id, node.position)}
                 style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
                 type="button"
               >
+                <span
+                  className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-violet shadow-md"
+                  data-link-handle="true"
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setSelectedNoteId(node.note.id)
+                    setConnectState({
+                      sourceNoteId: node.note.id,
+                      start: { x: node.position.x + 4.8, y: node.position.y },
+                      current: pointFromEvent(event),
+                    })
+                  }}
+                />
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
                     {noteTypeLabel(node.note.noteType)}
@@ -926,6 +1084,51 @@ function KnowledgeCanvas({
                   ) : (
                     <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
                       No related cards found yet.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <GitBranch size={15} className="text-violet" />
+                  Link management
+                </h3>
+                <div className="space-y-2">
+                  {approvedLinkRows.length ? (
+                    approvedLinkRows.map(({ link, note }) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={link.id}>
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="line-clamp-1 text-[13px] font-extrabold text-white">{note.title}</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                              Approved link
+                            </p>
+                          </div>
+                          <button
+                            className="rounded-md border border-[#3A3A3A] px-2 py-1 text-[11px] font-bold text-gray-300 hover:border-red-400 hover:text-red-200"
+                            onClick={() => onRemoveNoteLink(link.id)}
+                            type="button"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <select
+                          className="h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
+                          onChange={(event) => onUpdateNoteLink(link.id, event.target.value)}
+                          value={link.relationType}
+                        >
+                          {relationOptions.map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      Drag from a card node to another card to create the first approved link.
                     </p>
                   )}
                 </div>
@@ -1911,6 +2114,36 @@ function App() {
     }
   }
 
+  async function updateManualNoteLink(linkId: string, relationType: string) {
+    try {
+      await requestJson(`/note-links/${linkId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ relationType }),
+      })
+      setNotice('Note link updated.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to update note link')
+      setNotice(null)
+    }
+  }
+
+  async function removeManualNoteLink(linkId: string) {
+    try {
+      await requestJson(`/note-links/${linkId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({}),
+      })
+      setNotice('Note link removed.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to remove note link')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -1950,6 +2183,8 @@ function App() {
                 data={workspaceData}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
+                onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
+                onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />
             </div>
           </>

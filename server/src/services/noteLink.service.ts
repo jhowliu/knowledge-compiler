@@ -49,11 +49,28 @@ export class NoteLinkService {
     return link;
   }
 
+  async updateLink(input: {
+    id: string;
+    relationType: string;
+    confidence?: "low" | "medium" | "high";
+    rationale?: string | null;
+  }) {
+    const link = await this.noteLinkRepository.updateRelation(input);
+    if (!link) {
+      throw new AppError("Note link not found", 404);
+    }
+    return link;
+  }
+
   async approveLink(id: string) {
     return this.setLinkStatus(id, "approved");
   }
 
   async rejectLink(id: string) {
+    return this.setLinkStatus(id, "rejected");
+  }
+
+  async archiveLink(id: string) {
     return this.setLinkStatus(id, "rejected");
   }
 

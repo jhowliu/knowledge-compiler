@@ -79,6 +79,35 @@ describe("note link routes", () => {
     expect(approveResponse.body.noteLink.status).toBe("approved");
   });
 
+  test("updates and archives approved links", async () => {
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    await noteLinkRepository.createManual({
+      sourceNoteType: "compiled_note",
+      sourceNoteId: "compiled-1",
+      targetNoteType: "compiled_note",
+      targetNoteId: "compiled-2",
+      relationType: "related_concept",
+      confidence: "high",
+    });
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository,
+      enablePhaseOneWorkflow: false,
+    });
+
+    const updateResponse = await request(app)
+      .patch("/note-links/note-link-1")
+      .send({ relationType: "prerequisite" });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.noteLink.relationType).toBe("prerequisite");
+
+    const archiveResponse = await request(app).delete("/note-links/note-link-1");
+
+    expect(archiveResponse.status).toBe(200);
+    expect(archiveResponse.body.noteLink.status).toBe("rejected");
+  });
+
   test("lists bidirectional links for a selected note", async () => {
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     await noteLinkRepository.createSuggestion({

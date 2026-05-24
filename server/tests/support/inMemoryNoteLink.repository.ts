@@ -106,6 +106,22 @@ export class InMemoryNoteLinkRepository implements NoteLinkRepository {
       .slice(0, input.limit);
   }
 
+  async updateRelation(input: {
+    id: string;
+    relationType: string;
+    confidence?: Confidence;
+    rationale?: string | null;
+  }): Promise<NoteLink | null> {
+    const link = this.noteLinks.find((item) => item.id === input.id) ?? null;
+    if (link) {
+      link.relationType = input.relationType;
+      link.confidence = input.confidence ?? link.confidence;
+      link.rationale = input.rationale ?? link.rationale;
+      link.updatedAt = new Date("2026-05-24T00:00:00.000Z");
+    }
+    return link;
+  }
+
   async setStatus(id: string, status: NoteLinkStatus): Promise<NoteLink | null> {
     const link = this.noteLinks.find((item) => item.id === id) ?? null;
     if (link) {

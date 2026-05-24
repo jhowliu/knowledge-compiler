@@ -31,6 +31,19 @@ export class NoteLinkController {
     }
   };
 
+  update = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        noteLink: await this.noteLinkService.updateLink({
+          id: requireStringParam(request, "id"),
+          ...request.body,
+        }),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   approve = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ noteLink: await this.noteLinkService.approveLink(requireStringParam(request, "id")) });
@@ -42,6 +55,14 @@ export class NoteLinkController {
   reject = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ noteLink: await this.noteLinkService.rejectLink(requireStringParam(request, "id")) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  archive = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({ noteLink: await this.noteLinkService.archiveLink(requireStringParam(request, "id")) });
     } catch (error) {
       next(error);
     }

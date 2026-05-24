@@ -26,6 +26,7 @@
 - Made recent raw notes clickable in the raw-note editor and added an on-the-fly Markdown preview pane for the current draft or selected note.
 - Added raw-note update, delete, and compile-existing APIs, then wired the editor Save/Delete/Compile saved controls to those endpoints.
 - Added a dedicated Review Maps page on `codex/review-maps-page`, following the dark Heptabase-like workspace design: left review-map list, decision-rule detail table, source body, linked algorithms, related algorithm notes, and raw evidence.
+- Simplified the old Knowledge Map UI into a Notes Network view: note list, selected-note center panel, bidirectional related-note links, agent link suggestions, raw evidence, and weak-area context.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -41,6 +42,7 @@
 - Phase 1 compiler is deterministic/local for now so the MVP works without `OPENAI_API_KEY`; it preserves the proposal/agent-run boundary for later OpenAI Agents SDK integration.
 - Web UI now uses Tailwind via `client/src/index.css`; old ad hoc `styles.css` was removed.
 - Phase 2 keeps review maps high-level: they link out to algorithm notes instead of expanding every representative problem into the map.
+- Knowledge graph UX should center on bidirectional note-to-note links and agent-maintained link suggestions instead of a complex spatial canvas.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -58,6 +60,7 @@
 - Review Maps browser verification inserted and approved a local sample note titled `Review map smoke: shortest path`.
 
 ## Next Target
+- Add persistent `note_links` storage and approval/rejection flows for agent-suggested bidirectional links.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

@@ -432,7 +432,7 @@ function LeftNavigation({
           type="button"
         >
           <Map size={16} />
-          Knowledge map
+          Notes network
         </button>
         <button
           className={navItemClass(activeView === 'review_maps')}
@@ -495,13 +495,13 @@ function TopToolbar({ noteCount, compiledCount, taskCount }: {
     <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">
       <div className="flex h-10 w-[420px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500">
         <Search size={16} />
-        Search notes, patterns, mistakes...
+        Search notes, links, evidence...
       </div>
 
       <div className="min-w-0 flex-1">
-        <h1 className="text-[15px] font-bold text-ink">Coding Knowledge Map</h1>
+        <h1 className="text-[15px] font-bold text-ink">Notes Network</h1>
         <p className="text-xs text-gray-500">
-          {noteCount} raw notes → {compiledCount} compiled notes → {taskCount} open actions
+          {noteCount} raw notes {'->'} {compiledCount} compiled notes {'->'} {taskCount} open actions
         </p>
       </div>
 
@@ -516,193 +516,306 @@ function TopToolbar({ noteCount, compiledCount, taskCount }: {
         className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white"
       >
         <RotateCw size={16} />
-        Run compiler
+        Re-index links
       </button>
     </header>
   )
 }
 
-function ClusterLabel({
-  children,
-  className,
-  dotClassName,
-}: {
-  children: React.ReactNode
-  className: string
-  dotClassName: string
-}) {
-  return (
-    <div className={`inline-flex h-[30px] items-center gap-2 rounded-2xl border px-3 text-xs font-bold ${className}`}>
-      <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
-      {children}
-    </div>
-  )
+function noteTypeLabel(noteType: string) {
+  return noteType.replaceAll('_', ' ')
 }
 
-function MapCard({
-  className = '',
-  title,
-  meta,
-  children,
-}: {
-  className?: string
-  title: string
-  meta: string
-  children: React.ReactNode
-}) {
-  return (
-    <article className={`absolute max-h-[202px] overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-card ${className}`}>
-      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">{meta}</p>
-      <h3 className="mb-2 line-clamp-3 text-[15px] font-extrabold text-ink">{title}</h3>
-      <div className="line-clamp-5 text-xs leading-5 text-gray-600">{children}</div>
-    </article>
-  )
+function noteTone(noteType: string) {
+  if (noteType === 'review_map') return 'border-violet/40 bg-violet/10 text-violet'
+  if (noteType === 'algorithm') return 'border-emerald-300 bg-emerald-50 text-emerald-800'
+  if (noteType === 'mistake') return 'border-orange-300 bg-orange-50 text-orange-800'
+  return 'border-gray-300 bg-white text-gray-700'
 }
 
-function EvidenceTray({ rawNotes }: { rawNotes: RawNote[] }) {
-  const snippets = rawNotes.slice(0, 3)
-
-  return (
-    <section className="absolute bottom-6 left-8 right-[392px] flex h-[124px] gap-3 rounded-lg border border-gray-300 bg-white p-3.5 shadow-card">
-      <div className="w-[118px] shrink-0">
-        <h2 className="text-sm font-extrabold text-ink">Evidence</h2>
-        <p className="mt-1 text-[11px] leading-4 text-gray-500">Source-backed changes</p>
-      </div>
-      {(snippets.length ? snippets : [null, null, null]).map((snippet, index) => (
-        <article
-          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-slate-50 p-3"
-          key={snippet?.id ?? index}
-        >
-          <p className="mb-2 text-[11px] font-bold text-gray-500">
-            {snippet ? snippet.title ?? 'Raw note' : ['LeetCode reflection', 'Mock feedback', 'Behavioral draft'][index]}
-          </p>
-          <p className="line-clamp-2 text-xs leading-5 text-ink">
-            {snippet?.bodyMarkdown ??
-              [
-                '“I realized it should use Floyd-Warshall...”',
-                'Capacity estimate missing from URL shortener pass.',
-                'Strong action, but result is not quantified yet.',
-              ][index]}
-          </p>
-        </article>
-      ))}
-    </section>
-  )
+function noteKeywords(note: CompiledNote | undefined) {
+  if (!note) return []
+  const text = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
+  const words = text.match(/[a-z][a-z0-9-]{2,}/g) ?? []
+  const stopWords = new Set([
+    'the',
+    'and',
+    'for',
+    'with',
+    'when',
+    'that',
+    'this',
+    'should',
+    'note',
+    'review',
+    'problem',
+    'algorithm',
+    'using',
+  ])
+  return [...new Set(words.filter((word) => !stopWords.has(word)))].slice(0, 10)
 }
 
-function KnowledgeCanvas({
-  data,
-}: {
-  data: WorkspaceData
-}) {
-  const primaryPattern = data.compiledNotes.find((note) => note.noteType === 'pattern')
-  const primaryProblem = data.compiledNotes.find((note) => note.noteType === 'problem_note')
-  const primaryReviewMap =
-    data.reviewMaps[0] ?? data.compiledNotes.find((note) => note.noteType === 'review_map')
-  const primaryMistake = data.mistakes[0]
-  const primaryTask = data.reviewTasks[0]
-  const primaryReadiness = data.readinessItems[0]
+function mergeKnowledgeNotes(data: WorkspaceData) {
+  const notes = new globalThis.Map<string, CompiledNote>()
+  for (const note of data.compiledNotes) notes.set(note.id, note)
+  for (const note of data.reviewMaps) notes.set(note.id, note)
+  return [...notes.values()]
+}
+
+function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
+  const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const selectedNote =
+    notes.find((note) => note.id === selectedNoteId) ??
+    data.reviewMaps[0] ??
+    notes[0] ??
+    null
+  const selectedDetails = reviewMapDetails(selectedNote ?? undefined)
+  const selectedKeywords = noteKeywords(selectedNote ?? undefined)
+  const relatedNotes = notes
+    .filter((note) => note.id !== selectedNote?.id)
+    .map((note) => {
+      const noteText = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
+      const titleMatch = selectedNote ? noteText.includes(selectedNote.title.toLowerCase()) : false
+      const algorithmMatch = selectedDetails.linkedAlgorithms.some((algorithm) =>
+        noteText.includes(algorithm.toLowerCase()),
+      )
+      const keywordMatches = selectedKeywords.filter((keyword) => noteText.includes(keyword)).length
+      return {
+        note,
+        score: (titleMatch ? 4 : 0) + (algorithmMatch ? 3 : 0) + keywordMatches,
+        reason: titleMatch
+          ? 'Backlink by title mention'
+          : algorithmMatch
+            ? 'Shares review-map algorithm'
+            : keywordMatches > 1
+              ? 'Shares indexed concepts'
+              : 'Nearby compiled note',
+      }
+    })
+    .filter((match) => match.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 5)
+  const rawEvidence = data.rawNotes
+    .filter((note) => {
+      const haystack = `${note.title ?? ''} ${note.bodyMarkdown}`.toLowerCase()
+      return (
+        (selectedNote ? haystack.includes(selectedNote.title.toLowerCase()) : false) ||
+        selectedDetails.linkedAlgorithms.some((algorithm) => haystack.includes(algorithm.toLowerCase())) ||
+        selectedKeywords.some((keyword) => haystack.includes(keyword))
+      )
+    })
+    .slice(0, 4)
+  const pendingSuggestions = data.proposals
+    .filter((proposal) => proposal.status === 'pending')
+    .slice(0, 3)
+  const weakReadiness = data.readinessItems.filter((item) => item.status === 'Weak').slice(0, 3)
 
   return (
-    <section className="relative h-full flex-1 overflow-hidden bg-canvas">
-      <div
-        className="absolute inset-0 opacity-70"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.32) 1px, transparent 0)',
-          backgroundSize: '28px 28px',
-        }}
-      />
+    <section className="grid min-h-0 flex-1 grid-cols-[312px_minmax(460px,1fr)_328px] bg-canvas">
+      <aside className="min-h-0 overflow-y-auto border-r border-gray-300 bg-white px-5 py-5">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Notes graph</p>
+            <h2 className="mt-1 text-xl font-extrabold text-ink">All notes</h2>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+            {notes.length}
+          </span>
+        </div>
 
-      <div className="absolute left-8 top-8">
-        <ClusterLabel
-          className="border-indigo-200 bg-indigo-50 text-indigo-800"
-          dotClassName="bg-violet"
-        >
-          Coding patterns
-        </ClusterLabel>
-      </div>
-      <div className="absolute left-[560px] top-[102px]">
-        <ClusterLabel
-          className="border-emerald-200 bg-emerald-50 text-emerald-800"
-          dotClassName="bg-emerald-500"
-        >
-          Readiness
-        </ClusterLabel>
-      </div>
-      <div className="absolute left-[356px] top-[512px]">
-        <ClusterLabel
-          className="border-orange-200 bg-orange-50 text-orange-800"
-          dotClassName="bg-orange-400"
-        >
-          Mistakes & actions
-        </ClusterLabel>
-      </div>
+        <div className="space-y-2">
+          {notes.length ? (
+            notes.map((note) => (
+              <button
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  note.id === selectedNote?.id
+                    ? 'border-violet bg-violet/10 shadow-card'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+                key={note.id}
+                onClick={() => setSelectedNoteId(note.id)}
+                type="button"
+              >
+                <span className={`mb-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(note.noteType)}`}>
+                  {noteTypeLabel(note.noteType)}
+                </span>
+                <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">{note.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{note.bodyMarkdown}</p>
+              </button>
+            ))
+          ) : (
+            <p className="rounded-lg border border-dashed border-gray-300 p-4 text-sm leading-6 text-gray-500">
+              Compile a raw note to start building the notes graph.
+            </p>
+          )}
+        </div>
+      </aside>
 
-      <div className="absolute left-[290px] top-[210px] h-0.5 w-[104px] rotate-[18deg] bg-indigo-300" />
-      <div className="absolute left-[486px] top-[268px] h-0.5 w-[92px] -rotate-[24deg] bg-indigo-300" />
-      <div className="absolute left-[420px] top-[370px] h-[178px] w-0.5 bg-orange-300" />
-      <div className="absolute left-[526px] top-[190px] h-0.5 w-[70px] -rotate-[14deg] bg-emerald-300" />
+      <main className="min-h-0 overflow-y-auto px-7 py-6">
+        {selectedNote ? (
+          <>
+            <section className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-card">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className={`mb-3 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${noteTone(selectedNote.noteType)}`}>
+                    {noteTypeLabel(selectedNote.noteType)}
+                  </span>
+                  <h2 className="text-2xl font-extrabold leading-8 text-ink">{selectedNote.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-500">
+                    Agent index treats this as the center note and suggests bidirectional links from nearby evidence.
+                  </p>
+                </div>
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-ink text-white">
+                  <GitBranch size={22} />
+                </div>
+              </div>
 
-      <MapCard
-        className="left-12 top-20 w-[260px]"
-        meta={primaryReviewMap?.noteType ?? 'review map'}
-        title={primaryReviewMap?.title ?? 'Shortest Path Decision Guide'}
-      >
-        {reviewMapSummary(primaryReviewMap)}
-      </MapCard>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ['Related', relatedNotes.length],
+                  ['Evidence', rawEvidence.length],
+                  ['Suggestions', pendingSuggestions.length],
+                ].map(([label, value]) => (
+                  <div className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={label}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+                    <p className="mt-1 text-2xl font-extrabold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
 
-      <MapCard
-        className="left-[354px] top-[178px] w-[250px] border-indigo-200"
-        meta={primaryPattern?.noteType ?? 'pattern'}
-        title={primaryPattern?.title ?? 'All-Pairs Shortest Path'}
-      >
-        {primaryPattern?.bodyMarkdown.slice(0, 150) ??
-          'Canonical pattern card. Recognition cues, common traps, and representative problems stay bounded here.'}
-      </MapCard>
+            <section className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-card">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                    Bidirectional links
+                  </p>
+                  <h3 className="mt-1 text-lg font-extrabold text-ink">Related notes</h3>
+                </div>
+                <span className="rounded-full border border-violet/30 bg-violet/10 px-3 py-1 text-xs font-bold text-violet">
+                  agent indexed
+                </span>
+              </div>
 
-      <MapCard
-        className="left-[552px] top-[330px] w-[248px]"
-        meta={primaryProblem?.noteType ?? 'problem note'}
-        title={primaryProblem?.title ?? '1334. Find the City'}
-      >
-        {primaryProblem?.bodyMarkdown.slice(0, 140) ??
-          'Problem evidence connects back to the raw note and supports pattern readiness changes.'}
-      </MapCard>
+              <div className="space-y-3">
+                {relatedNotes.length ? (
+                  relatedNotes.map(({ note, reason }) => (
+                    <button
+                      className="grid w-full grid-cols-[1fr_36px_1fr] items-center gap-3 rounded-lg border border-gray-200 bg-slate-50 p-3 text-left hover:border-violet/40"
+                      key={note.id}
+                      onClick={() => setSelectedNoteId(note.id)}
+                      type="button"
+                    >
+                      <div className="min-w-0">
+                        <p className="line-clamp-1 text-sm font-extrabold text-ink">{selectedNote.title}</p>
+                        <p className="mt-1 text-xs font-bold text-gray-500">current note</p>
+                      </div>
+                      <div className="grid h-9 w-9 place-items-center rounded-full bg-white text-violet shadow-sm">
+                        <Link2 size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="line-clamp-1 text-sm font-extrabold text-ink">{note.title}</p>
+                        <p className="mt-1 text-xs text-gray-500">{reason}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-lg border border-dashed border-gray-300 p-4 text-sm leading-6 text-gray-500">
+                    No related notes yet. The next indexing pass should propose links when notes share algorithms,
+                    mistake patterns, or source evidence.
+                  </p>
+                )}
+              </div>
+            </section>
 
-      <MapCard
-        className="left-[584px] top-[138px] w-[228px] border-emerald-200"
-        meta="readiness"
-        title={primaryReadiness?.area ?? 'Graph shortest path'}
-      >
-        <span
-          className={`mb-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusTone(
-            primaryReadiness?.status ?? 'Weak',
-          )}`}
-        >
-          {primaryReadiness?.status ?? 'Weak'}
-        </span>
-        <p>{primaryReadiness?.rationale ?? 'Needs two successful review passes before moving to Okay.'}</p>
-      </MapCard>
+            <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-card">
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">Note body</p>
+              <MarkdownPreview markdown={selectedNote.bodyMarkdown} />
+            </section>
+          </>
+        ) : (
+          <div className="grid h-full place-items-center">
+            <p className="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-500">
+              No compiled notes yet.
+            </p>
+          </div>
+        )}
+      </main>
 
-      <MapCard
-        className="left-[304px] top-[552px] w-[270px] border-orange-200"
-        meta="mistake"
-        title={primaryMistake?.title ?? 'Did not recognize APSP'}
-      >
-        {primaryMistake?.description ??
-          'Personal recurring error lives in the mistake log, linked back to source evidence.'}
-      </MapCard>
+      <aside className="min-h-0 overflow-y-auto border-l border-gray-300 bg-white px-5 py-5">
+        <section className="mb-6">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-ink">
+            <Sparkles size={16} className="text-violet" />
+            Agent link suggestions
+          </h3>
+          <div className="space-y-2">
+            {pendingSuggestions.length ? (
+              pendingSuggestions.map((proposal) => (
+                <article className="min-w-0 rounded-lg border border-violet/20 bg-violet/5 p-3" key={proposal.id}>
+                  <p className="line-clamp-1 break-words text-[13px] font-extrabold text-ink">
+                    {proposal.detectedKnowledgeType ?? 'knowledge update'}
+                  </p>
+                  <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-gray-600">
+                    {proposal.rationale ?? 'Review this proposal to approve new notes and links.'}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
+                No pending link suggestions.
+              </p>
+            )}
+          </div>
+        </section>
 
-      <MapCard
-        className="left-[582px] top-[564px] w-[230px] border-amber-200"
-        meta="review task"
-        title={primaryTask?.title ?? 'Practice 2 APSP problems'}
-      >
-        {primaryTask?.description ?? 'Actionable practice card generated from approved proposal.'}
-      </MapCard>
+        <section className="mb-6">
+          <h3 className="mb-3 text-sm font-extrabold text-ink">Raw evidence</h3>
+          <div className="space-y-2">
+            {rawEvidence.length ? (
+              rawEvidence.map((note) => (
+                <article className="min-w-0 rounded-lg border border-gray-200 bg-slate-50 p-3" key={note.id}>
+                  <p className="line-clamp-1 break-words text-[13px] font-extrabold text-ink">
+                    {note.title ?? 'Untitled raw note'}
+                  </p>
+                  <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-gray-600">
+                    {note.bodyMarkdown}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
+                No raw evidence found for the selected note.
+              </p>
+            )}
+          </div>
+        </section>
 
-      <EvidenceTray rawNotes={data.rawNotes} />
+        <section>
+          <h3 className="mb-3 text-sm font-extrabold text-ink">Weak areas</h3>
+          <div className="space-y-2">
+            {weakReadiness.length ? (
+              weakReadiness.map((item) => (
+                <article className="rounded-lg border border-orange-200 bg-orange-50 p-3" key={item.id}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-extrabold text-orange-900">{item.area}</p>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(item.status)}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-orange-800">
+                    {item.rationale ?? 'Needs another review pass.'}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
+                No weak areas currently flagged.
+              </p>
+            )}
+          </div>
+        </section>
+      </aside>
     </section>
   )
 }

@@ -13,6 +13,14 @@ export class NoteLinkController {
     }
   };
 
+  create = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.status(201).json({ noteLink: await this.noteLinkService.createManualLink(request.body) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   forNote = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({

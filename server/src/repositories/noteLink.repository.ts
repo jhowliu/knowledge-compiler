@@ -52,6 +52,16 @@ const noteLinkSelect = `
 `;
 
 export interface NoteLinkRepository {
+  createManual(input: {
+    userId?: string | null;
+    sourceNoteType: string;
+    sourceNoteId: string;
+    targetNoteType: string;
+    targetNoteId: string;
+    relationType: string;
+    confidence: Confidence;
+    rationale?: string | null;
+  }): Promise<NoteLink | null>;
   createSuggestion(input: {
     userId?: string | null;
     sourceNoteType: string;
@@ -74,6 +84,19 @@ export interface NoteLinkRepository {
 }
 
 export class PostgresNoteLinkRepository implements NoteLinkRepository {
+  async createManual(input: {
+    userId?: string | null;
+    sourceNoteType: string;
+    sourceNoteId: string;
+    targetNoteType: string;
+    targetNoteId: string;
+    relationType: string;
+    confidence: Confidence;
+    rationale?: string | null;
+  }) {
+    return this.createLink({ ...input, status: "approved", preserveRejected: false });
+  }
+
   async createSuggestion(input: {
     userId?: string | null;
     sourceNoteType: string;
@@ -84,6 +107,22 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
     confidence: Confidence;
     rationale?: string | null;
     createdByAgentRunId?: string | null;
+  }) {
+    return this.createLink({ ...input, status: "pending", preserveRejected: true });
+  }
+
+  private async createLink(input: {
+    userId?: string | null;
+    sourceNoteType: string;
+    sourceNoteId: string;
+    targetNoteType: string;
+    targetNoteId: string;
+    relationType: string;
+    confidence: Confidence;
+    status: NoteLinkStatus;
+    rationale?: string | null;
+    createdByAgentRunId?: string | null;
+    preserveRejected: boolean;
   }) {
     if (input.sourceNoteType === input.targetNoteType && input.sourceNoteId === input.targetNoteId) {
       return null;
@@ -104,7 +143,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
             rationale,
             created_by_agent_run_id
           )
-          values ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           on conflict (
             source_note_type,
             source_note_id,
@@ -115,8 +154,8 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
           do update set confidence = excluded.confidence,
                         rationale = excluded.rationale,
                         status = case
-                          when note_links.status = 'rejected' then note_links.status
-                          else note_links.status
+                          when $11::boolean and note_links.status = 'rejected' then note_links.status
+                          else excluded.status
                         end,
                         updated_at = now()
           returning *
@@ -139,8 +178,10 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
         input.targetNoteId,
         input.relationType,
         input.confidence,
+        input.status,
         input.rationale ?? null,
         input.createdByAgentRunId ?? null,
+        input.preserveRejected,
       ],
     );
 

@@ -130,6 +130,14 @@ type WorkspaceData = {
   readinessItems: ReadinessItem[]
 }
 
+const relationOptions = [
+  ['related_concept', 'Related concept'],
+  ['prerequisite', 'Prerequisite'],
+  ['example_of', 'Example of'],
+  ['contrasts_with', 'Contrasts with'],
+  ['part_of', 'Part of'],
+] as const
+
 const emptyWorkspaceData: WorkspaceData = {
   rawNotes: [],
   proposals: [],
@@ -632,14 +640,21 @@ function relationLabel(relationType: string) {
 
 function KnowledgeCanvas({
   data,
+  onCreateNoteLink,
   onDecideNoteLink,
 }: {
   data: WorkspaceData
+  onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
 }) {
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [linkSearch, setLinkSearch] = useState('')
+  const [linkTargetId, setLinkTargetId] = useState('')
+  const [manualRelationType, setManualRelationType] = useState<(typeof relationOptions)[number][0]>(
+    'related_concept',
+  )
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) ??
     data.reviewMaps[0] ??
@@ -738,6 +753,33 @@ function KnowledgeCanvas({
     .filter((proposal) => proposal.status === 'pending')
     .slice(0, 3)
   const pendingNoteLinks = selectedNoteLinks.filter((link) => link.status === 'pending').slice(0, 5)
+  const linkCandidateNotes = notes
+    .filter((note) => note.id !== selectedNote?.id)
+    .filter((note) => {
+      const query = linkSearch.trim().toLowerCase()
+      if (!query) return true
+      return `${note.title} ${note.noteType} ${note.bodyMarkdown}`.toLowerCase().includes(query)
+    })
+    .slice(0, 12)
+  const selectedLinkTargetId =
+    linkTargetId && linkCandidateNotes.some((note) => note.id === linkTargetId)
+      ? linkTargetId
+      : (linkCandidateNotes[0]?.id ?? '')
+
+  function submitManualLink(event: React.FormEvent) {
+    event.preventDefault()
+    if (!selectedNote || !selectedLinkTargetId) {
+      return
+    }
+    onCreateNoteLink({
+      sourceNoteId: selectedNote.id,
+      targetNoteId: selectedLinkTargetId,
+      relationType: manualRelationType,
+    })
+    setLinkSearch('')
+    setLinkTargetId('')
+    setManualRelationType('related_concept')
+  }
 
   return (
     <section className="flex min-h-0 flex-1 bg-canvas">
@@ -887,6 +929,63 @@ function KnowledgeCanvas({
                     </p>
                   )}
                 </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <Plus size={15} className="text-violet" />
+                  Add link
+                </h3>
+                <form className="rounded-lg border border-[#303030] bg-[#202020] p-3" onSubmit={submitManualLink}>
+                  <input
+                    className="mb-2 h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
+                    onChange={(event) => {
+                      setLinkSearch(event.target.value)
+                      setLinkTargetId('')
+                    }}
+                    placeholder="Search notes"
+                    value={linkSearch}
+                  />
+                  <select
+                    className="mb-2 h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
+                    disabled={!linkCandidateNotes.length}
+                    onChange={(event) => setLinkTargetId(event.target.value)}
+                    value={selectedLinkTargetId}
+                  >
+                    {linkCandidateNotes.length ? (
+                      linkCandidateNotes.map((note) => (
+                        <option key={note.id} value={note.id}>
+                          {note.title}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">No matching notes</option>
+                    )}
+                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      className="h-9 min-w-0 flex-1 rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
+                      onChange={(event) =>
+                        setManualRelationType(event.target.value as (typeof relationOptions)[number][0])
+                      }
+                      value={manualRelationType}
+                    >
+                      {relationOptions.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="inline-flex h-9 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!selectedLinkTargetId}
+                      type="submit"
+                    >
+                      <Plus size={13} />
+                      Add
+                    </button>
+                  </div>
+                </form>
               </section>
 
               <section className="mb-6">
@@ -1793,6 +1892,25 @@ function App() {
     }
   }
 
+  async function createManualNoteLink(input: {
+    sourceNoteId: string
+    targetNoteId: string
+    relationType: string
+  }) {
+    try {
+      await requestJson('/note-links', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+      setNotice('Note link added.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to create note link')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -1828,7 +1946,11 @@ function App() {
               </div>
             ) : null}
             <div className="flex min-h-0 flex-1">
-              <KnowledgeCanvas data={workspaceData} onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)} />
+              <KnowledgeCanvas
+                data={workspaceData}
+                onCreateNoteLink={(input) => void createManualNoteLink(input)}
+                onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
+              />
             </div>
           </>
         ) : activeView === 'review_maps' ? (

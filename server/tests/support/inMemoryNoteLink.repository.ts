@@ -4,6 +4,19 @@ import type { NoteLinkRepository } from "../../src/repositories/noteLink.reposit
 export class InMemoryNoteLinkRepository implements NoteLinkRepository {
   readonly noteLinks: NoteLink[] = [];
 
+  async createManual(input: {
+    userId?: string | null;
+    sourceNoteType: string;
+    sourceNoteId: string;
+    targetNoteType: string;
+    targetNoteId: string;
+    relationType: string;
+    confidence: Confidence;
+    rationale?: string | null;
+  }): Promise<NoteLink | null> {
+    return this.createLink({ ...input, status: "approved" });
+  }
+
   async createSuggestion(input: {
     userId?: string | null;
     sourceNoteType: string;
@@ -12,6 +25,21 @@ export class InMemoryNoteLinkRepository implements NoteLinkRepository {
     targetNoteId: string;
     relationType: string;
     confidence: Confidence;
+    rationale?: string | null;
+    createdByAgentRunId?: string | null;
+  }): Promise<NoteLink | null> {
+    return this.createLink({ ...input, status: "pending" });
+  }
+
+  private async createLink(input: {
+    userId?: string | null;
+    sourceNoteType: string;
+    sourceNoteId: string;
+    targetNoteType: string;
+    targetNoteId: string;
+    relationType: string;
+    confidence: Confidence;
+    status: NoteLinkStatus;
     rationale?: string | null;
     createdByAgentRunId?: string | null;
   }): Promise<NoteLink | null> {
@@ -30,6 +58,7 @@ export class InMemoryNoteLinkRepository implements NoteLinkRepository {
     if (existing) {
       existing.confidence = input.confidence;
       existing.rationale = input.rationale ?? null;
+      existing.status = input.status;
       existing.updatedAt = new Date("2026-05-24T00:00:00.000Z");
       return existing;
     }
@@ -45,7 +74,7 @@ export class InMemoryNoteLinkRepository implements NoteLinkRepository {
       targetTitle: null,
       relationType: input.relationType,
       confidence: input.confidence,
-      status: "pending",
+      status: input.status,
       rationale: input.rationale ?? null,
       createdByAgentRunId: input.createdByAgentRunId ?? null,
       createdAt: new Date("2026-05-24T00:00:00.000Z"),

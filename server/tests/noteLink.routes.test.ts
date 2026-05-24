@@ -4,6 +4,52 @@ import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.reposit
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 
 describe("note link routes", () => {
+  test("creates an approved manual note link", async () => {
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository,
+      enablePhaseOneWorkflow: false,
+    });
+
+    const response = await request(app)
+      .post("/note-links")
+      .send({
+        sourceNoteId: "11111111-1111-4111-8111-111111111111",
+        targetNoteId: "22222222-2222-4222-8222-222222222222",
+        relationType: "prerequisite",
+        confidence: "high",
+        rationale: "BFS should be understood before shortest path review maps.",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.noteLink).toMatchObject({
+      sourceNoteId: "11111111-1111-4111-8111-111111111111",
+      targetNoteId: "22222222-2222-4222-8222-222222222222",
+      relationType: "prerequisite",
+      status: "approved",
+    });
+  });
+
+  test("rejects self links", async () => {
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+      enablePhaseOneWorkflow: false,
+    });
+
+    const response = await request(app)
+      .post("/note-links")
+      .send({
+        sourceNoteId: "11111111-1111-4111-8111-111111111111",
+        targetNoteId: "11111111-1111-4111-8111-111111111111",
+        relationType: "related_concept",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("A note cannot link to itself");
+  });
+
   test("lists graph links and approves pending suggestions", async () => {
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     await noteLinkRepository.createSuggestion({

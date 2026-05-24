@@ -748,33 +748,32 @@ function KnowledgeCanvas({
     .sort((left, right) => right.score - left.score)
     .slice(0, 5)
   const relatedNotes = [...approvedLinkedNotes, ...inferredRelatedNotes].slice(0, 5)
-  const visibleGraphNotes = [
-    ...(selectedNote ? [selectedNote] : []),
-    ...relatedNotes.map(({ note }) => note),
-    ...notes.filter(
-      (note) =>
-        note.id !== selectedNote?.id &&
-        !relatedNotes.some((match) => match.note.id === note.id),
-    ),
-  ].slice(0, 6)
+  const baseVisibleGraphNotes = notes.slice(0, 9)
+  const visibleGraphNotes =
+    selectedNote && !baseVisibleGraphNotes.some((note) => note.id === selectedNote.id)
+      ? [...baseVisibleGraphNotes.slice(0, 8), selectedNote]
+      : baseVisibleGraphNotes
   const graphPositions = [
-    { x: 46, y: 50 },
+    { x: 44, y: 48 },
     { x: 22, y: 31 },
     { x: 72, y: 31 },
     { x: 22, y: 68 },
     { x: 72, y: 68 },
     { x: 46, y: 80 },
+    { x: 46, y: 20 },
+    { x: 82, y: 50 },
+    { x: 14, y: 50 },
   ]
   const graphNodes = visibleGraphNotes.map((note, index) => ({
     note,
     position: nodePositions[note.id] ?? graphPositions[index] ?? graphPositions[0],
     relation:
       note.id === selectedNote?.id
-        ? 'center'
+        ? 'selected'
         : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
     link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
-  const centerNode = graphNodes.find((node) => node.note.id === selectedNote?.id) ?? graphNodes[0]
+  const selectedGraphNode = graphNodes.find((node) => node.note.id === selectedNote?.id) ?? graphNodes[0]
   const approvedLinkRows = selectedNoteLinks
     .filter((link) => link.status === 'approved')
     .map((link) => {
@@ -911,7 +910,7 @@ function KnowledgeCanvas({
           </p>
         </div>
 
-        {centerNode ? (
+        {selectedGraphNode ? (
           <svg
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden="true"
@@ -919,14 +918,14 @@ function KnowledgeCanvas({
             viewBox="0 0 100 100"
           >
             {graphNodes
-              .filter((node) => node.note.id !== centerNode.note.id)
+              .filter((node) => node.note.id !== selectedGraphNode.note.id)
               .map((node) => {
-                const labelX = (centerNode.position.x + node.position.x) / 2
-                const labelY = (centerNode.position.y + node.position.y) / 2
+                const labelX = (selectedGraphNode.position.x + node.position.x) / 2
+                const labelY = (selectedGraphNode.position.y + node.position.y) / 2
                 return (
-                  <g key={`${centerNode.note.id}-${node.note.id}`}>
+                  <g key={`${selectedGraphNode.note.id}-${node.note.id}`}>
                     <path
-                      d={edgePath(centerNode.position, node.position)}
+                      d={edgePath(selectedGraphNode.position, node.position)}
                       fill="none"
                       stroke="rgba(99, 102, 241, 0.34)"
                       strokeDasharray={node.link ? undefined : '5 7'}
@@ -965,12 +964,11 @@ function KnowledgeCanvas({
         {graphNodes.length ? (
           graphNodes.map((node) => {
             const isSelected = node.note.id === selectedNote?.id
-            const isCenter = node.note.id === centerNode?.note.id
             return (
               <button
                 className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
                   isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
-                } ${isCenter ? 'w-[232px]' : ''}`}
+                }`}
                 data-note-id={node.note.id}
                 key={node.note.id}
                 onClick={() => setSelectedNoteId(node.note.id)}
@@ -996,7 +994,7 @@ function KnowledgeCanvas({
                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
                     {noteTypeLabel(node.note.noteType)}
                   </span>
-                  {isCenter ? (
+                  {isSelected ? (
                     <GitBranch size={15} className="text-violet" />
                   ) : (
                     <Link2 size={14} className="text-gray-400" />

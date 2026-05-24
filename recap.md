@@ -33,6 +33,7 @@
 - Started `codex/persistent-note-links` and added persistent note-link approval flow: migration `002_note_link_approval_flow.sql`, `note-links` API routes, repository/service/controller layer, proposal approval-generated pending link suggestions, and Notes Graph approve/reject UI.
 - Started `codex/manual-note-link-editing` stacked on PR #6 and added manual approved note-link creation from the Notes Graph inspector.
 - Extended Notes Graph toward a Heptabase-like whiteboard: cards can be dragged, cards expose connection nodes, dragging from one node to another creates an approved `note_link`, edges use auto-generated Bezier paths with relation labels, and approved links can be edited or removed from the inspector.
+- Adjusted Notes Graph selection behavior so clicking a card no longer recenters or resizes it; card positions stay fixed until the user drags them.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
 
 ## Decisions
@@ -55,6 +56,7 @@
 - Notes Graph should prefer approved DB-backed `note_links` first, then fall back to inferred related cards until enough explicit links exist.
 - Manual links are created as approved immediately; agent-created links still enter the pending review queue.
 - Whiteboard card positions are currently session-local UI state; persist positions later only after the canvas interaction model settles.
+- Selecting a card should only update highlight, edges, and the inspector. Position changes should come from explicit dragging.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 
 ## Open Issues
@@ -75,6 +77,7 @@
 - `002_note_link_approval_flow.sql` was applied locally. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and a localhost Notes Graph browser smoke test all pass.
 - Manual link editing validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test adding one manual note link all pass.
 - Whiteboard link validation: browser smoke test dragged a card node to another card to create a link, then removed one approved link; console reported no errors.
+- Fixed-position card validation: browser smoke test clicked another graph card and confirmed every card kept the same x/y/width while the inspector selection changed.
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
 
 ## Next Target

@@ -499,9 +499,9 @@ function TopToolbar({ noteCount, compiledCount, taskCount }: {
       </div>
 
       <div className="min-w-0 flex-1">
-        <h1 className="text-[15px] font-bold text-ink">Notes Network</h1>
+        <h1 className="text-[15px] font-bold text-ink">Notes Graph</h1>
         <p className="text-xs text-gray-500">
-          {noteCount} raw notes {'->'} {compiledCount} compiled notes {'->'} {taskCount} open actions
+          {noteCount} raw notes {'->'} {compiledCount} compiled notes. Open a card to inspect links.
         </p>
       </div>
 
@@ -596,6 +596,32 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
     .filter((match) => match.score > 0)
     .sort((left, right) => right.score - left.score)
     .slice(0, 5)
+  const visibleGraphNotes = [
+    ...(selectedNote ? [selectedNote] : []),
+    ...relatedNotes.map(({ note }) => note),
+    ...notes.filter(
+      (note) =>
+        note.id !== selectedNote?.id &&
+        !relatedNotes.some((match) => match.note.id === note.id),
+    ),
+  ].slice(0, 6)
+  const graphPositions = [
+    { x: 46, y: 50 },
+    { x: 22, y: 31 },
+    { x: 72, y: 31 },
+    { x: 22, y: 68 },
+    { x: 72, y: 68 },
+    { x: 46, y: 80 },
+  ]
+  const graphNodes = visibleGraphNotes.map((note, index) => ({
+    note,
+    position: graphPositions[index] ?? graphPositions[0],
+    relation:
+      note.id === selectedNote?.id
+        ? 'center'
+        : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
+  }))
+  const centerNode = graphNodes.find((node) => node.note.id === selectedNote?.id) ?? graphNodes[0]
   const rawEvidence = data.rawNotes
     .filter((note) => {
       const haystack = `${note.title ?? ''} ${note.bodyMarkdown}`.toLowerCase()
@@ -609,212 +635,212 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
   const pendingSuggestions = data.proposals
     .filter((proposal) => proposal.status === 'pending')
     .slice(0, 3)
-  const weakReadiness = data.readinessItems.filter((item) => item.status === 'Weak').slice(0, 3)
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[312px_minmax(460px,1fr)_328px] bg-canvas">
-      <aside className="min-h-0 overflow-y-auto border-r border-gray-300 bg-white px-5 py-5">
-        <div className="mb-5 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Notes graph</p>
-            <h2 className="mt-1 text-xl font-extrabold text-ink">All notes</h2>
-          </div>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-            {notes.length}
-          </span>
+    <section className="flex min-h-0 flex-1 bg-canvas">
+      <main className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.34) 1px, transparent 0)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+
+        <div className="absolute left-7 top-6 z-20">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Graph view</p>
+          <h2 className="mt-1 text-2xl font-extrabold text-ink">Notes as links</h2>
+          <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
+            Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
+          </p>
         </div>
 
-        <div className="space-y-2">
-          {notes.length ? (
-            notes.map((note) => (
+        {centerNode ? (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+            {graphNodes
+              .filter((node) => node.note.id !== centerNode.note.id)
+              .map((node) => (
+                <line
+                  key={`${centerNode.note.id}-${node.note.id}`}
+                  x1={`${centerNode.position.x}%`}
+                  y1={`${centerNode.position.y}%`}
+                  x2={`${node.position.x}%`}
+                  y2={`${node.position.y}%`}
+                  stroke="rgba(99, 102, 241, 0.32)"
+                  strokeDasharray={node.relation === 'Nearby note' ? '5 7' : undefined}
+                  strokeWidth="2"
+                />
+              ))}
+          </svg>
+        ) : null}
+
+        {graphNodes.length ? (
+          graphNodes.map((node) => {
+            const isSelected = node.note.id === selectedNote?.id
+            const isCenter = node.note.id === centerNode?.note.id
+            return (
               <button
-                className={`w-full rounded-lg border p-3 text-left transition ${
-                  note.id === selectedNote?.id
-                    ? 'border-violet bg-violet/10 shadow-card'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-                key={note.id}
-                onClick={() => setSelectedNoteId(note.id)}
+                className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
+                  isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
+                } ${isCenter ? 'w-[232px]' : ''}`}
+                key={node.note.id}
+                onClick={() => setSelectedNoteId(node.note.id)}
+                style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
                 type="button"
               >
-                <span className={`mb-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(note.noteType)}`}>
-                  {noteTypeLabel(note.noteType)}
-                </span>
-                <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">{note.title}</p>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{note.bodyMarkdown}</p>
-              </button>
-            ))
-          ) : (
-            <p className="rounded-lg border border-dashed border-gray-300 p-4 text-sm leading-6 text-gray-500">
-              Compile a raw note to start building the notes graph.
-            </p>
-          )}
-        </div>
-      </aside>
-
-      <main className="min-h-0 overflow-y-auto px-7 py-6">
-        {selectedNote ? (
-          <>
-            <section className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-card">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <span className={`mb-3 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${noteTone(selectedNote.noteType)}`}>
-                    {noteTypeLabel(selectedNote.noteType)}
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
+                    {noteTypeLabel(node.note.noteType)}
                   </span>
-                  <h2 className="text-2xl font-extrabold leading-8 text-ink">{selectedNote.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-gray-500">
-                    Agent index treats this as the center note and suggests bidirectional links from nearby evidence.
-                  </p>
+                  {isCenter ? (
+                    <GitBranch size={15} className="text-violet" />
+                  ) : (
+                    <Link2 size={14} className="text-gray-400" />
+                  )}
                 </div>
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-ink text-white">
-                  <GitBranch size={22} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ['Related', relatedNotes.length],
-                  ['Evidence', rawEvidence.length],
-                  ['Suggestions', pendingSuggestions.length],
-                ].map(([label, value]) => (
-                  <div className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={label}>
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                    <p className="mt-1 text-2xl font-extrabold text-ink">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-card">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                    Bidirectional links
-                  </p>
-                  <h3 className="mt-1 text-lg font-extrabold text-ink">Related notes</h3>
-                </div>
-                <span className="rounded-full border border-violet/30 bg-violet/10 px-3 py-1 text-xs font-bold text-violet">
-                  agent indexed
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {relatedNotes.length ? (
-                  relatedNotes.map(({ note, reason }) => (
-                    <button
-                      className="grid w-full grid-cols-[1fr_36px_1fr] items-center gap-3 rounded-lg border border-gray-200 bg-slate-50 p-3 text-left hover:border-violet/40"
-                      key={note.id}
-                      onClick={() => setSelectedNoteId(note.id)}
-                      type="button"
-                    >
-                      <div className="min-w-0">
-                        <p className="line-clamp-1 text-sm font-extrabold text-ink">{selectedNote.title}</p>
-                        <p className="mt-1 text-xs font-bold text-gray-500">current note</p>
-                      </div>
-                      <div className="grid h-9 w-9 place-items-center rounded-full bg-white text-violet shadow-sm">
-                        <Link2 size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="line-clamp-1 text-sm font-extrabold text-ink">{note.title}</p>
-                        <p className="mt-1 text-xs text-gray-500">{reason}</p>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <p className="rounded-lg border border-dashed border-gray-300 p-4 text-sm leading-6 text-gray-500">
-                    No related notes yet. The next indexing pass should propose links when notes share algorithms,
-                    mistake patterns, or source evidence.
-                  </p>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-card">
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">Note body</p>
-              <MarkdownPreview markdown={selectedNote.bodyMarkdown} />
-            </section>
-          </>
+                <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">
+                  {node.note.title}
+                </p>
+                <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-gray-500">
+                  {node.relation}
+                </p>
+              </button>
+            )
+          })
         ) : (
-          <div className="grid h-full place-items-center">
+          <div className="absolute inset-0 grid place-items-center">
             <p className="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-500">
-              No compiled notes yet.
+              Compile a raw note to start the graph.
             </p>
           </div>
         )}
+
+        <div className="absolute bottom-6 left-7 z-10 flex gap-2">
+          {[
+            ['Notes', notes.length],
+            ['Visible links', Math.max(graphNodes.length - 1, 0)],
+            ['Pending suggestions', pendingSuggestions.length],
+          ].map(([label, value]) => (
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm" key={label}>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+              <p className="mt-0.5 text-lg font-extrabold text-ink">{value}</p>
+            </div>
+          ))}
+        </div>
       </main>
 
-      <aside className="min-h-0 overflow-y-auto border-l border-gray-300 bg-white px-5 py-5">
-        <section className="mb-6">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-ink">
-            <Sparkles size={16} className="text-violet" />
-            Agent link suggestions
-          </h3>
-          <div className="space-y-2">
-            {pendingSuggestions.length ? (
-              pendingSuggestions.map((proposal) => (
-                <article className="min-w-0 rounded-lg border border-violet/20 bg-violet/5 p-3" key={proposal.id}>
-                  <p className="line-clamp-1 break-words text-[13px] font-extrabold text-ink">
-                    {proposal.detectedKnowledgeType ?? 'knowledge update'}
-                  </p>
-                  <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-gray-600">
-                    {proposal.rationale ?? 'Review this proposal to approve new notes and links.'}
-                  </p>
-                </article>
-              ))
-            ) : (
-              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
-                No pending link suggestions.
-              </p>
-            )}
-          </div>
-        </section>
-
-        <section className="mb-6">
-          <h3 className="mb-3 text-sm font-extrabold text-ink">Raw evidence</h3>
-          <div className="space-y-2">
-            {rawEvidence.length ? (
-              rawEvidence.map((note) => (
-                <article className="min-w-0 rounded-lg border border-gray-200 bg-slate-50 p-3" key={note.id}>
-                  <p className="line-clamp-1 break-words text-[13px] font-extrabold text-ink">
-                    {note.title ?? 'Untitled raw note'}
-                  </p>
-                  <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-gray-600">
-                    {note.bodyMarkdown}
-                  </p>
-                </article>
-              ))
-            ) : (
-              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
-                No raw evidence found for the selected note.
-              </p>
-            )}
-          </div>
-        </section>
-
-        <section>
-          <h3 className="mb-3 text-sm font-extrabold text-ink">Weak areas</h3>
-          <div className="space-y-2">
-            {weakReadiness.length ? (
-              weakReadiness.map((item) => (
-                <article className="rounded-lg border border-orange-200 bg-orange-50 p-3" key={item.id}>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-extrabold text-orange-900">{item.area}</p>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(item.status)}`}>
-                      {item.status}
-                    </span>
+      <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#303030] bg-[#1B1B1B] text-white">
+        {selectedNote ? (
+          <>
+            <header className="border-b border-[#303030] px-6 py-5">
+              <span className="mb-3 inline-flex rounded-full border border-[#3A3A3A] bg-[#202020] px-2.5 py-1 text-[11px] font-bold capitalize text-gray-300">
+                {noteTypeLabel(selectedNote.noteType)}
+              </span>
+              <h2 className="text-xl font-extrabold leading-7 text-white">{selectedNote.title}</h2>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {[
+                  ['Links', relatedNotes.length],
+                  ['Evidence', rawEvidence.length],
+                  ['Queue', pendingSuggestions.length],
+                ].map(([label, value]) => (
+                  <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+                    <p className="mt-1 text-lg font-extrabold text-white">{value}</p>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-orange-800">
-                    {item.rationale ?? 'Needs another review pass.'}
-                  </p>
-                </article>
-              ))
-            ) : (
-              <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
-                No weak areas currently flagged.
-              </p>
-            )}
+                ))}
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Content</h3>
+                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
+                  <MarkdownPreview markdown={selectedNote.bodyMarkdown} />
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <Link2 size={15} className="text-violet" />
+                  Related cards
+                </h3>
+                <div className="space-y-2">
+                  {relatedNotes.length ? (
+                    relatedNotes.map(({ note, reason }) => (
+                      <button
+                        className="w-full rounded-lg border border-[#303030] bg-[#202020] p-3 text-left hover:border-violet/50"
+                        key={note.id}
+                        onClick={() => setSelectedNoteId(note.id)}
+                        type="button"
+                      >
+                        <p className="line-clamp-1 text-[13px] font-extrabold text-white">{note.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-400">{reason}</p>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No related cards found yet.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Raw evidence</h3>
+                <div className="space-y-2">
+                  {rawEvidence.length ? (
+                    rawEvidence.map((note) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={note.id}>
+                        <p className="line-clamp-1 text-[13px] font-extrabold text-white">
+                          {note.title ?? 'Untitled raw note'}
+                        </p>
+                        <p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-400">{note.bodyMarkdown}</p>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No raw evidence found for this card.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <Sparkles size={15} className="text-violet" />
+                  Agent queue
+                </h3>
+                <div className="space-y-2">
+                  {pendingSuggestions.length ? (
+                    pendingSuggestions.map((proposal) => (
+                      <article className="rounded-lg border border-violet/30 bg-violet/10 p-3" key={proposal.id}>
+                        <p className="line-clamp-1 text-[13px] font-extrabold text-white">
+                          {proposal.detectedKnowledgeType ?? 'knowledge update'}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-300">
+                          {proposal.rationale ?? 'Review this proposal to approve new notes and links.'}
+                        </p>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No pending link suggestions.
+                    </p>
+                  )}
+                </div>
+              </section>
+            </div>
+          </>
+        ) : (
+          <div className="grid flex-1 place-items-center p-6 text-center">
+            <div>
+              <GitBranch className="mx-auto mb-4 text-gray-500" size={36} />
+              <h2 className="text-lg font-extrabold text-white">No card selected</h2>
+              <p className="mt-2 text-sm leading-6 text-gray-400">Select a graph card to open its content.</p>
+            </div>
           </div>
-        </section>
+        )}
       </aside>
     </section>
   )
@@ -1629,11 +1655,6 @@ function App() {
             ) : null}
             <div className="flex min-h-0 flex-1">
               <KnowledgeCanvas data={workspaceData} />
-              <ProposalInspector
-                onApprove={(proposalId) => void decideProposal(proposalId, 'approve')}
-                onReject={(proposalId) => void decideProposal(proposalId, 'reject')}
-                proposal={selectedProposal}
-              />
             </div>
           </>
         ) : activeView === 'review_maps' ? (

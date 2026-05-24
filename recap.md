@@ -27,6 +27,7 @@
 - Added raw-note update, delete, and compile-existing APIs, then wired the editor Save/Delete/Compile saved controls to those endpoints.
 - Added a dedicated Review Maps page on `codex/review-maps-page`, following the dark Heptabase-like workspace design: left review-map list, decision-rule detail table, source body, linked algorithms, related algorithm notes, and raw evidence.
 - Simplified the old Knowledge Map UI into a Notes Network view: note list, selected-note center panel, bidirectional related-note links, agent link suggestions, raw evidence, and weak-area context.
+- Adjusted the Notes Network again to be graph-first and easier to read: lightweight cards on a dotted canvas, connector lines from the focused card, and a right-side inspector that opens card content only after selection.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -43,6 +44,7 @@
 - Web UI now uses Tailwind via `client/src/index.css`; old ad hoc `styles.css` was removed.
 - Phase 2 keeps review maps high-level: they link out to algorithm notes instead of expanding every representative problem into the map.
 - Knowledge graph UX should center on bidirectional note-to-note links and agent-maintained link suggestions instead of a complex spatial canvas.
+- The first graph screen should keep cards minimal and defer dense content to the selected-card inspector.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.

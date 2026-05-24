@@ -19,7 +19,22 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
     return note;
   }
 
+  async getById(id: string): Promise<RawNote | null> {
+    return this.notes.find((note) => note.id === id) ?? null;
+  }
+
   async listRecent(limit: number): Promise<RawNote[]> {
     return this.notes.slice(0, limit);
+  }
+
+  async updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote> {
+    const note = await this.getById(id);
+    if (!note) {
+      throw new Error("Raw note not found");
+    }
+
+    note.extractedData = extractedData;
+    note.domain = domain ?? note.domain;
+    return note;
   }
 }

@@ -6,14 +6,16 @@ describe("RawNoteService", () => {
     const repository = new InMemoryRawNoteRepository();
     const service = new RawNoteService(repository);
 
-    const rawNote = await service.createRawNote({
+    const result = await service.createRawNote({
       title: "Floyd-Warshall miss",
       bodyMarkdown: "I missed that this was an all-pairs shortest path problem.",
     });
 
-    expect(rawNote.sourceType).toBe("manual");
-    expect(rawNote.title).toBe("Floyd-Warshall miss");
-    expect(rawNote.bodyMarkdown).toBe("I missed that this was an all-pairs shortest path problem.");
+    expect(result.rawNote.sourceType).toBe("manual");
+    expect(result.rawNote.title).toBe("Floyd-Warshall miss");
+    expect(result.rawNote.bodyMarkdown).toBe(
+      "I missed that this was an all-pairs shortest path problem.",
+    );
   });
 
   test("lists recent raw notes through the repository boundary", async () => {

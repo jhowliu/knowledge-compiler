@@ -1,0 +1,136 @@
+import { pool } from "../db/pool.js";
+import type { AgentRun, AgentRunEvent } from "../domain/knowledge.js";
+
+type AgentRunRow = {
+  id: string;
+  user_id: string | null;
+  run_type: string;
+  status: string;
+  input: unknown;
+  output: unknown;
+  error: string | null;
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
+};
+
+type AgentRunEventRow = {
+  id: string;
+  agent_run_id: string;
+  event_type: string;
+  payload: unknown;
+  created_at: Date;
+};
+
+function mapAgentRun(row: AgentRunRow): AgentRun {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    runType: row.run_type,
+    status: row.status,
+    input: row.input,
+    output: row.output,
+    error: row.error,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  };
+}
+
+function mapAgentRunEvent(row: AgentRunEventRow): AgentRunEvent {
+  return {
+    id: row.id,
+    agentRunId: row.agent_run_id,
+    eventType: row.event_type,
+    payload: row.payload,
+    createdAt: row.created_at,
+  };
+}
+
+export interface AgentRunRepository {
+  create(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
+  addEvent(input: { agentRunId: string; eventType: string; payload: unknown }): Promise<AgentRunEvent>;
+  complete(id: string, output: unknown): Promise<AgentRun>;
+  fail(id: string, error: string): Promise<AgentRun>;
+  getById(id: string): Promise<AgentRun | null>;
+  listEvents(agentRunId: string): Promise<AgentRunEvent[]>;
+}
+
+export class PostgresAgentRunRepository implements AgentRunRepository {
+  async create(input: { userId?: string | null; runType: string; input: unknown }) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        insert into agent_runs (user_id, run_type, status, input, started_at)
+        values ($1, $2, 'running', $3, now())
+        returning *
+      `,
+      [input.userId ?? null, input.runType, input.input],
+    );
+
+    return mapAgentRun(result.rows[0]);
+  }
+
+  async addEvent(input: { agentRunId: string; eventType: string; payload: unknown }) {
+    const result = await pool.query<AgentRunEventRow>(
+      `
+        insert into agent_run_events (agent_run_id, event_type, payload)
+        values ($1, $2, $3)
+        returning *
+      `,
+      [input.agentRunId, input.eventType, input.payload],
+    );
+
+    return mapAgentRunEvent(result.rows[0]);
+  }
+
+  async complete(id: string, output: unknown) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        update agent_runs
+        set status = 'completed',
+            output = $2,
+            completed_at = now()
+        where id = $1
+        returning *
+      `,
+      [id, output],
+    );
+
+    return mapAgentRun(result.rows[0]);
+  }
+
+  async fail(id: string, error: string) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        update agent_runs
+        set status = 'failed',
+            error = $2,
+            completed_at = now()
+        where id = $1
+        returning *
+      `,
+      [id, error],
+    );
+
+    return mapAgentRun(result.rows[0]);
+  }
+
+  async getById(id: string) {
+    const result = await pool.query<AgentRunRow>("select * from agent_runs where id = $1", [id]);
+    return result.rows[0] ? mapAgentRun(result.rows[0]) : null;
+  }
+
+  async listEvents(agentRunId: string) {
+    const result = await pool.query<AgentRunEventRow>(
+      `
+        select *
+        from agent_run_events
+        where agent_run_id = $1
+        order by created_at asc
+      `,
+      [agentRunId],
+    );
+
+    return result.rows.map(mapAgentRunEvent);
+  }
+}

@@ -14,7 +14,9 @@ type RawNoteRow = {
 
 export interface RawNoteRepository {
   create(input: CreateRawNoteInput): Promise<RawNote>;
+  getById(id: string): Promise<RawNote | null>;
   listRecent(limit: number): Promise<RawNote[]>;
+  updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote>;
 }
 
 function mapRawNote(row: RawNoteRow): RawNote {
@@ -56,6 +58,19 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
     return mapRawNote(result.rows[0]);
   }
 
+  async getById(id: string) {
+    const result = await pool.query<RawNoteRow>(
+      `
+        select *
+        from raw_notes
+        where id = $1
+      `,
+      [id],
+    );
+
+    return result.rows[0] ? mapRawNote(result.rows[0]) : null;
+  }
+
   async listRecent(limit: number) {
     const result = await pool.query<RawNoteRow>(
       `
@@ -68,5 +83,20 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
     );
 
     return result.rows.map(mapRawNote);
+  }
+
+  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+    const result = await pool.query<RawNoteRow>(
+      `
+        update raw_notes
+        set extracted_data = $2,
+            domain = coalesce($3, domain)
+        where id = $1
+        returning *
+      `,
+      [id, extractedData, domain],
+    );
+
+    return mapRawNote(result.rows[0]);
   }
 }

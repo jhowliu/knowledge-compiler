@@ -1,27 +1,52 @@
 import cors from "cors";
 import express from "express";
-import { env } from "./config/env.js";
+import { corsOptions } from "./config/cors.js";
+import type { AgentRunRepository } from "./repositories/agentRun.repository.js";
+import { PostgresAgentRunRepository } from "./repositories/agentRun.repository.js";
+import type { KnowledgeRepository } from "./repositories/knowledge.repository.js";
+import { PostgresKnowledgeRepository } from "./repositories/knowledge.repository.js";
+import type { ProposalRepository } from "./repositories/proposal.repository.js";
+import { PostgresProposalRepository } from "./repositories/proposal.repository.js";
 import type { RawNoteRepository } from "./repositories/rawNote.repository.js";
 import { PostgresRawNoteRepository } from "./repositories/rawNote.repository.js";
+import { createAgentRunRoutes } from "./routes/agentRun.routes.js";
+import { createDashboardRoutes } from "./routes/dashboard.routes.js";
+import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawNoteRoutes } from "./routes/rawNote.routes.js";
+import { DashboardService } from "./services/dashboard.service.js";
+import { PhaseOneWorkflowService } from "./services/phaseOneWorkflow.service.js";
+import { ProposalService } from "./services/proposal.service.js";
 import { RawNoteService } from "./services/rawNote.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 export type AppDependencies = {
   rawNoteRepository?: RawNoteRepository;
+  knowledgeRepository?: KnowledgeRepository;
+  proposalRepository?: ProposalRepository;
+  agentRunRepository?: AgentRunRepository;
+  enablePhaseOneWorkflow?: boolean;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const rawNoteRepository = dependencies.rawNoteRepository ?? new PostgresRawNoteRepository();
-  const rawNoteService = new RawNoteService(rawNoteRepository);
+  const knowledgeRepository = dependencies.knowledgeRepository ?? new PostgresKnowledgeRepository();
+  const proposalRepository = dependencies.proposalRepository ?? new PostgresProposalRepository();
+  const agentRunRepository = dependencies.agentRunRepository ?? new PostgresAgentRunRepository();
+  const enablePhaseOneWorkflow = dependencies.enablePhaseOneWorkflow ?? true;
+  const phaseOneWorkflowService = enablePhaseOneWorkflow
+    ? new PhaseOneWorkflowService(
+        rawNoteRepository,
+        knowledgeRepository,
+        proposalRepository,
+        agentRunRepository,
+      )
+    : null;
+  const rawNoteService = new RawNoteService(rawNoteRepository, phaseOneWorkflowService);
+  const proposalService = new ProposalService(proposalRepository, knowledgeRepository);
+  const dashboardService = new DashboardService(knowledgeRepository);
 
-  app.use(
-    cors({
-      origin: env.CLIENT_ORIGIN,
-      credentials: true,
-    }),
-  );
+  app.use(cors(corsOptions));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_request, response) => {
@@ -29,6 +54,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.use("/raw-notes", createRawNoteRoutes(rawNoteService));
+  if (phaseOneWorkflowService) {
+    app.use("/agent-runs", createAgentRunRoutes(phaseOneWorkflowService, agentRunRepository));
+  }
+  app.use("/update-proposals", createProposalRoutes(proposalService));
+  app.use(createDashboardRoutes(dashboardService));
   app.use(errorHandler);
 
   return app;

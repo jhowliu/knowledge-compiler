@@ -9,6 +9,12 @@ export type RawNote = {
   createdAt: Date;
 };
 
+export type RawNoteWithProposal = {
+  rawNote: RawNote;
+  proposalId: string | null;
+  agentRunId: string | null;
+};
+
 export type CreateRawNoteInput = {
   userId?: string | null;
   domain?: string | null;

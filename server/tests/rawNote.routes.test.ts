@@ -5,7 +5,7 @@ import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.
 describe("raw note routes", () => {
   test("POST /raw-notes returns 201 for a valid payload", async () => {
     const repository = new InMemoryRawNoteRepository();
-    const app = createApp({ rawNoteRepository: repository });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
 
     const response = await request(app).post("/raw-notes").send({
       title: "Stack with state",
@@ -15,12 +15,13 @@ describe("raw note routes", () => {
     expect(response.status).toBe(201);
     expect(response.body.rawNote.title).toBe("Stack with state");
     expect(response.body.rawNote.sourceType).toBe("manual");
+    expect(response.body.proposal).toBeNull();
     expect(repository.notes).toHaveLength(1);
   });
 
   test("POST /raw-notes returns 400 for an invalid payload", async () => {
     const repository = new InMemoryRawNoteRepository();
-    const app = createApp({ rawNoteRepository: repository });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
 
     const response = await request(app).post("/raw-notes").send({
       bodyMarkdown: "",

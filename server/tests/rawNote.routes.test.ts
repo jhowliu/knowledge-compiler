@@ -31,4 +31,102 @@ describe("raw note routes", () => {
     expect(response.body.error).toBe("Invalid request");
     expect(repository.notes).toHaveLength(0);
   });
+
+  test("PATCH /raw-notes/:id updates an existing raw note", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const rawNote = await repository.create({
+      title: "Old title",
+      bodyMarkdown: "Old body",
+    });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).patch(`/raw-notes/${rawNote.id}`).send({
+      title: "Updated title",
+      bodyMarkdown: "Updated body",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rawNote.title).toBe("Updated title");
+    expect(response.body.rawNote.bodyMarkdown).toBe("Updated body");
+    expect(repository.notes).toHaveLength(1);
+  });
+
+  test("PATCH /raw-notes/:id returns 404 when the note does not exist", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).patch("/raw-notes/missing").send({
+      title: "Missing",
+      bodyMarkdown: "Still missing",
+    });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Raw note not found");
+  });
+
+  test("PATCH /raw-notes/:id returns 400 for an invalid update", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const rawNote = await repository.create({
+      title: "Old title",
+      bodyMarkdown: "Old body",
+    });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).patch(`/raw-notes/${rawNote.id}`).send({
+      title: "Updated title",
+      bodyMarkdown: "",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("Invalid request");
+  });
+
+  test("DELETE /raw-notes/:id removes an existing raw note", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const rawNote = await repository.create({
+      title: "Delete me",
+      bodyMarkdown: "Temporary note",
+    });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).delete(`/raw-notes/${rawNote.id}`);
+
+    expect(response.status).toBe(204);
+    expect(repository.notes).toHaveLength(0);
+  });
+
+  test("DELETE /raw-notes/:id returns 404 when the note does not exist", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).delete("/raw-notes/missing");
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Raw note not found");
+  });
+
+  test("POST /raw-notes/:id/compile compiles an existing raw note", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const rawNote = await repository.create({
+      title: "Compile me",
+      bodyMarkdown: "Practice note",
+    });
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).post(`/raw-notes/${rawNote.id}/compile`).send({});
+
+    expect(response.status).toBe(200);
+    expect(response.body.proposal).toBeNull();
+    expect(response.body.agentRunId).toBeNull();
+  });
+
+  test("POST /raw-notes/:id/compile returns 404 when the note does not exist", async () => {
+    const repository = new InMemoryRawNoteRepository();
+    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+
+    const response = await request(app).post("/raw-notes/missing/compile").send({});
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Raw note not found");
+  });
 });

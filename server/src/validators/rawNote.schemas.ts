@@ -7,3 +7,9 @@ export const createRawNoteSchema = z.object({
   title: z.string().min(1).nullable().optional(),
   bodyMarkdown: z.string().min(1),
 });
+
+export const updateRawNoteSchema = z.object({
+  domain: z.string().min(1).nullable().optional(),
+  title: z.string().min(1).nullable().optional(),
+  bodyMarkdown: z.string().min(1),
+});

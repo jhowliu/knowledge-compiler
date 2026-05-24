@@ -22,3 +22,9 @@ export type CreateRawNoteInput = {
   title?: string | null;
   bodyMarkdown: string;
 };
+
+export type UpdateRawNoteInput = {
+  domain?: string | null;
+  title?: string | null;
+  bodyMarkdown: string;
+};

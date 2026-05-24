@@ -24,6 +24,7 @@
 - Fixed the raw-note capture UX: the left-nav `Capture raw note` button now focuses the input form, and successful compile shows a visible confirmation message.
 - Replaced the inline raw-note capture card with a dedicated dark raw-note editor page; clicking `Capture raw note` or `Raw notes` now navigates to that page.
 - Made recent raw notes clickable in the raw-note editor and added an on-the-fly Markdown preview pane for the current draft or selected note.
+- Added raw-note update, delete, and compile-existing APIs, then wired the editor Save/Delete/Compile saved controls to those endpoints.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -52,6 +53,7 @@
 - A Vite process from before this phase was still running as PID 76042 during cleanup; the Phase 2 smoke-test dev servers were stopped.
 - Local raw-note smoke tests inserted sample notes into the development database.
 - Raw-note editor browser verification inserted another sample note into the development database.
+- Raw-note CRUD browser verification created, edited, compiled, and deleted a throwaway note; its generated proposal remains in the development database.
 
 ## Next Target
 - Add richer review-map editing and approval UX, including a dedicated review-map list/detail mode.

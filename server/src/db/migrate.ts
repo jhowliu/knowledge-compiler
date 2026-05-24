@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { pool, closePool } from "./pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const migrationsDir = path.resolve(__dirname, "../../migrations");
+const migrationsDir = path.resolve(__dirname, "../../db/migrations");
 
 async function ensureMigrationsTable() {
   await pool.query(`

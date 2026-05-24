@@ -4,12 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "isolatedModules": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

@@ -25,6 +25,7 @@
 - Replaced the inline raw-note capture card with a dedicated dark raw-note editor page; clicking `Capture raw note` or `Raw notes` now navigates to that page.
 - Made recent raw notes clickable in the raw-note editor and added an on-the-fly Markdown preview pane for the current draft or selected note.
 - Added raw-note update, delete, and compile-existing APIs, then wired the editor Save/Delete/Compile saved controls to those endpoints.
+- Added a dedicated Review Maps page on `codex/review-maps-page`, following the dark Heptabase-like workspace design: left review-map list, decision-rule detail table, source body, linked algorithms, related algorithm notes, and raw evidence.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -54,9 +55,10 @@
 - Local raw-note smoke tests inserted sample notes into the development database.
 - Raw-note editor browser verification inserted another sample note into the development database.
 - Raw-note CRUD browser verification created, edited, compiled, and deleted a throwaway note; its generated proposal remains in the development database.
+- Review Maps browser verification inserted and approved a local sample note titled `Review map smoke: shortest path`.
 
 ## Next Target
-- Add richer review-map editing and approval UX, including a dedicated review-map list/detail mode.
+- Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

@@ -30,6 +30,7 @@
 - Adjusted the Notes Network again to be graph-first and easier to read: lightweight cards on a dotted canvas, connector lines from the focused card, and a right-side inspector that opens card content only after selection.
 - Added app-wide light/dark theme support with a sidebar toggle; Notes Graph, Raw Notes, and Review Maps now render in both modes and persist the selected mode in local storage.
 - Rebased `codex/review-maps-page` onto latest `origin/main` after the raw-note CRUD merge, preserving both raw-note edit/save/delete/compile-existing flows and the Review Maps/Notes Graph/theme work.
+- Started `codex/persistent-note-links` and added persistent note-link approval flow: migration `002_note_link_approval_flow.sql`, `note-links` API routes, repository/service/controller layer, proposal approval-generated pending link suggestions, and Notes Graph approve/reject UI.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -48,6 +49,7 @@
 - Knowledge graph UX should center on bidirectional note-to-note links and agent-maintained link suggestions instead of a complex spatial canvas.
 - The first graph screen should keep cards minimal and defer dense content to the selected-card inspector.
 - Theme mode is global UI state and should apply to every workspace page, not just the graph view.
+- Notes Graph should prefer approved DB-backed `note_links` first, then fall back to inferred related cards until enough explicit links exist.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -64,9 +66,10 @@
 - Raw-note CRUD browser verification created, edited, compiled, and deleted a throwaway note; its generated proposal remains in the development database.
 - Review Maps browser verification inserted and approved a local sample note titled `Review map smoke: shortest path`.
 - After rebasing with `origin/main`, `npm run typecheck`, `npm run build`, and `npm run test` all pass.
+- `002_note_link_approval_flow.sql` was applied locally. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and a localhost Notes Graph browser smoke test all pass.
 
 ## Next Target
-- Add persistent `note_links` storage and approval/rejection flows for agent-suggested bidirectional links.
+- Add a manual link creation/edit affordance in Notes Graph so users can connect cards without waiting for agent suggestions.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

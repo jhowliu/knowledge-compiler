@@ -14,6 +14,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly mistakes: Mistake[] = [];
   readonly reviewTasks: ReviewTask[] = [];
   readonly readinessItems: ReadinessItem[] = [];
+  relatedResults: SearchResult[] = [];
 
   async upsertConcept(input: {
     userId?: string | null;
@@ -35,7 +36,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   async indexConcept(): Promise<void> {}
 
   async searchRelated(): Promise<SearchResult[]> {
-    return [];
+    return this.relatedResults;
   }
 
   async upsertCompiledNote(input: {

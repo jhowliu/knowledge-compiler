@@ -29,6 +29,7 @@ import './index.css'
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected'
+type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
 type ThemeMode = 'light' | 'dark'
 
@@ -78,6 +79,21 @@ type CompiledNote = {
   updatedAt: string
 }
 
+type NoteLink = {
+  id: string
+  sourceNoteType: string
+  sourceNoteId: string
+  sourceTitle: string | null
+  targetNoteType: string
+  targetNoteId: string
+  targetTitle: string | null
+  relationType: string
+  confidence: string
+  status: NoteLinkStatus
+  rationale: string | null
+  updatedAt: string
+}
+
 type Mistake = {
   id: string
   domain: string
@@ -107,6 +123,7 @@ type WorkspaceData = {
   rawNotes: RawNote[]
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
+  noteLinks: NoteLink[]
   reviewMaps: CompiledNote[]
   mistakes: Mistake[]
   reviewTasks: ReviewTask[]
@@ -117,6 +134,7 @@ const emptyWorkspaceData: WorkspaceData = {
   rawNotes: [],
   proposals: [],
   compiledNotes: [],
+  noteLinks: [],
   reviewMaps: [],
   mistakes: [],
   reviewTasks: [],
@@ -156,11 +174,12 @@ async function requestVoid(path: string, init?: RequestInit): Promise<void> {
 }
 
 async function loadWorkspaceData(): Promise<WorkspaceData> {
-  const [rawNotes, proposals, compiledNotes, reviewMaps, mistakes, reviewTasks, readinessItems] =
+  const [rawNotes, proposals, compiledNotes, noteLinks, reviewMaps, mistakes, reviewTasks, readinessItems] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
+      requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
@@ -171,6 +190,7 @@ async function loadWorkspaceData(): Promise<WorkspaceData> {
     rawNotes: rawNotes.rawNotes,
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
+    noteLinks: noteLinks.noteLinks,
     reviewMaps: reviewMaps.reviewMaps,
     mistakes: mistakes.mistakes,
     reviewTasks: reviewTasks.reviewTasks,
@@ -600,8 +620,25 @@ function mergeKnowledgeNotes(data: WorkspaceData) {
   return [...notes.values()]
 }
 
-function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
+function connectedNoteId(link: NoteLink, noteId: string) {
+  if (link.sourceNoteId === noteId) return link.targetNoteId
+  if (link.targetNoteId === noteId) return link.sourceNoteId
+  return null
+}
+
+function relationLabel(relationType: string) {
+  return relationType.replaceAll('_', ' ')
+}
+
+function KnowledgeCanvas({
+  data,
+  onDecideNoteLink,
+}: {
+  data: WorkspaceData
+  onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
+}) {
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
+  const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) ??
@@ -610,8 +647,34 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
     null
   const selectedDetails = reviewMapDetails(selectedNote ?? undefined)
   const selectedKeywords = noteKeywords(selectedNote ?? undefined)
-  const relatedNotes = notes
+  const selectedNoteLinks = selectedNote
+    ? data.noteLinks.filter(
+        (link) =>
+          link.sourceNoteType === 'compiled_note' &&
+          link.targetNoteType === 'compiled_note' &&
+          Boolean(connectedNoteId(link, selectedNote.id)),
+      )
+    : []
+  const approvedLinkedNotes = selectedNoteLinks
+    .filter((link) => link.status === 'approved')
+    .map((link) => {
+      const noteId = selectedNote ? connectedNoteId(link, selectedNote.id) : null
+      const note = noteId ? noteById.get(noteId) : null
+      return note
+        ? {
+            note,
+            score: link.confidence === 'high' ? 10 : link.confidence === 'medium' ? 8 : 6,
+            reason: relationLabel(link.relationType),
+            link,
+          }
+        : null
+    })
+    .filter((match): match is { note: CompiledNote; score: number; reason: string; link: NoteLink } =>
+      Boolean(match),
+    )
+  const inferredRelatedNotes = notes
     .filter((note) => note.id !== selectedNote?.id)
+    .filter((note) => !approvedLinkedNotes.some((match) => match.note.id === note.id))
     .map((note) => {
       const noteText = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
       const titleMatch = selectedNote ? noteText.includes(selectedNote.title.toLowerCase()) : false
@@ -634,6 +697,7 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
     .filter((match) => match.score > 0)
     .sort((left, right) => right.score - left.score)
     .slice(0, 5)
+  const relatedNotes = [...approvedLinkedNotes, ...inferredRelatedNotes].slice(0, 5)
   const visibleGraphNotes = [
     ...(selectedNote ? [selectedNote] : []),
     ...relatedNotes.map(({ note }) => note),
@@ -673,6 +737,7 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
   const pendingSuggestions = data.proposals
     .filter((proposal) => proposal.status === 'pending')
     .slice(0, 3)
+  const pendingNoteLinks = selectedNoteLinks.filter((link) => link.status === 'pending').slice(0, 5)
 
   return (
     <section className="flex min-h-0 flex-1 bg-canvas">
@@ -757,8 +822,8 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
         <div className="absolute bottom-6 left-7 z-10 flex gap-2">
           {[
             ['Notes', notes.length],
-            ['Visible links', Math.max(graphNodes.length - 1, 0)],
-            ['Pending suggestions', pendingSuggestions.length],
+            ['Approved links', data.noteLinks.filter((link) => link.status === 'approved').length],
+            ['Pending links', data.noteLinks.filter((link) => link.status === 'pending').length],
           ].map(([label, value]) => (
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm" key={label}>
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
@@ -780,7 +845,7 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
                 {[
                   ['Links', relatedNotes.length],
                   ['Evidence', rawEvidence.length],
-                  ['Queue', pendingSuggestions.length],
+                  ['Queue', pendingNoteLinks.length + pendingSuggestions.length],
                 ].map(([label, value]) => (
                   <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
                     <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
@@ -861,10 +926,54 @@ function KnowledgeCanvas({ data }: { data: WorkspaceData }) {
                         </p>
                       </article>
                     ))
-                  ) : (
+                  ) : null}
+                  {pendingNoteLinks.length ? (
+                    pendingNoteLinks.map((link) => {
+                      const otherId = selectedNote ? connectedNoteId(link, selectedNote.id) : null
+                      const otherNote = otherId ? noteById.get(otherId) : null
+                      return (
+                        <article className="rounded-lg border border-violet/30 bg-violet/10 p-3" key={link.id}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="line-clamp-1 text-[13px] font-extrabold text-white">
+                                {otherNote?.title ?? link.targetTitle ?? link.sourceTitle ?? 'Related note'}
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-gray-300">
+                                {link.rationale ?? `Suggested ${relationLabel(link.relationType)} link.`}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-violet/30 px-2 py-0.5 text-[10px] font-bold uppercase text-violet">
+                              {link.confidence}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              className="inline-flex items-center gap-1 rounded-md bg-violet px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-violet-dark"
+                              onClick={() => onDecideNoteLink(link.id, 'approve')}
+                              type="button"
+                            >
+                              <Check size={13} />
+                              Approve
+                            </button>
+                            <button
+                              className="inline-flex items-center gap-1 rounded-md border border-[#3A3A3A] px-2.5 py-1.5 text-[11px] font-bold text-gray-300 hover:border-gray-500"
+                              onClick={() => onDecideNoteLink(link.id, 'reject')}
+                              type="button"
+                            >
+                              <X size={13} />
+                              Reject
+                            </button>
+                          </div>
+                        </article>
+                      )
+                    })
+                  ) : null}
+                  {!pendingSuggestions.length && !pendingNoteLinks.length ? (
                     <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
                       No pending link suggestions.
                     </p>
+                  ) : (
+                    null
                   )}
                 </div>
               </section>
@@ -1669,6 +1778,21 @@ function App() {
     await refresh()
   }
 
+  async function decideNoteLink(linkId: string, decision: 'approve' | 'reject') {
+    try {
+      await requestJson(`/note-links/${linkId}/${decision}`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      setNotice(decision === 'approve' ? 'Note link approved.' : 'Note link rejected.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to update note link')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -1704,7 +1828,7 @@ function App() {
               </div>
             ) : null}
             <div className="flex min-h-0 flex-1">
-              <KnowledgeCanvas data={workspaceData} />
+              <KnowledgeCanvas data={workspaceData} onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)} />
             </div>
           </>
         ) : activeView === 'review_maps' ? (

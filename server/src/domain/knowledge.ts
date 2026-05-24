@@ -26,6 +26,7 @@ export type CompiledNote = {
 };
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
+export type NoteLinkStatus = "pending" | "approved" | "rejected";
 
 export type UpdateProposal = {
   id: string;
@@ -92,6 +93,24 @@ export type ReadinessItem = {
   status: ReadinessStatus;
   rationale: string | null;
   lastEvidenceAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type NoteLink = {
+  id: string;
+  userId: string | null;
+  sourceNoteType: string;
+  sourceNoteId: string;
+  sourceTitle: string | null;
+  targetNoteType: string;
+  targetNoteId: string;
+  targetTitle: string | null;
+  relationType: string;
+  confidence: Confidence;
+  status: NoteLinkStatus;
+  rationale: string | null;
+  createdByAgentRunId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

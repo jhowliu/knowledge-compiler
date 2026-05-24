@@ -21,6 +21,7 @@ import './index.css'
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected'
+type ActiveView = 'knowledge_map' | 'raw_note_editor'
 
 type RawNote = {
   id: string
@@ -216,16 +217,27 @@ function IconButton({ label, children }: { label: string; children: React.ReactN
 }
 
 function LeftNavigation({
+  activeView,
   pendingCount,
   weakCount,
   reviewMapCount,
   onCaptureClick,
+  onKnowledgeMapClick,
+  onRawNotesClick,
 }: {
+  activeView: ActiveView
   pendingCount: number
   weakCount: number
   reviewMapCount: number
   onCaptureClick: () => void
+  onKnowledgeMapClick: () => void
+  onRawNotesClick: () => void
 }) {
+  const navItemClass = (isActive: boolean) =>
+    `flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] ${
+      isActive ? 'bg-[#2A2A2A] font-semibold text-white' : 'text-gray-300'
+    }`
+
   return (
     <aside className="flex h-screen w-[252px] shrink-0 flex-col gap-[18px] bg-ink px-[18px] py-6 text-white">
       <div className="space-y-1">
@@ -244,20 +256,28 @@ function LeftNavigation({
 
       <nav className="space-y-1.5">
         <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">WORKSPACE</p>
-        <a className="flex h-9 items-center gap-2.5 rounded-md bg-[#2A2A2A] px-2.5 text-[13px] font-semibold text-white">
+        <button
+          className={navItemClass(activeView === 'knowledge_map')}
+          onClick={onKnowledgeMapClick}
+          type="button"
+        >
           <Map size={16} />
           Knowledge map
-        </a>
-        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+        </button>
+        <button className={navItemClass(false)} type="button">
           <Library size={16} className="text-gray-400" />
           Review maps
           <span className="ml-auto text-[11px] font-bold text-gray-400">{reviewMapCount}</span>
-        </a>
-        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+        </button>
+        <button
+          className={navItemClass(activeView === 'raw_note_editor')}
+          onClick={onRawNotesClick}
+          type="button"
+        >
           <PencilLine size={16} className="text-gray-400" />
           Raw notes
-        </a>
-        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+        </button>
+        <button className={navItemClass(false)} type="button">
           <Sparkles size={16} className="text-gray-400" />
           Update proposals
           {pendingCount > 0 ? (
@@ -265,7 +285,7 @@ function LeftNavigation({
               {pendingCount}
             </span>
           ) : null}
-        </a>
+        </button>
       </nav>
 
       <nav className="space-y-1.5">
@@ -398,22 +418,8 @@ function EvidenceTray({ rawNotes }: { rawNotes: RawNote[] }) {
 
 function KnowledgeCanvas({
   data,
-  title,
-  bodyMarkdown,
-  isSubmitting,
-  onTitleChange,
-  onBodyChange,
-  onSubmit,
-  titleInputRef,
 }: {
   data: WorkspaceData
-  title: string
-  bodyMarkdown: string
-  isSubmitting: boolean
-  onTitleChange: (value: string) => void
-  onBodyChange: (value: string) => void
-  onSubmit: (event: React.FormEvent) => void
-  titleInputRef: React.RefObject<HTMLInputElement | null>
 }) {
   const primaryPattern = data.compiledNotes.find((note) => note.noteType === 'pattern')
   const primaryProblem = data.compiledNotes.find((note) => note.noteType === 'problem_note')
@@ -522,42 +528,124 @@ function KnowledgeCanvas({
         {primaryTask?.description ?? 'Actionable practice card generated from approved proposal.'}
       </MapCard>
 
-      <form
-        className="absolute left-12 top-[330px] w-[316px] rounded-lg border border-gray-300 bg-white p-4 shadow-card"
-        onSubmit={onSubmit}
-      >
-        <div className="mb-3 flex items-start justify-between gap-3">
+      <EvidenceTray rawNotes={data.rawNotes} />
+    </section>
+  )
+}
+
+function RawNoteEditorPage({
+  rawNotes,
+  title,
+  bodyMarkdown,
+  isSubmitting,
+  notice,
+  error,
+  titleInputRef,
+  onTitleChange,
+  onBodyChange,
+  onSubmit,
+}: {
+  rawNotes: RawNote[]
+  title: string
+  bodyMarkdown: string
+  isSubmitting: boolean
+  notice: string | null
+  error: string | null
+  titleInputRef: React.RefObject<HTMLInputElement | null>
+  onTitleChange: (value: string) => void
+  onBodyChange: (value: string) => void
+  onSubmit: (event: React.FormEvent) => void
+}) {
+  return (
+    <section className="flex min-h-0 flex-1 bg-[#181818] text-white">
+      <aside className="flex w-[304px] shrink-0 flex-col border-r border-[#2B2B2B] bg-[#181818] px-5 py-6">
+        <div className="mb-7 flex items-center gap-4">
+          <PencilLine size={34} strokeWidth={1.9} className="text-gray-400" />
+          <h1 className="text-[26px] font-semibold leading-none tracking-normal text-gray-100">
+            Raw notes
+          </h1>
+        </div>
+
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            Recent notes
+          </p>
+          <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-bold text-gray-300">
+            {rawNotes.length}
+          </span>
+        </div>
+
+        <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
+          {rawNotes.length ? (
+            rawNotes.slice(0, 12).map((note) => (
+              <article
+                className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3"
+                key={note.id}
+              >
+                <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
+                  {note.title ?? 'Untitled raw note'}
+                </p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
+                  {note.bodyMarkdown}
+                </p>
+              </article>
+            ))
+          ) : (
+            <p className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3 text-xs leading-5 text-gray-400">
+              No raw notes yet.
+            </p>
+          )}
+        </div>
+      </aside>
+
+      <form className="flex min-w-0 flex-1 flex-col bg-[#202020]" onSubmit={onSubmit}>
+        <header className="flex h-[78px] items-center justify-between gap-4 border-b border-[#303030] px-8">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-violet">Raw markdown</p>
-            <h2 className="text-lg font-extrabold text-ink">Capture evidence</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              New raw note
+            </p>
+            <h2 className="text-[15px] font-bold text-gray-100">Capture interview evidence</h2>
           </div>
+
           <button
-            className="flex h-9 items-center gap-2 rounded-lg bg-violet px-3 text-xs font-extrabold text-white disabled:opacity-60"
+            className="flex h-10 items-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
-            <Sparkles size={14} />
-            {isSubmitting ? 'Compiling' : 'Compile'}
+            <Sparkles size={16} />
+            {isSubmitting ? 'Compiling' : 'Compile note'}
           </button>
-        </div>
-        <input
-          aria-label="Raw note title"
-          className="mb-2 h-10 w-full rounded-md border border-gray-300 bg-slate-50 px-3 text-[13px] outline-none focus:border-violet focus:ring-2 focus:ring-indigo-100"
-          onChange={(event) => onTitleChange(event.target.value)}
-          placeholder="1334. Find the City..."
-          ref={titleInputRef}
-          value={title}
-        />
-        <textarea
-          aria-label="Raw practice note"
-          className="h-[118px] w-full resize-none rounded-md border border-gray-300 bg-slate-50 px-3 py-2 text-[13px] leading-5 outline-none focus:border-violet focus:ring-2 focus:ring-indigo-100"
-          onChange={(event) => onBodyChange(event.target.value)}
-          placeholder="Write messy. The compiler extracts structure after you save."
-          value={bodyMarkdown}
-        />
-      </form>
+        </header>
 
-      <EvidenceTray rawNotes={data.rawNotes} />
+        {error ? (
+          <div className="mx-8 mt-5 rounded-lg border border-red-900/60 bg-red-950/50 px-4 py-3 text-sm text-red-100">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="mx-8 mt-5 rounded-lg border border-emerald-900/60 bg-emerald-950/50 px-4 py-3 text-sm font-semibold text-emerald-100">
+            {notice}
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 flex-1 flex-col px-8 py-7">
+          <input
+            aria-label="Raw note title"
+            className="mb-5 h-14 w-full border-0 bg-transparent text-3xl font-semibold tracking-normal text-white outline-none placeholder:text-gray-600"
+            onChange={(event) => onTitleChange(event.target.value)}
+            placeholder="Untitled raw note"
+            ref={titleInputRef}
+            value={title}
+          />
+          <textarea
+            aria-label="Raw practice note"
+            className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
+            onChange={(event) => onBodyChange(event.target.value)}
+            placeholder="Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile."
+            value={bodyMarkdown}
+          />
+        </div>
+      </form>
     </section>
   )
 }
@@ -669,6 +757,7 @@ function ProposalInspector({
 
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const [activeView, setActiveView] = useState<ActiveView>('knowledge_map')
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
@@ -707,6 +796,12 @@ function App() {
     void refresh()
   }, [])
 
+  useEffect(() => {
+    if (activeView === 'raw_note_editor') {
+      titleInputRef.current?.focus()
+    }
+  }, [activeView])
+
   async function submitRawNote(event: React.FormEvent) {
     event.preventDefault()
     if (!bodyMarkdown.trim()) {
@@ -741,6 +836,12 @@ function App() {
     }
   }
 
+  function openRawNoteEditor() {
+    setActiveView('raw_note_editor')
+    setNotice(null)
+    setError(null)
+  }
+
   async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
     await requestJson(`/update-proposals/${proposalId}/${decision}`, {
       method: 'POST',
@@ -752,47 +853,55 @@ function App() {
   return (
     <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
       <LeftNavigation
-        onCaptureClick={() => {
-          titleInputRef.current?.focus()
-          titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }}
+        activeView={activeView}
+        onCaptureClick={openRawNoteEditor}
+        onKnowledgeMapClick={() => setActiveView('knowledge_map')}
+        onRawNotesClick={openRawNoteEditor}
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
         weakCount={weakCount}
       />
       <section className="flex min-w-0 flex-1 flex-col">
-        <TopToolbar
-          compiledCount={workspaceData.compiledNotes.length}
-          noteCount={workspaceData.rawNotes.length}
-          taskCount={openTaskCount}
-        />
-        {error ? (
-          <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="mx-6 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-            {notice}
-          </div>
-        ) : null}
-        <div className="flex min-h-0 flex-1">
-          <KnowledgeCanvas
+        {activeView === 'knowledge_map' ? (
+          <>
+            <TopToolbar
+              compiledCount={workspaceData.compiledNotes.length}
+              noteCount={workspaceData.rawNotes.length}
+              taskCount={openTaskCount}
+            />
+            {error ? (
+              <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {error}
+              </div>
+            ) : null}
+            {notice ? (
+              <div className="mx-6 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                {notice}
+              </div>
+            ) : null}
+            <div className="flex min-h-0 flex-1">
+              <KnowledgeCanvas data={workspaceData} />
+              <ProposalInspector
+                onApprove={(proposalId) => void decideProposal(proposalId, 'approve')}
+                onReject={(proposalId) => void decideProposal(proposalId, 'reject')}
+                proposal={selectedProposal}
+              />
+            </div>
+          </>
+        ) : (
+          <RawNoteEditorPage
             bodyMarkdown={bodyMarkdown}
-            data={workspaceData}
+            error={error}
             isSubmitting={isSubmitting || isLoading}
+            notice={notice}
             onBodyChange={setBodyMarkdown}
             onSubmit={submitRawNote}
             onTitleChange={setTitle}
+            rawNotes={workspaceData.rawNotes}
             title={title}
             titleInputRef={titleInputRef}
           />
-          <ProposalInspector
-            onApprove={(proposalId) => void decideProposal(proposalId, 'approve')}
-            onReject={(proposalId) => void decideProposal(proposalId, 'reject')}
-            proposal={selectedProposal}
-          />
-        </div>
+        )}
       </section>
     </main>
   )

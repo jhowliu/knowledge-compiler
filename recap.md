@@ -22,6 +22,7 @@
 - Updated the web canvas to load review maps from the API and show their decision rules in the Heptabase-like map card.
 - Added server tests for review-map extraction/proposal behavior and the `/review-maps` dashboard route.
 - Fixed the raw-note capture UX: the left-nav `Capture raw note` button now focuses the input form, and successful compile shows a visible confirmation message.
+- Replaced the inline raw-note capture card with a dedicated dark raw-note editor page; clicking `Capture raw note` or `Raw notes` now navigates to that page.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -49,6 +50,7 @@
 - The Pencil source file is named `deisgn.pen` in the repo and remains untracked unless intentionally added.
 - A Vite process from before this phase was still running as PID 76042 during cleanup; the Phase 2 smoke-test dev servers were stopped.
 - Local raw-note smoke tests inserted sample notes into the development database.
+- Raw-note editor browser verification inserted another sample note into the development database.
 
 ## Next Target
 - Add richer review-map editing and approval UX, including a dedicated review-map list/detail mode.

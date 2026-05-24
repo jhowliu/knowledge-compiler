@@ -22,3 +22,110 @@
     font: inherit;
   }
 }
+
+@layer components {
+  .theme-dark .bg-canvas {
+    background-color: #111113 !important;
+  }
+
+  .theme-dark .bg-white,
+  .theme-dark .bg-slate-50,
+  .theme-dark .bg-slate-100 {
+    background-color: #1b1b1b !important;
+  }
+
+  .theme-dark .text-ink,
+  .theme-dark .text-slate-700 {
+    color: #f4f4f5 !important;
+  }
+
+  .theme-dark .text-gray-700,
+  .theme-dark .text-gray-600 {
+    color: #d4d4d8 !important;
+  }
+
+  .theme-dark .text-gray-500 {
+    color: #a1a1aa !important;
+  }
+
+  .theme-dark .border-gray-300,
+  .theme-dark .border-gray-200,
+  .theme-dark .border-slate-200 {
+    border-color: #303030 !important;
+  }
+
+  .theme-dark .shadow-card {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32) !important;
+  }
+
+  .theme-light .bg-\[\#181818\] {
+    background-color: #f6f7f9 !important;
+  }
+
+  .theme-light .bg-\[\#1B1B1B\],
+  .theme-light .bg-\[\#202020\],
+  .theme-light .bg-\[\#151515\] {
+    background-color: #ffffff !important;
+  }
+
+  .theme-light .bg-\[\#252039\] {
+    background-color: #f0efff !important;
+  }
+
+  .theme-light .bg-\[\#262626\],
+  .theme-light .bg-\[\#2A2A2A\],
+  .theme-light .bg-\[\#303030\] {
+    background-color: #eef2f7 !important;
+  }
+
+  .theme-light .border-\[\#2B2B2B\],
+  .theme-light .border-\[\#303030\],
+  .theme-light .border-\[\#333333\],
+  .theme-light .border-\[\#3A3A3A\],
+  .theme-light .border-red-900\/60,
+  .theme-light .border-emerald-900\/60 {
+    border-color: #d8dee8 !important;
+  }
+
+  .theme-light .text-white,
+  .theme-light .text-gray-100 {
+    color: #1a1a1a !important;
+  }
+
+  .theme-light .text-gray-200,
+  .theme-light .text-gray-300 {
+    color: #374151 !important;
+  }
+
+  .theme-light .text-gray-400,
+  .theme-light .text-gray-500 {
+    color: #64748b !important;
+  }
+
+  .theme-light .placeholder\:text-gray-600::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  .theme-light .bg-violet.text-white,
+  .theme-light .bg-violet .text-white,
+  .theme-light .bg-red-50 .text-red-800,
+  .theme-light .bg-emerald-50 .text-emerald-800 {
+    color: #ffffff !important;
+  }
+
+  .theme-light .bg-red-950\/50 {
+    background-color: #fef2f2 !important;
+  }
+
+  .theme-light .bg-emerald-950\/50 {
+    background-color: #ecfdf5 !important;
+  }
+
+  .theme-light .text-red-100 {
+    color: #991b1b !important;
+  }
+
+  .theme-light .text-emerald-100 {
+    color: #065f46 !important;
+  }
+}

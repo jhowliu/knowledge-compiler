@@ -15,8 +15,8 @@ export class RawNoteController {
 
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const rawNote = await this.rawNoteService.createRawNote(request.body);
-      response.status(201).json({ rawNote });
+      const result = await this.rawNoteService.createRawNote(request.body);
+      response.status(201).json(result);
     } catch (error) {
       next(error);
     }

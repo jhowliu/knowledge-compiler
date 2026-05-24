@@ -1,43 +1,727 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import "./styles.css";
+import React, { useEffect, useMemo, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import {
+  Check,
+  Download,
+  Filter,
+  GitBranch,
+  Layers3,
+  Library,
+  Link2,
+  Map,
+  PencilLine,
+  Plus,
+  RotateCw,
+  Search,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import './index.css'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
-function App() {
-  return (
-    <main className="app-shell">
-      <section className="workspace">
-        <header className="masthead">
-          <div>
-            <p className="eyebrow">Interview Knowledge Compiler</p>
-            <h1>Turn practice notes into durable interview knowledge.</h1>
-          </div>
-          <a className="status-pill" href={`${apiBaseUrl}/health`}>
-            API health
-          </a>
-        </header>
+type ProposalStatus = 'pending' | 'approved' | 'rejected'
 
-        <section className="note-panel">
-          <div className="panel-header">
-            <div>
-              <h2>Raw note</h2>
-              <p>Capture the messy reflection first. The agent proposal comes after.</p>
-            </div>
-            <button type="button">Save draft</button>
-          </div>
-          <textarea
-            aria-label="Raw practice note"
-            placeholder="Example: 1334. I missed that this was all-pairs shortest path and should use Floyd-Warshall..."
-          />
-        </section>
-      </section>
-    </main>
-  );
+type RawNote = {
+  id: string
+  title: string | null
+  domain: string | null
+  bodyMarkdown: string
+  createdAt: string
 }
 
-createRoot(document.getElementById("root")!).render(
+type ProposalItem = {
+  id: string
+  actionType: string
+  targetType: string | null
+  payload: Record<string, unknown>
+  rationale: string | null
+  status: ProposalStatus
+}
+
+type Proposal = {
+  id: string
+  rawNoteId: string | null
+  detectedDomain: string | null
+  detectedKnowledgeType: string | null
+  impactLevel: number
+  confidence: string
+  status: ProposalStatus
+  rationale: string | null
+  items: ProposalItem[]
+  createdAt: string
+}
+
+type CompiledNote = {
+  id: string
+  domain: string
+  noteType: string
+  title: string
+  bodyMarkdown: string
+  updatedAt: string
+}
+
+type Mistake = {
+  id: string
+  domain: string
+  category: string | null
+  title: string
+  description: string
+  evidenceCount: number
+}
+
+type ReviewTask = {
+  id: string
+  domain: string
+  title: string
+  description: string
+  status: string
+}
+
+type ReadinessItem = {
+  id: string
+  domain: string
+  area: string
+  status: string
+  rationale: string | null
+}
+
+type WorkspaceData = {
+  rawNotes: RawNote[]
+  proposals: Proposal[]
+  compiledNotes: CompiledNote[]
+  mistakes: Mistake[]
+  reviewTasks: ReviewTask[]
+  readinessItems: ReadinessItem[]
+}
+
+const emptyWorkspaceData: WorkspaceData = {
+  rawNotes: [],
+  proposals: [],
+  compiledNotes: [],
+  mistakes: [],
+  reviewTasks: [],
+  readinessItems: [],
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+    ...init,
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(body || `Request failed with ${response.status}`)
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function loadWorkspaceData(): Promise<WorkspaceData> {
+  const [rawNotes, proposals, compiledNotes, mistakes, reviewTasks, readinessItems] =
+    await Promise.all([
+      requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
+      requestJson<{ proposals: Proposal[] }>('/update-proposals'),
+      requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
+      requestJson<{ mistakes: Mistake[] }>('/mistakes'),
+      requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
+      requestJson<{ readinessItems: ReadinessItem[] }>('/readiness-map'),
+    ])
+
+  return {
+    rawNotes: rawNotes.rawNotes,
+    proposals: proposals.proposals,
+    compiledNotes: compiledNotes.compiledNotes,
+    mistakes: mistakes.mistakes,
+    reviewTasks: reviewTasks.reviewTasks,
+    readinessItems: readinessItems.readinessItems,
+  }
+}
+
+function payloadText(payload: Record<string, unknown>, key: string, fallback = '') {
+  const value = payload[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function payloadLabel(payload: Record<string, unknown>) {
+  for (const key of ['title', 'area', 'status', 'domain', 'noteType']) {
+    const value = payload[key]
+    if (typeof value === 'string' && value) {
+      return value
+    }
+  }
+
+  return 'Update'
+}
+
+function statusTone(status: string) {
+  if (status === 'Weak') return 'bg-orange-100 text-orange-800 border-orange-200'
+  if (status === 'Strong') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+  if (status === 'Needs Review') return 'bg-amber-100 text-amber-800 border-amber-200'
+  return 'bg-slate-100 text-slate-700 border-slate-200'
+}
+
+function actionLabel(actionType: string) {
+  return actionType.replaceAll('_', ' ')
+}
+
+function IconButton({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
+    >
+      {children}
+    </button>
+  )
+}
+
+function LeftNavigation({
+  pendingCount,
+  weakCount,
+}: {
+  pendingCount: number
+  weakCount: number
+}) {
+  return (
+    <aside className="flex h-screen w-[252px] shrink-0 flex-col gap-[18px] bg-ink px-[18px] py-6 text-white">
+      <div className="space-y-1">
+        <p className="text-lg font-bold leading-5">Interview Knowledge</p>
+        <p className="text-lg font-bold leading-5">Compiler</p>
+      </div>
+
+      <button className="flex h-11 items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white">
+        <Plus size={18} />
+        Capture raw note
+      </button>
+
+      <nav className="space-y-1.5">
+        <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">WORKSPACE</p>
+        <a className="flex h-9 items-center gap-2.5 rounded-md bg-[#2A2A2A] px-2.5 text-[13px] font-semibold text-white">
+          <Map size={16} />
+          Knowledge map
+        </a>
+        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+          <PencilLine size={16} className="text-gray-400" />
+          Raw notes
+        </a>
+        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+          <Sparkles size={16} className="text-gray-400" />
+          Update proposals
+          {pendingCount > 0 ? (
+            <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
+              {pendingCount}
+            </span>
+          ) : null}
+        </a>
+      </nav>
+
+      <nav className="space-y-1.5">
+        <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">DOMAINS</p>
+        {[
+          ['Coding / LeetCode', 'bg-violet'],
+          ['System design', 'bg-emerald-500'],
+          ['Behavioral stories', 'bg-amber-500'],
+        ].map(([label, color]) => (
+          <a className="flex h-8 items-center gap-2 px-2.5 text-[13px] text-gray-300" key={label}>
+            <span className={`h-2 w-2 rounded-full ${color}`} />
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <div className="mt-auto rounded-lg bg-[#262626] p-3.5">
+        <p className="mb-2 text-[13px] font-bold">Readiness</p>
+        <p className="text-xs leading-5 text-gray-300">
+          {weakCount || 0} weak areas need review today
+        </p>
+      </div>
+    </aside>
+  )
+}
+
+function TopToolbar({ noteCount, compiledCount, taskCount }: {
+  noteCount: number
+  compiledCount: number
+  taskCount: number
+}) {
+  return (
+    <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">
+      <div className="flex h-10 w-[420px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500">
+        <Search size={16} />
+        Search notes, patterns, mistakes...
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h1 className="text-[15px] font-bold text-ink">Coding Knowledge Map</h1>
+        <p className="text-xs text-gray-500">
+          {noteCount} raw notes → {compiledCount} compiled notes → {taskCount} open actions
+        </p>
+      </div>
+
+      <IconButton label="Filter">
+        <Filter size={18} />
+      </IconButton>
+      <IconButton label="Export">
+        <Download size={18} />
+      </IconButton>
+      <button
+        type="button"
+        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white"
+      >
+        <RotateCw size={16} />
+        Run compiler
+      </button>
+    </header>
+  )
+}
+
+function ClusterLabel({
+  children,
+  className,
+  dotClassName,
+}: {
+  children: React.ReactNode
+  className: string
+  dotClassName: string
+}) {
+  return (
+    <div className={`inline-flex h-[30px] items-center gap-2 rounded-2xl border px-3 text-xs font-bold ${className}`}>
+      <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
+      {children}
+    </div>
+  )
+}
+
+function MapCard({
+  className = '',
+  title,
+  meta,
+  children,
+}: {
+  className?: string
+  title: string
+  meta: string
+  children: React.ReactNode
+}) {
+  return (
+    <article className={`absolute max-h-[202px] overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-card ${className}`}>
+      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">{meta}</p>
+      <h3 className="mb-2 line-clamp-3 text-[15px] font-extrabold text-ink">{title}</h3>
+      <div className="line-clamp-5 text-xs leading-5 text-gray-600">{children}</div>
+    </article>
+  )
+}
+
+function EvidenceTray({ rawNotes }: { rawNotes: RawNote[] }) {
+  const snippets = rawNotes.slice(0, 3)
+
+  return (
+    <section className="absolute bottom-6 left-8 right-[392px] flex h-[124px] gap-3 rounded-lg border border-gray-300 bg-white p-3.5 shadow-card">
+      <div className="w-[118px] shrink-0">
+        <h2 className="text-sm font-extrabold text-ink">Evidence</h2>
+        <p className="mt-1 text-[11px] leading-4 text-gray-500">Source-backed changes</p>
+      </div>
+      {(snippets.length ? snippets : [null, null, null]).map((snippet, index) => (
+        <article
+          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-slate-50 p-3"
+          key={snippet?.id ?? index}
+        >
+          <p className="mb-2 text-[11px] font-bold text-gray-500">
+            {snippet ? snippet.title ?? 'Raw note' : ['LeetCode reflection', 'Mock feedback', 'Behavioral draft'][index]}
+          </p>
+          <p className="line-clamp-2 text-xs leading-5 text-ink">
+            {snippet?.bodyMarkdown ??
+              [
+                '“I realized it should use Floyd-Warshall...”',
+                'Capacity estimate missing from URL shortener pass.',
+                'Strong action, but result is not quantified yet.',
+              ][index]}
+          </p>
+        </article>
+      ))}
+    </section>
+  )
+}
+
+function KnowledgeCanvas({
+  data,
+  title,
+  bodyMarkdown,
+  isSubmitting,
+  onTitleChange,
+  onBodyChange,
+  onSubmit,
+}: {
+  data: WorkspaceData
+  title: string
+  bodyMarkdown: string
+  isSubmitting: boolean
+  onTitleChange: (value: string) => void
+  onBodyChange: (value: string) => void
+  onSubmit: (event: React.FormEvent) => void
+}) {
+  const primaryPattern = data.compiledNotes.find((note) => note.noteType === 'pattern')
+  const primaryProblem = data.compiledNotes.find((note) => note.noteType === 'problem_note')
+  const primaryMistake = data.mistakes[0]
+  const primaryTask = data.reviewTasks[0]
+  const primaryReadiness = data.readinessItems[0]
+
+  return (
+    <section className="relative h-full flex-1 overflow-hidden bg-canvas">
+      <div
+        className="absolute inset-0 opacity-70"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.32) 1px, transparent 0)',
+          backgroundSize: '28px 28px',
+        }}
+      />
+
+      <div className="absolute left-8 top-8">
+        <ClusterLabel
+          className="border-indigo-200 bg-indigo-50 text-indigo-800"
+          dotClassName="bg-violet"
+        >
+          Coding patterns
+        </ClusterLabel>
+      </div>
+      <div className="absolute left-[560px] top-[102px]">
+        <ClusterLabel
+          className="border-emerald-200 bg-emerald-50 text-emerald-800"
+          dotClassName="bg-emerald-500"
+        >
+          Readiness
+        </ClusterLabel>
+      </div>
+      <div className="absolute left-[356px] top-[512px]">
+        <ClusterLabel
+          className="border-orange-200 bg-orange-50 text-orange-800"
+          dotClassName="bg-orange-400"
+        >
+          Mistakes & actions
+        </ClusterLabel>
+      </div>
+
+      <div className="absolute left-[290px] top-[210px] h-0.5 w-[104px] rotate-[18deg] bg-indigo-300" />
+      <div className="absolute left-[486px] top-[268px] h-0.5 w-[92px] -rotate-[24deg] bg-indigo-300" />
+      <div className="absolute left-[420px] top-[370px] h-[178px] w-0.5 bg-orange-300" />
+      <div className="absolute left-[526px] top-[190px] h-0.5 w-[70px] -rotate-[14deg] bg-emerald-300" />
+
+      <MapCard className="left-12 top-20 w-[260px]" meta="review map" title="Shortest Path Decision Guide">
+        Weight = 1 → BFS. Positive weights → Dijkstra. All pairs → Floyd-Warshall.
+      </MapCard>
+
+      <MapCard
+        className="left-[354px] top-[178px] w-[250px] border-indigo-200"
+        meta={primaryPattern?.noteType ?? 'pattern'}
+        title={primaryPattern?.title ?? 'All-Pairs Shortest Path'}
+      >
+        {primaryPattern?.bodyMarkdown.slice(0, 150) ??
+          'Canonical pattern card. Recognition cues, common traps, and representative problems stay bounded here.'}
+      </MapCard>
+
+      <MapCard
+        className="left-[552px] top-[330px] w-[248px]"
+        meta={primaryProblem?.noteType ?? 'problem note'}
+        title={primaryProblem?.title ?? '1334. Find the City'}
+      >
+        {primaryProblem?.bodyMarkdown.slice(0, 140) ??
+          'Problem evidence connects back to the raw note and supports pattern readiness changes.'}
+      </MapCard>
+
+      <MapCard
+        className="left-[584px] top-[138px] w-[228px] border-emerald-200"
+        meta="readiness"
+        title={primaryReadiness?.area ?? 'Graph shortest path'}
+      >
+        <span
+          className={`mb-2 inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusTone(
+            primaryReadiness?.status ?? 'Weak',
+          )}`}
+        >
+          {primaryReadiness?.status ?? 'Weak'}
+        </span>
+        <p>{primaryReadiness?.rationale ?? 'Needs two successful review passes before moving to Okay.'}</p>
+      </MapCard>
+
+      <MapCard
+        className="left-[304px] top-[552px] w-[270px] border-orange-200"
+        meta="mistake"
+        title={primaryMistake?.title ?? 'Did not recognize APSP'}
+      >
+        {primaryMistake?.description ??
+          'Personal recurring error lives in the mistake log, linked back to source evidence.'}
+      </MapCard>
+
+      <MapCard
+        className="left-[582px] top-[564px] w-[230px] border-amber-200"
+        meta="review task"
+        title={primaryTask?.title ?? 'Practice 2 APSP problems'}
+      >
+        {primaryTask?.description ?? 'Actionable practice card generated from approved proposal.'}
+      </MapCard>
+
+      <form
+        className="absolute left-12 top-[330px] w-[316px] rounded-lg border border-gray-300 bg-white p-4 shadow-card"
+        onSubmit={onSubmit}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-violet">Raw markdown</p>
+            <h2 className="text-lg font-extrabold text-ink">Capture evidence</h2>
+          </div>
+          <button
+            className="flex h-9 items-center gap-2 rounded-lg bg-violet px-3 text-xs font-extrabold text-white disabled:opacity-60"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            <Sparkles size={14} />
+            {isSubmitting ? 'Compiling' : 'Compile'}
+          </button>
+        </div>
+        <input
+          aria-label="Raw note title"
+          className="mb-2 h-10 w-full rounded-md border border-gray-300 bg-slate-50 px-3 text-[13px] outline-none focus:border-violet focus:ring-2 focus:ring-indigo-100"
+          onChange={(event) => onTitleChange(event.target.value)}
+          placeholder="1334. Find the City..."
+          value={title}
+        />
+        <textarea
+          aria-label="Raw practice note"
+          className="h-[118px] w-full resize-none rounded-md border border-gray-300 bg-slate-50 px-3 py-2 text-[13px] leading-5 outline-none focus:border-violet focus:ring-2 focus:ring-indigo-100"
+          onChange={(event) => onBodyChange(event.target.value)}
+          placeholder="Write messy. The compiler extracts structure after you save."
+          value={bodyMarkdown}
+        />
+      </form>
+
+      <EvidenceTray rawNotes={data.rawNotes} />
+    </section>
+  )
+}
+
+function ProposalInspector({
+  proposal,
+  onApprove,
+  onReject,
+}: {
+  proposal: Proposal | null
+  onApprove: (proposalId: string) => void
+  onReject: (proposalId: string) => void
+}) {
+  const firstItem = proposal?.items[0]
+
+  return (
+    <aside className="h-full w-[360px] shrink-0 overflow-y-auto border-l border-gray-300 bg-white px-[18px] py-5">
+      <div className="mb-4 space-y-1">
+        <p className="text-[11px] font-bold tracking-wide text-violet">AI UPDATE PROPOSAL</p>
+        <h2 className="text-xl font-extrabold text-ink">Compile raw note into knowledge</h2>
+        <p className="text-xs leading-5 text-gray-500">
+          {proposal
+            ? `Detected ${proposal.detectedKnowledgeType ?? 'coding note'} · ${proposal.confidence} confidence`
+            : 'No pending proposal selected'}
+        </p>
+      </div>
+
+      <div className="mb-4 rounded-lg border border-gray-200 bg-slate-50 p-3.5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold text-gray-500">Domain</span>
+          <strong className="text-[13px] text-ink">{proposal?.detectedDomain ?? 'Coding'}</strong>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold text-gray-500">Impact</span>
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
+            Level {proposal?.impactLevel ?? 2} · approval recommended
+          </span>
+        </div>
+      </div>
+
+      <section className="mb-4 space-y-2.5">
+        <h3 className="text-sm font-extrabold text-ink">Suggested updates</h3>
+        {proposal?.items.length ? (
+          proposal.items.map((item, index) => (
+            <article className="rounded-md border border-gray-200 bg-white p-3" key={item.id}>
+              <p className="text-[13px] font-bold capitalize text-ink">
+                {index + 1}. {actionLabel(item.actionType)}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-600">{payloadLabel(item.payload)}</p>
+            </article>
+          ))
+        ) : (
+          <p className="rounded-md border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-500">
+            Capture a raw note to generate a proposal.
+          </p>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 p-3.5">
+        <h3 className="mb-2 text-[13px] font-extrabold text-indigo-800">Why</h3>
+        <p className="text-xs leading-5 text-indigo-800">
+          {proposal?.rationale ??
+            'The compiler turns messy practice notes into clean, evidence-backed knowledge changes.'}
+        </p>
+      </section>
+
+      <section className="mb-4 rounded-lg border border-gray-200 bg-slate-50 p-3.5">
+        <h3 className="mb-2 text-[13px] font-extrabold text-ink">Readiness change</h3>
+        <p className="text-xs leading-5 text-gray-600">
+          {firstItem
+            ? payloadText(firstItem.payload, 'rationale', 'Readiness updates remain linked to source evidence.')
+            : 'Graph shortest path remains Weak until review tasks are completed.'}
+        </p>
+      </section>
+
+      <section className="mb-4 space-y-2">
+        <h3 className="text-sm font-extrabold text-ink">Evidence links</h3>
+        {['Raw note · today', 'Shortest Path review map'].map((label) => (
+          <div className="flex h-[38px] items-center gap-2 rounded-md border border-gray-200 px-2.5 text-xs text-gray-700" key={label}>
+            <Link2 size={15} className="text-gray-500" />
+            {label}
+          </div>
+        ))}
+      </section>
+
+      <div className="flex gap-2.5">
+        <button
+          className="flex h-[42px] flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white text-[13px] font-bold text-ink disabled:opacity-50"
+          disabled={!proposal || proposal.status !== 'pending'}
+          onClick={() => proposal && onReject(proposal.id)}
+          type="button"
+        >
+          <X size={15} />
+          Reject
+        </button>
+        <button
+          className="flex h-[42px] flex-1 items-center justify-center gap-2 rounded-lg bg-violet text-[13px] font-extrabold text-white disabled:opacity-50"
+          disabled={!proposal || proposal.status !== 'pending'}
+          onClick={() => proposal && onApprove(proposal.id)}
+          type="button"
+        >
+          <Check size={15} />
+          Approve
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+function App() {
+  const [title, setTitle] = useState('')
+  const [bodyMarkdown, setBodyMarkdown] = useState('')
+  const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const selectedProposal = useMemo(() => {
+    return (
+      workspaceData.proposals.find((proposal) => proposal.id === selectedProposalId) ??
+      workspaceData.proposals.find((proposal) => proposal.status === 'pending') ??
+      workspaceData.proposals[0] ??
+      null
+    )
+  }, [selectedProposalId, workspaceData.proposals])
+
+  const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
+  const weakCount = workspaceData.readinessItems.filter((item) => item.status === 'Weak').length
+  const openTaskCount = workspaceData.reviewTasks.filter((task) => task.status === 'open').length
+
+  async function refresh() {
+    setIsLoading(true)
+    try {
+      setWorkspaceData(await loadWorkspaceData())
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  async function submitRawNote(event: React.FormEvent) {
+    event.preventDefault()
+    if (!bodyMarkdown.trim()) {
+      setError('Write a practice note first.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const result = await requestJson<{ proposal: Proposal | null }>('/raw-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.trim() || null,
+          bodyMarkdown,
+        }),
+      })
+      setTitle('')
+      setBodyMarkdown('')
+      setSelectedProposalId(result.proposal?.id ?? null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
+    await requestJson(`/update-proposals/${proposalId}/${decision}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+    await refresh()
+  }
+
+  return (
+    <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
+      <LeftNavigation pendingCount={pendingCount} weakCount={weakCount} />
+      <section className="flex min-w-0 flex-1 flex-col">
+        <TopToolbar
+          compiledCount={workspaceData.compiledNotes.length}
+          noteCount={workspaceData.rawNotes.length}
+          taskCount={openTaskCount}
+        />
+        {error ? (
+          <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {error}
+          </div>
+        ) : null}
+        <div className="flex min-h-0 flex-1">
+          <KnowledgeCanvas
+            bodyMarkdown={bodyMarkdown}
+            data={workspaceData}
+            isSubmitting={isSubmitting || isLoading}
+            onBodyChange={setBodyMarkdown}
+            onSubmit={submitRawNote}
+            onTitleChange={setTitle}
+            title={title}
+          />
+          <ProposalInspector
+            onApprove={(proposalId) => void decideProposal(proposalId, 'approve')}
+            onReject={(proposalId) => void decideProposal(proposalId, 'reject')}
+            proposal={selectedProposal}
+          />
+        </div>
+      </section>
+    </main>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,
-);
+)

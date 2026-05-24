@@ -1,4 +1,5 @@
-import type { CreateRawNoteInput } from "../domain/rawNote.js";
+import { AppError } from "../domain/errors.js";
+import type { CreateRawNoteInput, UpdateRawNoteInput } from "../domain/rawNote.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { PhaseOneWorkflowService } from "./phaseOneWorkflow.service.js";
 
@@ -24,6 +25,39 @@ export class RawNoteService {
 
   async listRecentRawNotes() {
     return this.rawNoteRepository.listRecent(50);
+  }
+
+  async updateRawNote(id: string, input: UpdateRawNoteInput) {
+    const rawNote = await this.rawNoteRepository.update(id, input);
+    if (!rawNote) {
+      throw new AppError("Raw note not found", 404);
+    }
+
+    return rawNote;
+  }
+
+  async deleteRawNote(id: string) {
+    const deleted = await this.rawNoteRepository.delete(id);
+    if (!deleted) {
+      throw new AppError("Raw note not found", 404);
+    }
+  }
+
+  async compileRawNote(id: string) {
+    const rawNote = await this.rawNoteRepository.getById(id);
+    if (!rawNote) {
+      throw new AppError("Raw note not found", 404);
+    }
+
+    if (!this.phaseOneWorkflowService) {
+      return { proposal: null, agentRunId: null };
+    }
+
+    const result = await this.phaseOneWorkflowService.ingestRawNote(id);
+    return {
+      proposal: result.proposal,
+      agentRunId: result.agentRunId,
+    };
   }
 }
 

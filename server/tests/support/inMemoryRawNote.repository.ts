@@ -1,4 +1,4 @@
-import type { CreateRawNoteInput, RawNote } from "../../src/domain/rawNote.js";
+import type { CreateRawNoteInput, RawNote, UpdateRawNoteInput } from "../../src/domain/rawNote.js";
 import type { RawNoteRepository } from "../../src/repositories/rawNote.repository.js";
 
 export class InMemoryRawNoteRepository implements RawNoteRepository {
@@ -25,6 +25,29 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
 
   async listRecent(limit: number): Promise<RawNote[]> {
     return this.notes.slice(0, limit);
+  }
+
+  async update(id: string, input: UpdateRawNoteInput): Promise<RawNote | null> {
+    const note = await this.getById(id);
+    if (!note) {
+      return null;
+    }
+
+    note.domain = input.domain ?? null;
+    note.title = input.title ?? null;
+    note.bodyMarkdown = input.bodyMarkdown;
+    note.extractedData = {};
+    return note;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const index = this.notes.findIndex((note) => note.id === id);
+    if (index === -1) {
+      return false;
+    }
+
+    this.notes.splice(index, 1);
+    return true;
   }
 
   async updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote> {

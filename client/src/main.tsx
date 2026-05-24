@@ -13,8 +13,10 @@ import {
   PencilLine,
   Plus,
   RotateCw,
+  Save,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react'
 import './index.css'
@@ -124,6 +126,21 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+async function requestVoid(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+    ...init,
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(body || `Request failed with ${response.status}`)
+  }
 }
 
 async function loadWorkspaceData(): Promise<WorkspaceData> {
@@ -645,6 +662,7 @@ function KnowledgeCanvas({
 function RawNoteEditorPage({
   rawNotes,
   selectedRawNoteId,
+  isDirty,
   title,
   bodyMarkdown,
   isSubmitting,
@@ -655,10 +673,13 @@ function RawNoteEditorPage({
   onBodyChange,
   onNewNote,
   onSelectRawNote,
+  onSave,
+  onDelete,
   onSubmit,
 }: {
   rawNotes: RawNote[]
   selectedRawNoteId: string | null
+  isDirty: boolean
   title: string
   bodyMarkdown: string
   isSubmitting: boolean
@@ -669,6 +690,8 @@ function RawNoteEditorPage({
   onBodyChange: (value: string) => void
   onNewNote: () => void
   onSelectRawNote: (note: RawNote) => void
+  onSave: () => void
+  onDelete: () => void
   onSubmit: (event: React.FormEvent) => void
 }) {
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
@@ -725,7 +748,7 @@ function RawNoteEditorPage({
         <header className="flex h-[78px] items-center justify-between gap-4 border-b border-[#303030] px-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              {selectedRawNote ? 'Saved raw note' : 'New raw note'}
+              {selectedRawNote ? (isDirty ? 'Editing saved raw note' : 'Saved raw note') : 'New raw note'}
             </p>
             <h2 className="text-[15px] font-bold text-gray-100">
               {selectedRawNote?.title ?? 'Capture interview evidence'}
@@ -741,13 +764,36 @@ function RawNoteEditorPage({
               <Plus size={16} />
               New note
             </button>
+            {selectedRawNote ? (
+              <>
+                <button
+                  className="flex h-10 items-center gap-2 rounded-lg border border-[#3A3A3A] px-3.5 text-[13px] font-bold text-gray-200 hover:bg-[#2A2A2A] disabled:opacity-50"
+                  disabled={isSubmitting || !isDirty}
+                  onClick={onSave}
+                  type="button"
+                >
+                  <Save size={16} />
+                  Save
+                </button>
+                <button
+                  aria-label="Delete raw note"
+                  className="grid h-10 w-10 place-items-center rounded-lg border border-red-900/70 text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                  disabled={isSubmitting}
+                  onClick={onDelete}
+                  title="Delete raw note"
+                  type="button"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            ) : null}
             <button
               className="flex h-10 items-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >
               <Sparkles size={16} />
-              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile as new' : 'Compile note'}
+              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile saved' : 'Compile note'}
             </button>
           </div>
         </header>
@@ -917,6 +963,7 @@ function App() {
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
+  const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -957,6 +1004,67 @@ function App() {
     }
   }, [activeView])
 
+  function rawNotePayload() {
+    return {
+      title: title.trim() || null,
+      bodyMarkdown,
+    }
+  }
+
+  async function saveSelectedRawNote() {
+    if (!selectedRawNoteId) {
+      return null
+    }
+
+    if (!bodyMarkdown.trim()) {
+      setError('Write a practice note first.')
+      return null
+    }
+
+    setIsSubmitting(true)
+    try {
+      const result = await requestJson<{ rawNote: RawNote }>(`/raw-notes/${selectedRawNoteId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(rawNotePayload()),
+      })
+      setSelectedRawNoteId(result.rawNote.id)
+      setIsRawNoteDirty(false)
+      setNotice('Raw note saved.')
+      setError(null)
+      await refresh()
+      return result.rawNote
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
+      setNotice(null)
+      return null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function deleteSelectedRawNote() {
+    if (!selectedRawNoteId) {
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await requestVoid(`/raw-notes/${selectedRawNoteId}`, { method: 'DELETE' })
+      setTitle('')
+      setBodyMarkdown('')
+      setSelectedRawNoteId(null)
+      setIsRawNoteDirty(false)
+      setNotice('Raw note deleted.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to delete note')
+      setNotice(null)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   async function submitRawNote(event: React.FormEvent) {
     event.preventDefault()
     if (!bodyMarkdown.trim()) {
@@ -966,21 +1074,41 @@ function App() {
 
     setIsSubmitting(true)
     try {
-      const result = await requestJson<{ proposal: Proposal | null }>('/raw-notes', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: title.trim() || null,
-          bodyMarkdown,
-        }),
-      })
+      let result: { proposal: Proposal | null }
+      const isCompilingSavedNote = Boolean(selectedRawNoteId)
+      if (selectedRawNoteId) {
+        if (isRawNoteDirty) {
+          await requestJson<{ rawNote: RawNote }>(`/raw-notes/${selectedRawNoteId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(rawNotePayload()),
+          })
+        }
+        result = await requestJson<{ proposal: Proposal | null }>(
+          `/raw-notes/${selectedRawNoteId}/compile`,
+          {
+            method: 'POST',
+            body: JSON.stringify({}),
+          },
+        )
+      } else {
+        result = await requestJson<{ proposal: Proposal | null }>('/raw-notes', {
+          method: 'POST',
+          body: JSON.stringify(rawNotePayload()),
+        })
+      }
+      setSelectedProposalId(result.proposal?.id ?? null)
+      setSelectedRawNoteId(null)
+      setIsRawNoteDirty(false)
       setTitle('')
       setBodyMarkdown('')
-      setSelectedRawNoteId(null)
-      setSelectedProposalId(result.proposal?.id ?? null)
       setNotice(
         result.proposal
-          ? 'Raw note captured. Review the generated update proposal.'
-          : 'Raw note captured.',
+          ? isCompilingSavedNote
+            ? 'Raw note compiled. Review the generated update proposal.'
+            : 'Raw note captured. Review the generated update proposal.'
+          : isCompilingSavedNote
+            ? 'Raw note compiled.'
+            : 'Raw note captured.',
       )
       setError(null)
       await refresh()
@@ -1002,6 +1130,7 @@ function App() {
     setTitle('')
     setBodyMarkdown('')
     setSelectedRawNoteId(null)
+    setIsRawNoteDirty(false)
     openRawNotesView()
   }
 
@@ -1009,18 +1138,19 @@ function App() {
     setSelectedRawNoteId(rawNote.id)
     setTitle(rawNote.title ?? '')
     setBodyMarkdown(rawNote.bodyMarkdown)
+    setIsRawNoteDirty(false)
     setNotice(null)
     setError(null)
   }
 
   function updateDraftTitle(value: string) {
-    setSelectedRawNoteId(null)
     setTitle(value)
+    setIsRawNoteDirty(true)
   }
 
   function updateDraftBody(value: string) {
-    setSelectedRawNoteId(null)
     setBodyMarkdown(value)
+    setIsRawNoteDirty(true)
   }
 
   async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
@@ -1073,10 +1203,13 @@ function App() {
           <RawNoteEditorPage
             bodyMarkdown={bodyMarkdown}
             error={error}
+            isDirty={isRawNoteDirty}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
             onBodyChange={updateDraftBody}
+            onDelete={() => void deleteSelectedRawNote()}
             onNewNote={openNewRawNoteEditor}
+            onSave={() => void saveSelectedRawNote()}
             onSelectRawNote={selectRawNote}
             onSubmit={submitRawNote}
             onTitleChange={updateDraftTitle}

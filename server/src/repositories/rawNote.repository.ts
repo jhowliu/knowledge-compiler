@@ -1,5 +1,5 @@
 import { pool } from "../db/pool.js";
-import type { CreateRawNoteInput, RawNote } from "../domain/rawNote.js";
+import type { CreateRawNoteInput, RawNote, UpdateRawNoteInput } from "../domain/rawNote.js";
 
 type RawNoteRow = {
   id: string;
@@ -16,6 +16,8 @@ export interface RawNoteRepository {
   create(input: CreateRawNoteInput): Promise<RawNote>;
   getById(id: string): Promise<RawNote | null>;
   listRecent(limit: number): Promise<RawNote[]>;
+  update(id: string, input: UpdateRawNoteInput): Promise<RawNote | null>;
+  delete(id: string): Promise<boolean>;
   updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote>;
 }
 
@@ -83,6 +85,35 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
     );
 
     return result.rows.map(mapRawNote);
+  }
+
+  async update(id: string, input: UpdateRawNoteInput) {
+    const result = await pool.query<RawNoteRow>(
+      `
+        update raw_notes
+        set domain = $2,
+            title = $3,
+            body_markdown = $4,
+            extracted_data = '{}'::jsonb
+        where id = $1
+        returning *
+      `,
+      [id, input.domain ?? null, input.title ?? null, input.bodyMarkdown],
+    );
+
+    return result.rows[0] ? mapRawNote(result.rows[0]) : null;
+  }
+
+  async delete(id: string) {
+    const result = await pool.query(
+      `
+        delete from raw_notes
+        where id = $1
+      `,
+      [id],
+    );
+
+    return (result.rowCount ?? 0) > 0;
   }
 
   async updateExtraction(id: string, extractedData: unknown, domain: string | null) {

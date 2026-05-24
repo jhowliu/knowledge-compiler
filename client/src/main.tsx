@@ -58,6 +58,7 @@ type CompiledNote = {
   noteType: string
   title: string
   bodyMarkdown: string
+  structuredData?: unknown
   updatedAt: string
 }
 
@@ -90,6 +91,7 @@ type WorkspaceData = {
   rawNotes: RawNote[]
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
+  reviewMaps: CompiledNote[]
   mistakes: Mistake[]
   reviewTasks: ReviewTask[]
   readinessItems: ReadinessItem[]
@@ -99,6 +101,7 @@ const emptyWorkspaceData: WorkspaceData = {
   rawNotes: [],
   proposals: [],
   compiledNotes: [],
+  reviewMaps: [],
   mistakes: [],
   reviewTasks: [],
   readinessItems: [],
@@ -122,11 +125,12 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function loadWorkspaceData(): Promise<WorkspaceData> {
-  const [rawNotes, proposals, compiledNotes, mistakes, reviewTasks, readinessItems] =
+  const [rawNotes, proposals, compiledNotes, reviewMaps, mistakes, reviewTasks, readinessItems] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
+      requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
       requestJson<{ readinessItems: ReadinessItem[] }>('/readiness-map'),
@@ -136,10 +140,39 @@ async function loadWorkspaceData(): Promise<WorkspaceData> {
     rawNotes: rawNotes.rawNotes,
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
+    reviewMaps: reviewMaps.reviewMaps,
     mistakes: mistakes.mistakes,
     reviewTasks: reviewTasks.reviewTasks,
     readinessItems: readinessItems.readinessItems,
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function reviewMapSummary(note: CompiledNote | undefined) {
+  const structuredData = isRecord(note?.structuredData) ? note.structuredData : {}
+  const decisionRules = Array.isArray(structuredData.decisionRules)
+    ? structuredData.decisionRules
+    : []
+  const lines = decisionRules
+    .map((rule) => {
+      if (!isRecord(rule)) return null
+      const signal = typeof rule.signal === 'string' ? rule.signal : ''
+      const recommendation = typeof rule.recommendation === 'string' ? rule.recommendation : ''
+      return signal && recommendation ? `${signal} -> ${recommendation}` : null
+    })
+    .filter((line): line is string => Boolean(line))
+
+  if (lines.length) {
+    return lines.slice(0, 4).join('. ')
+  }
+
+  return (
+    note?.bodyMarkdown.slice(0, 180) ??
+    'Weight = 1 -> BFS. Positive weights -> Dijkstra. All pairs -> Floyd-Warshall.'
+  )
 }
 
 function payloadText(payload: Record<string, unknown>, key: string, fallback = '') {
@@ -185,9 +218,11 @@ function IconButton({ label, children }: { label: string; children: React.ReactN
 function LeftNavigation({
   pendingCount,
   weakCount,
+  reviewMapCount,
 }: {
   pendingCount: number
   weakCount: number
+  reviewMapCount: number
 }) {
   return (
     <aside className="flex h-screen w-[252px] shrink-0 flex-col gap-[18px] bg-ink px-[18px] py-6 text-white">
@@ -206,6 +241,11 @@ function LeftNavigation({
         <a className="flex h-9 items-center gap-2.5 rounded-md bg-[#2A2A2A] px-2.5 text-[13px] font-semibold text-white">
           <Map size={16} />
           Knowledge map
+        </a>
+        <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
+          <Library size={16} className="text-gray-400" />
+          Review maps
+          <span className="ml-auto text-[11px] font-bold text-gray-400">{reviewMapCount}</span>
         </a>
         <a className="flex h-9 items-center gap-2.5 px-2.5 text-[13px] text-gray-300">
           <PencilLine size={16} className="text-gray-400" />
@@ -369,6 +409,8 @@ function KnowledgeCanvas({
 }) {
   const primaryPattern = data.compiledNotes.find((note) => note.noteType === 'pattern')
   const primaryProblem = data.compiledNotes.find((note) => note.noteType === 'problem_note')
+  const primaryReviewMap =
+    data.reviewMaps[0] ?? data.compiledNotes.find((note) => note.noteType === 'review_map')
   const primaryMistake = data.mistakes[0]
   const primaryTask = data.reviewTasks[0]
   const primaryReadiness = data.readinessItems[0]
@@ -414,8 +456,12 @@ function KnowledgeCanvas({
       <div className="absolute left-[420px] top-[370px] h-[178px] w-0.5 bg-orange-300" />
       <div className="absolute left-[526px] top-[190px] h-0.5 w-[70px] -rotate-[14deg] bg-emerald-300" />
 
-      <MapCard className="left-12 top-20 w-[260px]" meta="review map" title="Shortest Path Decision Guide">
-        Weight = 1 → BFS. Positive weights → Dijkstra. All pairs → Floyd-Warshall.
+      <MapCard
+        className="left-12 top-20 w-[260px]"
+        meta={primaryReviewMap?.noteType ?? 'review map'}
+        title={primaryReviewMap?.title ?? 'Shortest Path Decision Guide'}
+      >
+        {reviewMapSummary(primaryReviewMap)}
       </MapCard>
 
       <MapCard
@@ -687,7 +733,11 @@ function App() {
 
   return (
     <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
-      <LeftNavigation pendingCount={pendingCount} weakCount={weakCount} />
+      <LeftNavigation
+        pendingCount={pendingCount}
+        reviewMapCount={workspaceData.reviewMaps.length}
+        weakCount={weakCount}
+      />
       <section className="flex min-w-0 flex-1 flex-col">
         <TopToolbar
           compiledCount={workspaceData.compiledNotes.length}

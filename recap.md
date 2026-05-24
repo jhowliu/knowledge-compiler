@@ -16,6 +16,11 @@
 - Wired the React client to the Phase 1 API and smoke-tested note creation plus proposal approval in browser.
 - Redesigned the client to follow the local `deisgn.pen` Heptabase-like workspace: dark left navigation, top toolbar, spatial knowledge canvas, evidence tray, and right AI proposal inspector.
 - Added Tailwind CSS and `lucide-react` for the web UI implementation.
+- Started Phase 2 Review Maps on `codex/phase-2-review-maps`.
+- Added first-class review map listing through `GET /review-maps`.
+- Improved the coding compiler so decision-guide notes like `Weight = 1 => BFS` become `review_map` compiled notes with structured decision rules, common traps, linked algorithms, and no fake mistake record.
+- Updated the web canvas to load review maps from the API and show their decision rules in the Heptabase-like map card.
+- Added server tests for review-map extraction/proposal behavior and the `/review-maps` dashboard route.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -30,6 +35,7 @@
 - Migrations now live under `server/db/migrations`, with `npm run migrate --workspace=server` as the preferred command.
 - Phase 1 compiler is deterministic/local for now so the MVP works without `OPENAI_API_KEY`; it preserves the proposal/agent-run boundary for later OpenAI Agents SDK integration.
 - Web UI now uses Tailwind via `client/src/index.css`; old ad hoc `styles.css` was removed.
+- Phase 2 keeps review maps high-level: they link out to algorithm notes instead of expanding every representative problem into the map.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -40,8 +46,10 @@
 - `AGENTS.md` exists locally and was used as convention guidance, but it has not been staged in this session.
 - Vite may choose `5174` when `5173` is occupied; server CORS now allows localhost/127.0.0.1 dev origins on any port.
 - The Pencil source file is named `deisgn.pen` in the repo and remains untracked unless intentionally added.
+- A Vite process from before this phase was still running as PID 76042 during cleanup; the Phase 2 smoke-test dev servers were stopped.
 
 ## Next Target
+- Add richer review-map editing and approval UX, including a dedicated review-map list/detail mode.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

@@ -7,6 +7,7 @@ export function createDashboardRoutes(dashboardService: DashboardService) {
   const controller = new DashboardController(dashboardService);
 
   router.get("/compiled-notes", controller.compiledNotes);
+  router.get("/review-maps", controller.reviewMaps);
   router.get("/mistakes", controller.mistakes);
   router.get("/review-tasks", controller.reviewTasks);
   router.post("/review-tasks/:id/complete", controller.completeReviewTask);

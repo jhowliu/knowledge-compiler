@@ -199,6 +199,7 @@ export interface KnowledgeRepository {
     structuredData: unknown;
   }): Promise<CompiledNote>;
   listCompiledNotes(limit: number): Promise<CompiledNote[]>;
+  listReviewMaps(limit: number): Promise<CompiledNote[]>;
   upsertMistake(input: {
     userId?: string | null;
     domain: string;
@@ -431,6 +432,22 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         select *
         from compiled_notes
         where status = 'active'
+        order by updated_at desc
+        limit $1
+      `,
+      [limit],
+    );
+
+    return result.rows.map(mapCompiledNote);
+  }
+
+  async listReviewMaps(limit: number) {
+    const result = await pool.query<CompiledNoteRow>(
+      `
+        select *
+        from compiled_notes
+        where status = 'active'
+          and note_type = 'review_map'
         order by updated_at desc
         limit $1
       `,

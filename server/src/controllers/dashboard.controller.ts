@@ -13,6 +13,14 @@ export class DashboardController {
     }
   };
 
+  reviewMaps = async (_request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({ reviewMaps: await this.dashboardService.listReviewMaps() });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   mistakes = async (_request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ mistakes: await this.dashboardService.listMistakes() });

@@ -12,6 +12,7 @@ import {
   Library,
   Link2,
   Map,
+  Moon,
   Network,
   PencilLine,
   Plus,
@@ -19,6 +20,7 @@ import {
   Save,
   Search,
   Sparkles,
+  Sun,
   Trash2,
   X,
 } from 'lucide-react'
@@ -28,6 +30,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected'
 type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
+type ThemeMode = 'light' | 'dark'
 
 type DecisionRule = {
   signal: string
@@ -386,6 +389,7 @@ function IconButton({ label, children }: { label: string; children: React.ReactN
 
 function LeftNavigation({
   activeView,
+  themeMode,
   pendingCount,
   weakCount,
   reviewMapCount,
@@ -393,8 +397,10 @@ function LeftNavigation({
   onKnowledgeMapClick,
   onReviewMapsClick,
   onRawNotesClick,
+  onThemeToggle,
 }: {
   activeView: ActiveView
+  themeMode: ThemeMode
   pendingCount: number
   weakCount: number
   reviewMapCount: number
@@ -402,14 +408,28 @@ function LeftNavigation({
   onKnowledgeMapClick: () => void
   onReviewMapsClick: () => void
   onRawNotesClick: () => void
+  onThemeToggle: () => void
 }) {
+  const isDark = themeMode === 'dark'
   const navItemClass = (isActive: boolean) =>
     `flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] ${
-      isActive ? 'bg-[#2A2A2A] font-semibold text-white' : 'text-gray-300'
+      isActive
+        ? isDark
+          ? 'bg-[#2A2A2A] font-semibold text-white'
+          : 'bg-slate-100 font-semibold text-ink'
+        : isDark
+          ? 'text-gray-300'
+          : 'text-gray-600'
     }`
 
   return (
-    <aside className="flex h-screen w-[252px] shrink-0 flex-col gap-[18px] bg-ink px-[18px] py-6 text-white">
+    <aside
+      className={`flex h-screen w-[252px] shrink-0 flex-col gap-[18px] border-r px-[18px] py-6 ${
+        isDark
+          ? 'border-[#2B2B2B] bg-ink text-white'
+          : 'border-gray-200 bg-white text-ink'
+      }`}
+    >
       <div className="space-y-1">
         <p className="text-lg font-bold leading-5">Interview Knowledge</p>
         <p className="text-lg font-bold leading-5">Compiler</p>
@@ -469,16 +489,34 @@ function LeftNavigation({
           ['System design', 'bg-emerald-500'],
           ['Behavioral stories', 'bg-amber-500'],
         ].map(([label, color]) => (
-          <a className="flex h-8 items-center gap-2 px-2.5 text-[13px] text-gray-300" key={label}>
+          <a
+            className={`flex h-8 items-center gap-2 px-2.5 text-[13px] ${
+              isDark ? 'text-gray-300' : 'text-gray-600'
+            }`}
+            key={label}
+          >
             <span className={`h-2 w-2 rounded-full ${color}`} />
             {label}
           </a>
         ))}
       </nav>
 
-      <div className="mt-auto rounded-lg bg-[#262626] p-3.5">
+      <button
+        className={`mt-auto flex h-10 items-center justify-between rounded-lg border px-3 text-left text-[13px] font-bold ${
+          isDark
+            ? 'border-[#343434] bg-[#262626] text-gray-200'
+            : 'border-gray-200 bg-slate-50 text-ink'
+        }`}
+        onClick={onThemeToggle}
+        type="button"
+      >
+        <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
+        {isDark ? <Moon size={16} /> : <Sun size={16} />}
+      </button>
+
+      <div className={`rounded-lg p-3.5 ${isDark ? 'bg-[#262626]' : 'bg-slate-100'}`}>
         <p className="mb-2 text-[13px] font-bold">Readiness</p>
-        <p className="text-xs leading-5 text-gray-300">
+        <p className={`text-xs leading-5 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
           {weakCount || 0} weak areas need review today
         </p>
       </div>
@@ -1398,6 +1436,10 @@ function ProposalInspector({
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [activeView, setActiveView] = useState<ActiveView>('knowledge_map')
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
+    return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
+  })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
@@ -1438,6 +1480,10 @@ function App() {
   useEffect(() => {
     void refresh()
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
+  }, [themeMode])
 
   useEffect(() => {
     if (activeView === 'raw_note_editor') {
@@ -1624,15 +1670,19 @@ function App() {
   }
 
   return (
-    <main className="flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink">
+    <main
+      className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
+    >
       <LeftNavigation
         activeView={activeView}
         onCaptureClick={openNewRawNoteEditor}
         onKnowledgeMapClick={() => setActiveView('knowledge_map')}
         onRawNotesClick={openRawNotesView}
         onReviewMapsClick={openReviewMapsView}
+        onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
+        themeMode={themeMode}
         weakCount={weakCount}
       />
       <section className="flex min-w-0 flex-1 flex-col">

@@ -29,6 +29,7 @@
 - Simplified the old Knowledge Map UI into a Notes Network view: note list, selected-note center panel, bidirectional related-note links, agent link suggestions, raw evidence, and weak-area context.
 - Adjusted the Notes Network again to be graph-first and easier to read: lightweight cards on a dotted canvas, connector lines from the focused card, and a right-side inspector that opens card content only after selection.
 - Added app-wide light/dark theme support with a sidebar toggle; Notes Graph, Raw Notes, and Review Maps now render in both modes and persist the selected mode in local storage.
+- Rebased `codex/review-maps-page` onto latest `origin/main` after the raw-note CRUD merge, preserving both raw-note edit/save/delete/compile-existing flows and the Review Maps/Notes Graph/theme work.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -62,6 +63,7 @@
 - Raw-note editor browser verification inserted another sample note into the development database.
 - Raw-note CRUD browser verification created, edited, compiled, and deleted a throwaway note; its generated proposal remains in the development database.
 - Review Maps browser verification inserted and approved a local sample note titled `Review map smoke: shortest path`.
+- After rebasing with `origin/main`, `npm run typecheck`, `npm run build`, and `npm run test` all pass.
 
 ## Next Target
 - Add persistent `note_links` storage and approval/rejection flows for agent-suggested bidirectional links.

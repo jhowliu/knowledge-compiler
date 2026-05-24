@@ -35,6 +35,7 @@
 - Extended Notes Graph toward a Heptabase-like whiteboard: cards can be dragged, cards expose connection nodes, dragging from one node to another creates an approved `note_link`, edges use auto-generated Bezier paths with relation labels, and approved links can be edited or removed from the inspector.
 - Adjusted Notes Graph selection behavior so clicking a card no longer recenters or resizes it; card positions stay fixed until the user drags them.
 - Increased Notes Graph edge contrast: approved persisted links are darker/thicker solid lines, inferred temporary relations are lighter dashed lines, and drag-preview lines are brighter.
+- Added Notes Graph whiteboard controls for zoom, pan, and reset view; mouse wheel and toolbar buttons change zoom, blank-canvas drag pans the board, and reset restores zoom/pan plus session-local card positions.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
 
 ## Decisions
@@ -59,6 +60,7 @@
 - Whiteboard card positions are currently session-local UI state; persist positions later only after the canvas interaction model settles.
 - Selecting a card should only update highlight, edges, and the inspector. Position changes should come from explicit dragging.
 - Solid graph edges mean approved persisted `note_links`; dashed edges mean inferred related cards that have not been saved as links yet.
+- Canvas zoom/pan is viewport-only state; graph link data and card coordinates remain in the same world coordinate system.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 
 ## Open Issues
@@ -80,10 +82,11 @@
 - Manual link editing validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test adding one manual note link all pass.
 - Whiteboard link validation: browser smoke test dragged a card node to another card to create a link, then removed one approved link; console reported no errors.
 - Fixed-position card validation: browser smoke test clicked another graph card and confirmed every card kept the same x/y/width while the inspector selection changed.
+- Zoom/pan validation: browser smoke test verified zoom controls, blank-canvas pan, reset view, and no new console errors.
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
 
 ## Next Target
-- After PR #6/#7 merge, persist whiteboard card positions and add optional canvas zoom/pan.
+- Persist whiteboard card positions now that zoom/pan exists, then add optional multi-board support.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

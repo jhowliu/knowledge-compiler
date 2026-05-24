@@ -12,6 +12,7 @@ import {
   Library,
   Link2,
   Map,
+  Maximize2,
   Moon,
   Network,
   PencilLine,
@@ -23,10 +24,14 @@ import {
   Sun,
   Trash2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import './index.css'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+const minCanvasZoom = 0.55
+const maxCanvasZoom = 1.65
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected'
 type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
@@ -658,6 +663,21 @@ function edgePath(start: { x: number; y: number }, end: { x: number; y: number }
   return `M ${start.x} ${start.y} C ${c1x} ${start.y}, ${c2x} ${end.y}, ${end.x} ${end.y}`
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function uniqueRelatedMatches(matches: RelatedNoteMatch[]) {
+  const seen = new Set<string>()
+  return matches.filter((match) => {
+    if (seen.has(match.note.id)) {
+      return false
+    }
+    seen.add(match.note.id)
+    return true
+  })
+}
+
 function KnowledgeCanvas({
   data,
   onCreateNoteLink,
@@ -680,7 +700,14 @@ function KnowledgeCanvas({
   const [manualRelationType, setManualRelationType] = useState<(typeof relationOptions)[number][0]>(
     'related_concept',
   )
+  const [canvasZoom, setCanvasZoom] = useState(1)
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 })
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [panState, setPanState] = useState<{
+    startClientX: number
+    startClientY: number
+    origin: { x: number; y: number }
+  } | null>(null)
   const [dragState, setDragState] = useState<{
     noteId: string
     startClientX: number
@@ -747,7 +774,7 @@ function KnowledgeCanvas({
     .filter((match) => match.score > 0)
     .sort((left, right) => right.score - left.score)
     .slice(0, 5)
-  const relatedNotes = [...approvedLinkedNotes, ...inferredRelatedNotes].slice(0, 5)
+  const relatedNotes = uniqueRelatedMatches([...approvedLinkedNotes, ...inferredRelatedNotes]).slice(0, 5)
   const baseVisibleGraphNotes = notes.slice(0, 9)
   const visibleGraphNotes =
     selectedNote && !baseVisibleGraphNotes.some((note) => note.id === selectedNote.id)
@@ -828,9 +855,54 @@ function KnowledgeCanvas({
     const rect = canvasRef.current?.getBoundingClientRect()
     if (!rect) return { x: 50, y: 50 }
     return {
-      x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 100,
+      x: ((event.clientX - rect.left - canvasPan.x) / (rect.width * canvasZoom)) * 100,
+      y: ((event.clientY - rect.top - canvasPan.y) / (rect.height * canvasZoom)) * 100,
     }
+  }
+
+  function zoomCanvas(nextZoom: number, anchor?: { x: number; y: number }) {
+    const clampedZoom = clampNumber(nextZoom, minCanvasZoom, maxCanvasZoom)
+    if (!anchor || !canvasRef.current) {
+      setCanvasZoom(clampedZoom)
+      return
+    }
+
+    const rect = canvasRef.current.getBoundingClientRect()
+    const anchorX = anchor.x - rect.left
+    const anchorY = anchor.y - rect.top
+    const worldX = (anchorX - canvasPan.x) / canvasZoom
+    const worldY = (anchorY - canvasPan.y) / canvasZoom
+
+    setCanvasZoom(clampedZoom)
+    setCanvasPan({
+      x: anchorX - worldX * clampedZoom,
+      y: anchorY - worldY * clampedZoom,
+    })
+  }
+
+  function resetCanvasView() {
+    setCanvasZoom(1)
+    setCanvasPan({ x: 0, y: 0 })
+    setNodePositions({})
+  }
+
+  function startPan(event: React.PointerEvent) {
+    const target = event.target as HTMLElement
+    if (target.closest('[data-note-id], button, input, select, textarea')) {
+      return
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setPanState({
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      origin: canvasPan,
+    })
+  }
+
+  function wheelCanvas(event: React.WheelEvent) {
+    event.preventDefault()
+    const direction = event.deltaY > 0 ? -1 : 1
+    zoomCanvas(canvasZoom + direction * 0.08, { x: event.clientX, y: event.clientY })
   }
 
   function startDrag(event: React.PointerEvent, noteId: string, position: { x: number; y: number }) {
@@ -854,6 +926,14 @@ function KnowledgeCanvas({
       return
     }
 
+    if (panState) {
+      setCanvasPan({
+        x: panState.origin.x + event.clientX - panState.startClientX,
+        y: panState.origin.y + event.clientY - panState.startClientY,
+      })
+      return
+    }
+
     if (!dragState) {
       return
     }
@@ -862,8 +942,8 @@ function KnowledgeCanvas({
       return
     }
     const nextPosition = {
-      x: Math.min(86, Math.max(14, dragState.origin.x + ((event.clientX - dragState.startClientX) / rect.width) * 100)),
-      y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / rect.height) * 100)),
+      x: Math.min(86, Math.max(14, dragState.origin.x + ((event.clientX - dragState.startClientX) / (rect.width * canvasZoom)) * 100)),
+      y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / (rect.height * canvasZoom)) * 100)),
     }
     setNodePositions((positions) => ({ ...positions, [dragState.noteId]: nextPosition }))
   }
@@ -883,14 +963,17 @@ function KnowledgeCanvas({
     }
     setConnectState(null)
     setDragState(null)
+    setPanState(null)
   }
 
   return (
     <section className="flex min-h-0 flex-1 bg-canvas">
       <main
-        className="relative min-h-0 flex-1 overflow-hidden"
+        className={`relative min-h-0 flex-1 overflow-hidden ${panState ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onPointerDown={startPan}
         onPointerMove={movePointer}
         onPointerUp={finishPointer}
+        onWheel={wheelCanvas}
         ref={canvasRef}
       >
         <div
@@ -910,114 +993,152 @@ function KnowledgeCanvas({
           </p>
         </div>
 
-        {selectedGraphNode ? (
-          <svg
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            aria-hidden="true"
-            preserveAspectRatio="none"
-            viewBox="0 0 100 100"
+        <div className="absolute right-7 top-6 z-20 flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+          <button
+            className="grid h-8 w-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-ink"
+            onClick={() => zoomCanvas(canvasZoom - 0.12)}
+            title="Zoom out"
+            type="button"
           >
-            {graphNodes
-              .filter((node) => node.note.id !== selectedGraphNode.note.id)
-              .map((node) => {
-                const labelX = (selectedGraphNode.position.x + node.position.x) / 2
-                const labelY = (selectedGraphNode.position.y + node.position.y) / 2
-                return (
-                  <g key={`${selectedGraphNode.note.id}-${node.note.id}`}>
-                    <path
-                      d={edgePath(selectedGraphNode.position, node.position)}
-                      fill="none"
-                      stroke={node.link ? 'rgba(79, 70, 229, 0.78)' : 'rgba(100, 116, 139, 0.56)'}
-                      strokeDasharray={node.link ? undefined : '2.5 3.5'}
-                      strokeLinecap="round"
-                      strokeWidth={node.link ? '0.9' : '0.55'}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    {node.link ? (
-                      <text
-                        dominantBaseline="middle"
-                        fill="rgba(67, 56, 202, 0.96)"
-                        fontSize="2.3"
-                        fontWeight="700"
-                        textAnchor="middle"
-                        x={labelX}
-                        y={labelY}
-                      >
-                        {relationOptionLabel(node.link.relationType)}
-                      </text>
-                    ) : null}
-                  </g>
-                )
-              })}
-            {connectState ? (
-              <path
-                d={edgePath(connectState.start, connectState.current)}
-                fill="none"
-                stroke="rgba(124, 58, 237, 0.95)"
-                strokeDasharray="4 4"
-                strokeLinecap="round"
-                strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
-              />
-            ) : null}
-          </svg>
-        ) : null}
+            <ZoomOut size={16} />
+          </button>
+          <span className="min-w-12 text-center text-xs font-extrabold text-ink">
+            {Math.round(canvasZoom * 100)}%
+          </span>
+          <button
+            className="grid h-8 w-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-ink"
+            onClick={() => zoomCanvas(canvasZoom + 0.12)}
+            title="Zoom in"
+            type="button"
+          >
+            <ZoomIn size={16} />
+          </button>
+          <button
+            className="grid h-8 w-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-ink"
+            onClick={resetCanvasView}
+            title="Reset canvas"
+            type="button"
+          >
+            <Maximize2 size={15} />
+          </button>
+        </div>
 
-        {graphNodes.length ? (
-          graphNodes.map((node) => {
-            const isSelected = node.note.id === selectedNote?.id
-            return (
-              <button
-                className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
-                  isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
-                }`}
-                data-note-id={node.note.id}
-                key={node.note.id}
-                onClick={() => setSelectedNoteId(node.note.id)}
-                onPointerDown={(event) => startDrag(event, node.note.id, node.position)}
-                style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
-                type="button"
-              >
-                <span
-                  className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-violet shadow-md"
-                  data-link-handle="true"
-                  onPointerDown={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    setSelectedNoteId(node.note.id)
-                    setConnectState({
-                      sourceNoteId: node.note.id,
-                      start: { x: node.position.x + 4.8, y: node.position.y },
-                      current: pointFromEvent(event),
-                    })
-                  }}
+        <div
+          className="absolute inset-0"
+          style={{
+            transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${canvasZoom})`,
+            transformOrigin: '0 0',
+          }}
+        >
+          {selectedGraphNode ? (
+            <svg
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              aria-hidden="true"
+              preserveAspectRatio="none"
+              viewBox="0 0 100 100"
+            >
+              {graphNodes
+                .filter((node) => node.note.id !== selectedGraphNode.note.id)
+                .map((node) => {
+                  const labelX = (selectedGraphNode.position.x + node.position.x) / 2
+                  const labelY = (selectedGraphNode.position.y + node.position.y) / 2
+                  return (
+                    <g key={`${selectedGraphNode.note.id}-${node.note.id}`}>
+                      <path
+                        d={edgePath(selectedGraphNode.position, node.position)}
+                        fill="none"
+                        stroke={node.link ? 'rgba(79, 70, 229, 0.78)' : 'rgba(100, 116, 139, 0.56)'}
+                        strokeDasharray={node.link ? undefined : '2.5 3.5'}
+                        strokeLinecap="round"
+                        strokeWidth={node.link ? '0.9' : '0.55'}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {node.link ? (
+                        <text
+                          dominantBaseline="middle"
+                          fill="rgba(67, 56, 202, 0.96)"
+                          fontSize="2.3"
+                          fontWeight="700"
+                          textAnchor="middle"
+                          x={labelX}
+                          y={labelY}
+                        >
+                          {relationOptionLabel(node.link.relationType)}
+                        </text>
+                      ) : null}
+                    </g>
+                  )
+                })}
+              {connectState ? (
+                <path
+                  d={edgePath(connectState.start, connectState.current)}
+                  fill="none"
+                  stroke="rgba(124, 58, 237, 0.95)"
+                  strokeDasharray="4 4"
+                  strokeLinecap="round"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
                 />
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
-                    {noteTypeLabel(node.note.noteType)}
-                  </span>
-                  {isSelected ? (
-                    <GitBranch size={15} className="text-violet" />
-                  ) : (
-                    <Link2 size={14} className="text-gray-400" />
-                  )}
-                </div>
-                <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">
-                  {node.note.title}
-                </p>
-                <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-gray-500">
-                  {node.relation}
-                </p>
-              </button>
-            )
-          })
-        ) : (
-          <div className="absolute inset-0 grid place-items-center">
-            <p className="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-500">
-              Compile a raw note to start the graph.
-            </p>
-          </div>
-        )}
+              ) : null}
+            </svg>
+          ) : null}
+
+          {graphNodes.length ? (
+            graphNodes.map((node) => {
+              const isSelected = node.note.id === selectedNote?.id
+              return (
+                <button
+                  className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
+                    isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  data-note-id={node.note.id}
+                  key={node.note.id}
+                  onClick={() => setSelectedNoteId(node.note.id)}
+                  onPointerDown={(event) => startDrag(event, node.note.id, node.position)}
+                  style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
+                  type="button"
+                >
+                  <span
+                    className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-violet shadow-md"
+                    data-link-handle="true"
+                    onPointerDown={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setSelectedNoteId(node.note.id)
+                      setConnectState({
+                        sourceNoteId: node.note.id,
+                        start: { x: node.position.x + 4.8, y: node.position.y },
+                        current: pointFromEvent(event),
+                      })
+                    }}
+                  />
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
+                      {noteTypeLabel(node.note.noteType)}
+                    </span>
+                    {isSelected ? (
+                      <GitBranch size={15} className="text-violet" />
+                    ) : (
+                      <Link2 size={14} className="text-gray-400" />
+                    )}
+                  </div>
+                  <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">
+                    {node.note.title}
+                  </p>
+                  <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-gray-500">
+                    {node.relation}
+                  </p>
+                </button>
+              )
+            })
+          ) : (
+            <div className="absolute inset-0 grid place-items-center">
+              <p className="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-500">
+                Compile a raw note to start the graph.
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="absolute bottom-6 left-7 z-10 flex gap-2">
           {[

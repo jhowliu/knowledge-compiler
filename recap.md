@@ -34,6 +34,7 @@
 - Started `codex/manual-note-link-editing` stacked on PR #6 and added manual approved note-link creation from the Notes Graph inspector.
 - Extended Notes Graph toward a Heptabase-like whiteboard: cards can be dragged, cards expose connection nodes, dragging from one node to another creates an approved `note_link`, edges use auto-generated Bezier paths with relation labels, and approved links can be edited or removed from the inspector.
 - Adjusted Notes Graph selection behavior so clicking a card no longer recenters or resizes it; card positions stay fixed until the user drags them.
+- Increased Notes Graph edge contrast: approved persisted links are darker/thicker solid lines, inferred temporary relations are lighter dashed lines, and drag-preview lines are brighter.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
 
 ## Decisions
@@ -57,6 +58,7 @@
 - Manual links are created as approved immediately; agent-created links still enter the pending review queue.
 - Whiteboard card positions are currently session-local UI state; persist positions later only after the canvas interaction model settles.
 - Selecting a card should only update highlight, edges, and the inspector. Position changes should come from explicit dragging.
+- Solid graph edges mean approved persisted `note_links`; dashed edges mean inferred related cards that have not been saved as links yet.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 
 ## Open Issues

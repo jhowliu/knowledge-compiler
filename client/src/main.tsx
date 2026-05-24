@@ -927,15 +927,16 @@ function KnowledgeCanvas({
                     <path
                       d={edgePath(selectedGraphNode.position, node.position)}
                       fill="none"
-                      stroke="rgba(99, 102, 241, 0.34)"
-                      strokeDasharray={node.link ? undefined : '5 7'}
-                      strokeWidth="0.45"
+                      stroke={node.link ? 'rgba(79, 70, 229, 0.78)' : 'rgba(100, 116, 139, 0.56)'}
+                      strokeDasharray={node.link ? undefined : '2.5 3.5'}
+                      strokeLinecap="round"
+                      strokeWidth={node.link ? '0.9' : '0.55'}
                       vectorEffect="non-scaling-stroke"
                     />
                     {node.link ? (
                       <text
                         dominantBaseline="middle"
-                        fill="rgba(99, 102, 241, 0.88)"
+                        fill="rgba(67, 56, 202, 0.96)"
                         fontSize="2.3"
                         fontWeight="700"
                         textAnchor="middle"
@@ -952,9 +953,10 @@ function KnowledgeCanvas({
               <path
                 d={edgePath(connectState.start, connectState.current)}
                 fill="none"
-                stroke="rgba(124, 58, 237, 0.82)"
+                stroke="rgba(124, 58, 237, 0.95)"
                 strokeDasharray="4 4"
-                strokeWidth="0.7"
+                strokeLinecap="round"
+                strokeWidth="1"
                 vectorEffect="non-scaling-stroke"
               />
             ) : null}

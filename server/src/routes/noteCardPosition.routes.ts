@@ -9,6 +9,7 @@ export function createNoteCardPositionRoutes(noteCardPositionService: NoteCardPo
   const controller = new NoteCardPositionController(noteCardPositionService);
 
   router.get("/", controller.list);
+  router.delete("/", controller.reset);
   router.put("/:noteId", validateBody(saveNoteCardPositionSchema), controller.save);
 
   return router;

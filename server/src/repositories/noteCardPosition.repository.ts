@@ -27,6 +27,7 @@ function mapNoteCardPosition(row: NoteCardPositionRow): NoteCardPosition {
 
 export interface NoteCardPositionRepository {
   listForBoard(boardKey: string): Promise<NoteCardPosition[]>;
+  deleteForBoard(boardKey: string): Promise<number>;
   upsert(input: {
     userId?: string | null;
     boardKey: string;
@@ -78,5 +79,17 @@ export class PostgresNoteCardPositionRepository implements NoteCardPositionRepos
     );
 
     return result.rows[0] ? mapNoteCardPosition(result.rows[0]) : null;
+  }
+
+  async deleteForBoard(boardKey: string) {
+    const result = await pool.query(
+      `
+        delete from note_card_positions
+        where board_key = $1
+      `,
+      [boardKey],
+    );
+
+    return result.rowCount ?? 0;
   }
 }

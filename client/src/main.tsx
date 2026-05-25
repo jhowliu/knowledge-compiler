@@ -37,6 +37,14 @@ type ProposalStatus = 'pending' | 'approved' | 'rejected'
 type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
 type ThemeMode = 'light' | 'dark'
+type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
+
+const boardOptions: Array<{ key: BoardKey; label: string }> = [
+  { key: 'default', label: 'Default' },
+  { key: 'algorithms', label: 'Algorithms' },
+  { key: 'review-maps', label: 'Review maps' },
+  { key: 'mistakes', label: 'Mistakes' },
+]
 
 type DecisionRule = {
   signal: string
@@ -204,7 +212,7 @@ async function requestVoid(path: string, init?: RequestInit): Promise<void> {
   }
 }
 
-async function loadWorkspaceData(): Promise<WorkspaceData> {
+async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
   const [
     rawNotes,
     proposals,
@@ -221,7 +229,9 @@ async function loadWorkspaceData(): Promise<WorkspaceData> {
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
-      requestJson<{ noteCardPositions: NoteCardPosition[] }>('/note-card-positions'),
+      requestJson<{ noteCardPositions: NoteCardPosition[] }>(
+        `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
+      ),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
@@ -702,17 +712,23 @@ function uniqueRelatedMatches(matches: RelatedNoteMatch[]) {
 }
 
 function KnowledgeCanvas({
+  activeBoardKey,
   data,
   onCreateNoteLink,
   onDecideNoteLink,
+  onBoardChange,
   onMoveNoteCard,
+  onResetBoardLayout,
   onRemoveNoteLink,
   onUpdateNoteLink,
 }: {
+  activeBoardKey: BoardKey
   data: WorkspaceData
   onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
+  onBoardChange: (boardKey: BoardKey) => void
   onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
+  onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
@@ -924,6 +940,13 @@ function KnowledgeCanvas({
     setCanvasPan({ x: 0, y: 0 })
   }
 
+  function resetCurrentBoardLayout() {
+    resetCanvasView()
+    latestNodePositionsRef.current = {}
+    setNodePositions({})
+    onResetBoardLayout()
+  }
+
   function startPan(event: React.PointerEvent) {
     const target = event.target as HTMLElement
     if (target.closest('[data-note-id], button, input, select, textarea')) {
@@ -1038,6 +1061,22 @@ function KnowledgeCanvas({
           <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
             Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {boardOptions.map((board) => (
+              <button
+                className={`h-8 rounded-md border px-3 text-xs font-extrabold ${
+                  board.key === activeBoardKey
+                    ? 'border-violet bg-violet text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-ink'
+                }`}
+                key={board.key}
+                onClick={() => onBoardChange(board.key)}
+                type="button"
+              >
+                {board.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="absolute right-7 top-6 z-20 flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
@@ -1063,12 +1102,20 @@ function KnowledgeCanvas({
           <button
             className="grid h-8 w-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-ink"
             onClick={resetCanvasView}
-            title="Reset canvas"
+            title="Reset view"
             type="button"
           >
             <Maximize2 size={15} />
           </button>
         </div>
+
+        <button
+          className="absolute right-7 top-[78px] z-20 h-8 rounded-md border border-gray-200 bg-white px-3 text-xs font-extrabold text-gray-600 shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          onClick={resetCurrentBoardLayout}
+          type="button"
+        >
+          Reset layout
+        </button>
 
         <div
           className="absolute inset-0"
@@ -2019,6 +2066,12 @@ function App() {
     const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
     return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
   })
+  const [activeBoardKey, setActiveBoardKey] = useState<BoardKey>(() => {
+    const savedBoardKey = window.localStorage.getItem('knowledgeCompilerBoardKey')
+    return boardOptions.some((board) => board.key === savedBoardKey)
+      ? (savedBoardKey as BoardKey)
+      : 'default'
+  })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
@@ -2047,7 +2100,7 @@ function App() {
   async function refresh() {
     setIsLoading(true)
     try {
-      setWorkspaceData(await loadWorkspaceData())
+      setWorkspaceData(await loadWorkspaceData(activeBoardKey))
       setError(null)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
@@ -2058,11 +2111,15 @@ function App() {
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [activeBoardKey])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
   }, [themeMode])
+
+  useEffect(() => {
+    window.localStorage.setItem('knowledgeCompilerBoardKey', activeBoardKey)
+  }, [activeBoardKey])
 
   useEffect(() => {
     if (activeView === 'raw_note_editor') {
@@ -2318,7 +2375,7 @@ function App() {
         `/note-card-positions/${noteId}`,
         {
           method: 'PUT',
-          body: JSON.stringify(position),
+          body: JSON.stringify({ ...position, boardKey: activeBoardKey }),
         },
       )
       setWorkspaceData((current) => ({
@@ -2335,6 +2392,20 @@ function App() {
       setError(null)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save card position')
+    }
+  }
+
+  async function resetBoardLayout() {
+    try {
+      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(activeBoardKey)}`, {
+        method: 'DELETE',
+      })
+      setWorkspaceData((current) => ({ ...current, noteCardPositions: [] }))
+      setNotice('Board layout reset.')
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to reset board layout')
+      setNotice(null)
     }
   }
 
@@ -2374,10 +2445,13 @@ function App() {
             ) : null}
             <div className="flex min-h-0 flex-1">
               <KnowledgeCanvas
+                activeBoardKey={activeBoardKey}
                 data={workspaceData}
+                onBoardChange={setActiveBoardKey}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
+                onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />

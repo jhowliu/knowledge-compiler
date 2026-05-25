@@ -8,6 +8,13 @@ export class InMemoryNoteCardPositionRepository implements NoteCardPositionRepos
     return this.noteCardPositions.filter((position) => position.boardKey === boardKey);
   }
 
+  async deleteForBoard(boardKey: string): Promise<number> {
+    const beforeCount = this.noteCardPositions.length;
+    const keptPositions = this.noteCardPositions.filter((position) => position.boardKey !== boardKey);
+    this.noteCardPositions.splice(0, this.noteCardPositions.length, ...keptPositions);
+    return beforeCount - this.noteCardPositions.length;
+  }
+
   async upsert(input: {
     userId?: string | null;
     boardKey: string;

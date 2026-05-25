@@ -14,6 +14,14 @@ export class NoteCardPositionService {
     return this.noteCardPositionRepository.listForBoard(boardKeyOrDefault(boardKey));
   }
 
+  async resetBoard(boardKey?: string | null) {
+    const normalizedBoardKey = boardKeyOrDefault(boardKey);
+    return {
+      boardKey: normalizedBoardKey,
+      deletedCount: await this.noteCardPositionRepository.deleteForBoard(normalizedBoardKey),
+    };
+  }
+
   async savePosition(input: {
     userId?: string | null;
     boardKey?: string | null;

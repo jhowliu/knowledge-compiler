@@ -29,4 +29,16 @@ export class NoteCardPositionController {
       next(error);
     }
   };
+
+  reset = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        result: await this.noteCardPositionService.resetBoard(
+          typeof request.query.boardKey === "string" ? request.query.boardKey : null,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

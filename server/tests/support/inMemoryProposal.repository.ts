@@ -46,6 +46,10 @@ export class InMemoryProposalRepository implements ProposalRepository {
     return this.proposals.find((proposal) => proposal.id === id) ?? null;
   }
 
+  async listByRawNote(rawNoteId: string): Promise<ProposalWithItems[]> {
+    return this.proposals.filter((proposal) => proposal.rawNoteId === rawNoteId);
+  }
+
   async listRecent(): Promise<ProposalWithItems[]> {
     return this.proposals;
   }

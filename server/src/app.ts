@@ -56,7 +56,6 @@ export function createApp(dependencies: AppDependencies = {}) {
         agentRunRepository,
       )
     : null;
-  const rawNoteService = new RawNoteService(rawNoteRepository, phaseOneWorkflowService);
   const proposalService = new ProposalService(
     proposalRepository,
     knowledgeRepository,
@@ -69,6 +68,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     agentRunRepository,
     knowledgeRepository,
     noteLinkRepository,
+    rawNoteRepository,
+    proposalRepository,
+  );
+  const rawNoteService = new RawNoteService(
+    rawNoteRepository,
+    phaseOneWorkflowService,
+    enablePhaseOneWorkflow ? agentRunQueueService : null,
+    proposalRepository,
+    agentRunRepository,
   );
 
   app.use(cors(corsOptions));

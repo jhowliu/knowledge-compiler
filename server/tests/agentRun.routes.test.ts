@@ -3,6 +3,8 @@ import { createApp } from "../src/app.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
+import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
+import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 
 describe("agent run routes", () => {
   test("enqueues a reindex_links run and lists recent agent activity", async () => {
@@ -64,5 +66,35 @@ describe("agent run routes", () => {
       .send({ runType: "organize_board" });
 
     expect(response.status).toBe(400);
+  });
+
+  test("enqueues compile_raw_note and produces a proposal", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const rawNote = await rawNoteRepository.create({
+      title: "K stops shortest path",
+      bodyMarkdown: "Dijkstra needs extra state for k stops: dist[n][k+2].",
+    });
+    const app = createApp({
+      agentRunRepository,
+      rawNoteRepository,
+      proposalRepository,
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+    });
+
+    const response = await request(app)
+      .post("/agent-runs")
+      .send({ runType: "compile_raw_note", input: { rawNoteId: rawNote.id } });
+
+    expect(response.status).toBe(202);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(agentRunRepository.agentRuns[0]).toMatchObject({
+      runType: "compile_raw_note",
+      status: "completed",
+    });
   });
 });

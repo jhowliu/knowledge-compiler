@@ -87,6 +87,15 @@ export class InMemoryAgentRunRepository implements AgentRunRepository {
     return this.agentRuns.slice(-limit).reverse();
   }
 
+  async listByRawNote(rawNoteId: string): Promise<AgentRun[]> {
+    return this.agentRuns.filter((agentRun) => {
+      const input = agentRun.input && typeof agentRun.input === "object"
+        ? (agentRun.input as Record<string, unknown>)
+        : {};
+      return input.rawNoteId === rawNoteId;
+    });
+  }
+
   async listEvents(agentRunId: string): Promise<AgentRunEvent[]> {
     return this.events.filter((event) => event.agentRunId === agentRunId);
   }

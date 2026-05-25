@@ -1,5 +1,7 @@
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
+import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 
 describe("raw note routes", () => {
@@ -128,5 +130,46 @@ describe("raw note routes", () => {
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe("Raw note not found");
+  });
+
+  test("GET /raw-notes/:id/indexing-trace returns proposal and agent status", async () => {
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const rawNote = await rawNoteRepository.create({
+      title: "Trace me",
+      bodyMarkdown: "I missed Dijkstra with extra state.",
+    });
+    await proposalRepository.create({
+      rawNoteId: rawNote.id,
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "problem_reflection",
+        impactLevel: 3,
+        confidence: "medium",
+        rationale: "Detected coding note.",
+        items: [],
+      },
+    });
+    await agentRunRepository.enqueue({
+      runType: "compile_raw_note",
+      input: { rawNoteId: rawNote.id },
+    });
+    const app = createApp({
+      rawNoteRepository,
+      proposalRepository,
+      agentRunRepository,
+      enablePhaseOneWorkflow: false,
+    });
+
+    const response = await request(app).get(`/raw-notes/${rawNote.id}/indexing-trace`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.indexingTrace).toMatchObject({
+      status: "Indexing",
+      rawNote: { id: rawNote.id },
+    });
+    expect(response.body.indexingTrace.proposals).toHaveLength(1);
+    expect(response.body.indexingTrace.agentRuns).toHaveLength(1);
   });
 });

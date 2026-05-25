@@ -2,6 +2,9 @@ import type { CompiledNote } from "../domain/knowledge.js";
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
+import type { ProposalRepository } from "../repositories/proposal.repository.js";
+import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
+import { WikiIndexerService } from "./wikiIndexer.service.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -47,17 +50,24 @@ export class AgentRunQueueService {
     private readonly agentRunRepository: AgentRunRepository,
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly noteLinkRepository: NoteLinkRepository,
+    private readonly rawNoteRepository?: RawNoteRepository,
+    private readonly proposalRepository?: ProposalRepository,
+    private readonly wikiIndexerService = new WikiIndexerService(),
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
-    if (input.runType !== "reindex_links") {
+    if (!["reindex_links", "compile_raw_note"].includes(input.runType)) {
       throw new Error("Unsupported agent run type");
+    }
+    const runInput = input.input && typeof input.input === "object" ? input.input : {};
+    if (input.runType === "compile_raw_note" && typeof (runInput as Record<string, unknown>).rawNoteId !== "string") {
+      throw new Error("compile_raw_note requires rawNoteId");
     }
 
     const agentRun = await this.agentRunRepository.enqueue({
       userId: input.userId,
       runType: input.runType,
-      input: input.input ?? {},
+      input: runInput,
     });
     await this.agentRunRepository.addEvent({
       agentRunId: agentRun.id,
@@ -82,6 +92,21 @@ export class AgentRunQueueService {
     });
 
     try {
+      if (agentRun.runType === "compile_raw_note") {
+        const input =
+          agentRun.input && typeof agentRun.input === "object"
+            ? (agentRun.input as Record<string, unknown>)
+            : {};
+        const output = await this.compileRawNote(agentRun.id, String(input.rawNoteId));
+        await this.agentRunRepository.complete(agentRun.id, output);
+        await this.agentRunRepository.addEvent({
+          agentRunId: agentRun.id,
+          eventType: "run_completed",
+          payload: output,
+        });
+        return;
+      }
+
       if (agentRun.runType !== "reindex_links") {
         throw new Error(`Unsupported agent run type: ${agentRun.runType}`);
       }
@@ -161,6 +186,95 @@ export class AgentRunQueueService {
       notesScanned: notes.length,
       candidateCount: candidates.length,
       suggestionsCreated,
+    };
+  }
+
+  private async compileRawNote(agentRunId: string, rawNoteId: string) {
+    if (!this.rawNoteRepository || !this.proposalRepository) {
+      throw new Error("compile_raw_note worker is not configured");
+    }
+
+    const rawNote = await this.rawNoteRepository.getById(rawNoteId);
+    if (!rawNote) {
+      throw new Error("Raw note not found");
+    }
+
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      eventType: "raw_note_loaded",
+      payload: { rawNoteId },
+    });
+
+    const { extraction, provider } = await this.wikiIndexerService.extract(rawNote);
+    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      eventType: "detection_completed",
+      payload: {
+        provider,
+        knowledgeType: extraction.knowledgeType,
+        concepts: extraction.concepts,
+      },
+    });
+
+    for (const concept of extraction.concepts) {
+      const savedConcept = await this.knowledgeRepository.upsertConcept({
+        userId: rawNote.userId,
+        name: concept.name,
+        conceptType: concept.conceptType,
+      });
+      await this.knowledgeRepository.indexConcept({
+        userId: rawNote.userId,
+        conceptId: savedConcept.id,
+        targetType: "raw_note",
+        targetId: rawNote.id,
+        relationType: "mentions",
+        confidence: concept.confidence,
+        source: provider === "openai" ? "openai_wiki_indexer" : "deterministic_wiki_indexer",
+      });
+    }
+
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      eventType: "wiki_index_drafted",
+      payload: {
+        provider,
+        conceptCount: extraction.concepts.length,
+        patterns: extraction.patterns,
+        algorithms: extraction.algorithms,
+      },
+    });
+
+    const relatedNotes = await this.knowledgeRepository.searchRelated({
+      query: rawNote.bodyMarkdown,
+      conceptNames: extraction.concepts.map((concept) => concept.name),
+      limit: 8,
+    });
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      eventType: "related_knowledge_found",
+      payload: { relatedNotes },
+    });
+
+    const draft = this.wikiIndexerService.draftProposal(rawNote, extraction, relatedNotes);
+    const proposal = await this.proposalRepository.create({
+      userId: rawNote.userId,
+      rawNoteId: rawNote.id,
+      draft,
+    });
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      eventType: "proposal_created",
+      payload: { proposalId: proposal.id },
+    });
+
+    return {
+      rawNoteId: rawNote.id,
+      proposalId: proposal.id,
+      provider,
+      detectedKnowledgeType: extraction.knowledgeType,
+      conceptCount: extraction.concepts.length,
+      relatedNoteCount: relatedNotes.length,
     };
   }
 }

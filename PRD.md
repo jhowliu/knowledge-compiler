@@ -1675,6 +1675,8 @@ When a raw note is added, the system should:
 4. Use related notes as context for update proposal generation.
 5. Link proposed updates back to raw evidence.
 
+For Coding notes, the indexer should treat algorithm variants as first-class wiki index signals instead of flattening them into only the base algorithm. For example, a raw note about `Cheapest Flights Within K Stops` should still link to `Dijkstra`, but it should also extract concepts such as `Constrained Shortest Path`, `Shortest Path With State`, `K Stops / Edge Budget`, `Priority Queue`, and `dist[node][edges]`. The proposal should explain that the note is a variant of shortest path where the state includes the number of edges or stops used.
+
 Example concept index record:
 
 ```text
@@ -1728,7 +1730,36 @@ Later:
 full-text search + concept index + links + pgvector
 ```
 
-### 34.9 Auth and Secrets
+### 34.9 Agentic Raw Note Indexing Flow
+
+The MVP raw-note compile path should run through a queued `compile_raw_note` agent run. The first implementation may use a deterministic local wiki indexer as the fallback, but the service boundary should allow an LLM provider when `OPENAI_API_KEY` is configured.
+
+```text
+POST /raw-notes
+-> save raw note
+-> enqueue compile_raw_note agent run
+-> load raw note
+-> LLM-wiki indexer extracts canonical concepts and variant signals
+-> write extracted_data and concept_index entries
+-> search related compiled notes
+-> draft update proposal
+-> save proposal
+-> record agent_run_events for each step
+-> UI shows indexing trace on the raw-note page
+```
+
+Required trace events:
+
+- `raw_note_loaded`
+- `detection_completed`
+- `wiki_index_drafted`
+- `related_knowledge_found`
+- `proposal_created`
+- `run_completed`
+
+All durable compiled knowledge writes remain approval-gated. The agent run may save extraction metadata, concept index entries, and pending proposals, but approved compiled notes, mistake records, review tasks, and readiness changes should still be applied through the proposal approval flow.
+
+### 34.10 Auth and Secrets
 
 The app should use its own authentication and session model. It should not depend on Codex CLI authentication or read local Codex auth files.
 
@@ -1744,13 +1775,14 @@ OpenAI access should be handled server-side using environment variables.
 
 ```text
 OPENAI_API_KEY
+OPENAI_WIKI_INDEX_MODEL
 DATABASE_URL
 SESSION_SECRET
 ```
 
 User browsers should never receive provider API keys.
 
-### 34.10 API Surface
+### 34.11 API Surface
 
 Recommended MVP endpoints:
 
@@ -1758,11 +1790,17 @@ Recommended MVP endpoints:
 POST /raw-notes
 GET /raw-notes
 GET /raw-notes/:id
+PATCH /raw-notes/:id
+DELETE /raw-notes/:id
+POST /raw-notes/:id/compile
+GET /raw-notes/:id/indexing-trace
 
 GET /compiled-notes
 GET /compiled-notes/:id
 
 POST /agent-runs/note-ingestion
+POST /agent-runs
+GET /agent-runs
 GET /agent-runs/:id
 
 GET /update-proposals
@@ -1779,7 +1817,7 @@ GET /search
 
 The API should expose proposal status and agent run events so the UI can show progress and explain what the AI did.
 
-### 34.11 MVP Implementation Priority
+### 34.12 MVP Implementation Priority
 
 ```text
 1. Database schema and migrations

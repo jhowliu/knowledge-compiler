@@ -13,10 +13,31 @@ export class NoteLinkController {
     }
   };
 
+  create = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.status(201).json({ noteLink: await this.noteLinkService.createManualLink(request.body) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   forNote = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({
         noteLinks: await this.noteLinkService.listLinksForNote(requireStringParam(request, "noteId")),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  update = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        noteLink: await this.noteLinkService.updateLink({
+          id: requireStringParam(request, "id"),
+          ...request.body,
+        }),
       });
     } catch (error) {
       next(error);
@@ -34,6 +55,14 @@ export class NoteLinkController {
   reject = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ noteLink: await this.noteLinkService.rejectLink(requireStringParam(request, "id")) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  archive = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({ noteLink: await this.noteLinkService.archiveLink(requireStringParam(request, "id")) });
     } catch (error) {
       next(error);
     }

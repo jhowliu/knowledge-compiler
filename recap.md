@@ -31,6 +31,12 @@
 - Added app-wide light/dark theme support with a sidebar toggle; Notes Graph, Raw Notes, and Review Maps now render in both modes and persist the selected mode in local storage.
 - Rebased `codex/review-maps-page` onto latest `origin/main` after the raw-note CRUD merge, preserving both raw-note edit/save/delete/compile-existing flows and the Review Maps/Notes Graph/theme work.
 - Started `codex/persistent-note-links` and added persistent note-link approval flow: migration `002_note_link_approval_flow.sql`, `note-links` API routes, repository/service/controller layer, proposal approval-generated pending link suggestions, and Notes Graph approve/reject UI.
+- Started `codex/manual-note-link-editing` stacked on PR #6 and added manual approved note-link creation from the Notes Graph inspector.
+- Extended Notes Graph toward a Heptabase-like whiteboard: cards can be dragged, cards expose connection nodes, dragging from one node to another creates an approved `note_link`, edges use auto-generated Bezier paths with relation labels, and approved links can be edited or removed from the inspector.
+- Adjusted Notes Graph selection behavior so clicking a card no longer recenters or resizes it; card positions stay fixed until the user drags them.
+- Increased Notes Graph edge contrast: approved persisted links are darker/thicker solid lines, inferred temporary relations are lighter dashed lines, and drag-preview lines are brighter.
+- Added Notes Graph whiteboard controls for zoom, pan, and reset view; mouse wheel and toolbar buttons change zoom, blank-canvas drag pans the board, and reset restores zoom/pan plus session-local card positions.
+- Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -50,6 +56,12 @@
 - The first graph screen should keep cards minimal and defer dense content to the selected-card inspector.
 - Theme mode is global UI state and should apply to every workspace page, not just the graph view.
 - Notes Graph should prefer approved DB-backed `note_links` first, then fall back to inferred related cards until enough explicit links exist.
+- Manual links are created as approved immediately; agent-created links still enter the pending review queue.
+- Whiteboard card positions are currently session-local UI state; persist positions later only after the canvas interaction model settles.
+- Selecting a card should only update highlight, edges, and the inspector. Position changes should come from explicit dragging.
+- Solid graph edges mean approved persisted `note_links`; dashed edges mean inferred related cards that have not been saved as links yet.
+- Canvas zoom/pan is viewport-only state; graph link data and card coordinates remain in the same world coordinate system.
+- Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -67,9 +79,14 @@
 - Review Maps browser verification inserted and approved a local sample note titled `Review map smoke: shortest path`.
 - After rebasing with `origin/main`, `npm run typecheck`, `npm run build`, and `npm run test` all pass.
 - `002_note_link_approval_flow.sql` was applied locally. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and a localhost Notes Graph browser smoke test all pass.
+- Manual link editing validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test adding one manual note link all pass.
+- Whiteboard link validation: browser smoke test dragged a card node to another card to create a link, then removed one approved link; console reported no errors.
+- Fixed-position card validation: browser smoke test clicked another graph card and confirmed every card kept the same x/y/width while the inspector selection changed.
+- Zoom/pan validation: browser smoke test verified zoom controls, blank-canvas pan, reset view, and no new console errors.
+- `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
 
 ## Next Target
-- Add a manual link creation/edit affordance in Notes Graph so users can connect cards without waiting for agent suggestions.
+- Persist whiteboard card positions now that zoom/pan exists, then add optional multi-board support.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

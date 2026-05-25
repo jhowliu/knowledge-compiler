@@ -115,6 +115,17 @@ export type NoteLink = {
   updatedAt: Date;
 };
 
+export type NoteCardPosition = {
+  id: string;
+  userId: string | null;
+  boardKey: string;
+  noteId: string;
+  x: number;
+  y: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type AgentRun = {
   id: string;
   userId: string | null;

@@ -37,6 +37,14 @@ type ProposalStatus = 'pending' | 'approved' | 'rejected'
 type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
 type ThemeMode = 'light' | 'dark'
+type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
+
+const boardOptions: Array<{ key: BoardKey; label: string }> = [
+  { key: 'default', label: 'Default' },
+  { key: 'algorithms', label: 'Algorithms' },
+  { key: 'review-maps', label: 'Review maps' },
+  { key: 'mistakes', label: 'Mistakes' },
+]
 
 type DecisionRule = {
   signal: string
@@ -99,6 +107,25 @@ type NoteLink = {
   updatedAt: string
 }
 
+type NoteCardPosition = {
+  id: string
+  boardKey: string
+  noteId: string
+  x: number
+  y: number
+  updatedAt: string
+}
+
+type AgentRun = {
+  id: string
+  runType: string
+  status: string
+  output: unknown
+  error: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
 type Mistake = {
   id: string
   domain: string
@@ -129,6 +156,8 @@ type WorkspaceData = {
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]
+  noteCardPositions: NoteCardPosition[]
+  agentRuns: AgentRun[]
   reviewMaps: CompiledNote[]
   mistakes: Mistake[]
   reviewTasks: ReviewTask[]
@@ -155,6 +184,8 @@ const emptyWorkspaceData: WorkspaceData = {
   proposals: [],
   compiledNotes: [],
   noteLinks: [],
+  noteCardPositions: [],
+  agentRuns: [],
   reviewMaps: [],
   mistakes: [],
   reviewTasks: [],
@@ -193,13 +224,28 @@ async function requestVoid(path: string, init?: RequestInit): Promise<void> {
   }
 }
 
-async function loadWorkspaceData(): Promise<WorkspaceData> {
-  const [rawNotes, proposals, compiledNotes, noteLinks, reviewMaps, mistakes, reviewTasks, readinessItems] =
+async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
+  const [
+    rawNotes,
+    proposals,
+    compiledNotes,
+    noteLinks,
+    noteCardPositions,
+    agentRuns,
+    reviewMaps,
+    mistakes,
+    reviewTasks,
+    readinessItems,
+  ] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
+      requestJson<{ noteCardPositions: NoteCardPosition[] }>(
+        `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
+      ),
+      requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
@@ -211,6 +257,8 @@ async function loadWorkspaceData(): Promise<WorkspaceData> {
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
     noteLinks: noteLinks.noteLinks,
+    noteCardPositions: noteCardPositions.noteCardPositions,
+    agentRuns: agentRuns.agentRuns,
     reviewMaps: reviewMaps.reviewMaps,
     mistakes: mistakes.mistakes,
     reviewTasks: reviewTasks.reviewTasks,
@@ -564,9 +612,19 @@ function LeftNavigation({
   )
 }
 
-function TopToolbar({ noteCount, compiledCount, taskCount }: {
+function TopToolbar({
+  agentRunStatus,
+  compiledCount,
+  isAgentRunning,
+  noteCount,
+  onReindexLinks,
+  taskCount,
+}: {
+  agentRunStatus: string
   noteCount: number
   compiledCount: number
+  isAgentRunning: boolean
+  onReindexLinks: () => void
   taskCount: number
 }) {
   return (
@@ -591,11 +649,16 @@ function TopToolbar({ noteCount, compiledCount, taskCount }: {
       </IconButton>
       <button
         type="button"
-        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white"
+        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isAgentRunning}
+        onClick={onReindexLinks}
       >
         <RotateCw size={16} />
-        Re-index links
+        {isAgentRunning ? 'Re-indexing' : 'Re-index links'}
       </button>
+      <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-500">
+        Agent {agentRunStatus}
+      </span>
     </header>
   )
 }
@@ -654,6 +717,10 @@ function relationOptionLabel(relationType: string) {
   return relationOptions.find(([value]) => value === relationType)?.[1] ?? relationLabel(relationType)
 }
 
+function agentRunLabel(runType: string) {
+  return runType.replaceAll('_', ' ')
+}
+
 function edgePath(start: { x: number; y: number }, end: { x: number; y: number }) {
   const dx = end.x - start.x
   const bend = Math.max(8, Math.min(22, Math.abs(dx) * 0.45))
@@ -679,19 +746,28 @@ function uniqueRelatedMatches(matches: RelatedNoteMatch[]) {
 }
 
 function KnowledgeCanvas({
+  activeBoardKey,
   data,
   onCreateNoteLink,
   onDecideNoteLink,
+  onBoardChange,
+  onMoveNoteCard,
+  onResetBoardLayout,
   onRemoveNoteLink,
   onUpdateNoteLink,
 }: {
+  activeBoardKey: BoardKey
   data: WorkspaceData
   onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
+  onBoardChange: (boardKey: BoardKey) => void
+  onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
+  onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
+  const latestNodePositionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -719,6 +795,19 @@ function KnowledgeCanvas({
     start: { x: number; y: number }
     current: { x: number; y: number }
   } | null>(null)
+  const persistedNodePositions = useMemo(() => {
+    return Object.fromEntries(
+      data.noteCardPositions.map((position) => [
+        position.noteId,
+        { x: position.x, y: position.y },
+      ]),
+    ) as Record<string, { x: number; y: number }>
+  }, [data.noteCardPositions])
+
+  useEffect(() => {
+    latestNodePositionsRef.current = persistedNodePositions
+    setNodePositions(persistedNodePositions)
+  }, [persistedNodePositions])
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) ??
     data.reviewMaps[0] ??
@@ -883,7 +972,13 @@ function KnowledgeCanvas({
   function resetCanvasView() {
     setCanvasZoom(1)
     setCanvasPan({ x: 0, y: 0 })
+  }
+
+  function resetCurrentBoardLayout() {
+    resetCanvasView()
+    latestNodePositionsRef.current = {}
     setNodePositions({})
+    onResetBoardLayout()
   }
 
   function startPan(event: React.PointerEvent) {
@@ -945,7 +1040,11 @@ function KnowledgeCanvas({
       x: Math.min(86, Math.max(14, dragState.origin.x + ((event.clientX - dragState.startClientX) / (rect.width * canvasZoom)) * 100)),
       y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / (rect.height * canvasZoom)) * 100)),
     }
-    setNodePositions((positions) => ({ ...positions, [dragState.noteId]: nextPosition }))
+    setNodePositions((positions) => {
+      const nextPositions = { ...positions, [dragState.noteId]: nextPosition }
+      latestNodePositionsRef.current = nextPositions
+      return nextPositions
+    })
   }
 
   function finishPointer(event: React.PointerEvent) {
@@ -959,6 +1058,11 @@ function KnowledgeCanvas({
           targetNoteId,
           relationType: 'related_concept',
         })
+      }
+    } else if (dragState) {
+      const position = latestNodePositionsRef.current[dragState.noteId]
+      if (position) {
+        onMoveNoteCard(dragState.noteId, position)
       }
     }
     setConnectState(null)
@@ -991,6 +1095,22 @@ function KnowledgeCanvas({
           <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
             Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {boardOptions.map((board) => (
+              <button
+                className={`h-8 rounded-md border px-3 text-xs font-extrabold ${
+                  board.key === activeBoardKey
+                    ? 'border-violet bg-violet text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-ink'
+                }`}
+                key={board.key}
+                onClick={() => onBoardChange(board.key)}
+                type="button"
+              >
+                {board.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="absolute right-7 top-6 z-20 flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
@@ -1016,12 +1136,20 @@ function KnowledgeCanvas({
           <button
             className="grid h-8 w-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-ink"
             onClick={resetCanvasView}
-            title="Reset canvas"
+            title="Reset view"
             type="button"
           >
             <Maximize2 size={15} />
           </button>
         </div>
+
+        <button
+          className="absolute right-7 top-[78px] z-20 h-8 rounded-md border border-gray-200 bg-white px-3 text-xs font-extrabold text-gray-600 shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          onClick={resetCurrentBoardLayout}
+          type="button"
+        >
+          Reset layout
+        </button>
 
         <div
           className="absolute inset-0"
@@ -1333,6 +1461,36 @@ function KnowledgeCanvas({
               </section>
 
               <section>
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <RotateCw size={15} className="text-violet" />
+                  Agent activity
+                </h3>
+                <div className="mb-6 space-y-2">
+                  {data.agentRuns.length ? (
+                    data.agentRuns.slice(0, 3).map((agentRun) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={agentRun.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[13px] font-extrabold capitalize text-white">
+                              {agentRunLabel(agentRun.runType)}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-gray-400">
+                              {agentRun.error ?? 'Background run tracked with proposal-safe writes.'}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
+                            {agentRun.status}
+                          </span>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No agent runs yet. Start with Re-index links.
+                    </p>
+                  )}
+                </div>
+
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
                   <Sparkles size={15} className="text-violet" />
                   Agent queue
@@ -1972,6 +2130,12 @@ function App() {
     const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
     return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
   })
+  const [activeBoardKey, setActiveBoardKey] = useState<BoardKey>(() => {
+    const savedBoardKey = window.localStorage.getItem('knowledgeCompilerBoardKey')
+    return boardOptions.some((board) => board.key === savedBoardKey)
+      ? (savedBoardKey as BoardKey)
+      : 'default'
+  })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
@@ -1996,11 +2160,15 @@ function App() {
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const weakCount = workspaceData.readinessItems.filter((item) => item.status === 'Weak').length
   const openTaskCount = workspaceData.reviewTasks.filter((task) => task.status === 'open').length
+  const latestAgentRun = workspaceData.agentRuns[0] ?? null
+  const isAgentRunning = workspaceData.agentRuns.some((agentRun) =>
+    ['queued', 'running'].includes(agentRun.status),
+  )
 
   async function refresh() {
     setIsLoading(true)
     try {
-      setWorkspaceData(await loadWorkspaceData())
+      setWorkspaceData(await loadWorkspaceData(activeBoardKey))
       setError(null)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
@@ -2011,11 +2179,15 @@ function App() {
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [activeBoardKey])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
   }, [themeMode])
+
+  useEffect(() => {
+    window.localStorage.setItem('knowledgeCompilerBoardKey', activeBoardKey)
+  }, [activeBoardKey])
 
   useEffect(() => {
     if (activeView === 'raw_note_editor') {
@@ -2265,6 +2437,67 @@ function App() {
     }
   }
 
+  async function saveNoteCardPosition(noteId: string, position: { x: number; y: number }) {
+    try {
+      const result = await requestJson<{ noteCardPosition: NoteCardPosition }>(
+        `/note-card-positions/${noteId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ ...position, boardKey: activeBoardKey }),
+        },
+      )
+      setWorkspaceData((current) => ({
+        ...current,
+        noteCardPositions: [
+          result.noteCardPosition,
+          ...current.noteCardPositions.filter(
+            (item) =>
+              item.boardKey !== result.noteCardPosition.boardKey ||
+              item.noteId !== result.noteCardPosition.noteId,
+          ),
+        ],
+      }))
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to save card position')
+    }
+  }
+
+  async function resetBoardLayout() {
+    try {
+      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(activeBoardKey)}`, {
+        method: 'DELETE',
+      })
+      setWorkspaceData((current) => ({ ...current, noteCardPositions: [] }))
+      setNotice('Board layout reset.')
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to reset board layout')
+      setNotice(null)
+    }
+  }
+
+  async function startReindexLinksRun() {
+    try {
+      const result = await requestJson<{ agentRun: AgentRun }>('/agent-runs', {
+        method: 'POST',
+        body: JSON.stringify({ runType: 'reindex_links' }),
+      })
+      setWorkspaceData((current) => ({
+        ...current,
+        agentRuns: [result.agentRun, ...current.agentRuns],
+      }))
+      setNotice('Agent re-index started.')
+      setError(null)
+      window.setTimeout(() => {
+        void refresh()
+      }, 900)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to start agent run')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -2285,8 +2518,11 @@ function App() {
         {activeView === 'knowledge_map' ? (
           <>
             <TopToolbar
+              agentRunStatus={latestAgentRun?.status ?? 'idle'}
               compiledCount={workspaceData.compiledNotes.length}
+              isAgentRunning={isAgentRunning}
               noteCount={workspaceData.rawNotes.length}
+              onReindexLinks={() => void startReindexLinksRun()}
               taskCount={openTaskCount}
             />
             {error ? (
@@ -2301,9 +2537,13 @@ function App() {
             ) : null}
             <div className="flex min-h-0 flex-1">
               <KnowledgeCanvas
+                activeBoardKey={activeBoardKey}
                 data={workspaceData}
+                onBoardChange={setActiveBoardKey}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
+                onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
+                onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />

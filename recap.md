@@ -36,6 +36,9 @@
 - Adjusted Notes Graph selection behavior so clicking a card no longer recenters or resizes it; card positions stay fixed until the user drags them.
 - Increased Notes Graph edge contrast: approved persisted links are darker/thicker solid lines, inferred temporary relations are lighter dashed lines, and drag-preview lines are brighter.
 - Added Notes Graph whiteboard controls for zoom, pan, and reset view; mouse wheel and toolbar buttons change zoom, blank-canvas drag pans the board, and reset restores zoom/pan plus session-local card positions.
+- Added persisted Notes Graph card positions: migration `003_note_card_positions.sql`, clean architecture API under `/note-card-positions`, frontend load/save wiring, and drag-end persistence for whiteboard layouts.
+- Added lightweight multi-board layout controls for Notes Graph: fixed board tabs for Default, Algorithms, Review maps, and Mistakes; card positions load/save per board key; Reset layout clears only the active board.
+- Added the first agentic runtime skeleton: queued `reindex_links` agent runs, in-process worker processing, deterministic note-link reindexing, agent run events, pending link suggestions, `GET/POST /agent-runs`, and Notes Graph Agent Activity UI.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
 
 ## Decisions
@@ -61,6 +64,9 @@
 - Selecting a card should only update highlight, edges, and the inspector. Position changes should come from explicit dragging.
 - Solid graph edges mean approved persisted `note_links`; dashed edges mean inferred related cards that have not been saved as links yet.
 - Canvas zoom/pan is viewport-only state; graph link data and card coordinates remain in the same world coordinate system.
+- Whiteboard card positions persist per `board_key` and compiled-note id; reset view only changes zoom/pan and does not delete saved layout positions.
+- Multi-board support starts with fixed board keys and no separate boards table; add custom board creation only after the default board interaction model settles.
+- Agentic writes should continue to enter approval flows first: the re-index worker creates pending `note_links` and records agent events instead of directly approving knowledge changes.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 
 ## Open Issues
@@ -83,10 +89,13 @@
 - Whiteboard link validation: browser smoke test dragged a card node to another card to create a link, then removed one approved link; console reported no errors.
 - Fixed-position card validation: browser smoke test clicked another graph card and confirmed every card kept the same x/y/width while the inspector selection changed.
 - Zoom/pan validation: browser smoke test verified zoom controls, blank-canvas pan, reset view, and no new console errors.
+- Persisted-position validation: applied `003_note_card_positions.sql`, then browser smoke test dragged a graph card, confirmed `/note-card-positions` stored the coordinates, reloaded the page, and confirmed the card stayed in place with no new console errors.
+- Multi-board validation: browser smoke test switched to the Review maps board, dragged a card, confirmed saved positions used `boardKey=review-maps`, reloaded and confirmed placement persisted, reset that board layout, and confirmed the Default board still retained its positions.
+- Agent runtime validation: `POST /agent-runs` queued `reindex_links`, worker completed it with events and pending link suggestions, and browser smoke test confirmed the Re-index links button, Agent completed status, Agent Activity panel, and pending link refresh.
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
 
 ## Next Target
-- Persist whiteboard card positions now that zoom/pan exists, then add optional multi-board support.
+- Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, and links to generated pending note links.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

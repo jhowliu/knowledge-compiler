@@ -48,15 +48,31 @@ function mapAgentRunEvent(row: AgentRunEventRow): AgentRunEvent {
 }
 
 export interface AgentRunRepository {
+  enqueue(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
   create(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
   addEvent(input: { agentRunId: string; eventType: string; payload: unknown }): Promise<AgentRunEvent>;
+  start(id: string): Promise<AgentRun>;
   complete(id: string, output: unknown): Promise<AgentRun>;
   fail(id: string, error: string): Promise<AgentRun>;
   getById(id: string): Promise<AgentRun | null>;
+  listRecent(limit: number): Promise<AgentRun[]>;
   listEvents(agentRunId: string): Promise<AgentRunEvent[]>;
 }
 
 export class PostgresAgentRunRepository implements AgentRunRepository {
+  async enqueue(input: { userId?: string | null; runType: string; input: unknown }) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        insert into agent_runs (user_id, run_type, status, input)
+        values ($1, $2, 'queued', $3)
+        returning *
+      `,
+      [input.userId ?? null, input.runType, input.input],
+    );
+
+    return mapAgentRun(result.rows[0]);
+  }
+
   async create(input: { userId?: string | null; runType: string; input: unknown }) {
     const result = await pool.query<AgentRunRow>(
       `
@@ -81,6 +97,21 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     );
 
     return mapAgentRunEvent(result.rows[0]);
+  }
+
+  async start(id: string) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        update agent_runs
+        set status = 'running',
+            started_at = now()
+        where id = $1
+        returning *
+      `,
+      [id],
+    );
+
+    return mapAgentRun(result.rows[0]);
   }
 
   async complete(id: string, output: unknown) {
@@ -118,6 +149,20 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   async getById(id: string) {
     const result = await pool.query<AgentRunRow>("select * from agent_runs where id = $1", [id]);
     return result.rows[0] ? mapAgentRun(result.rows[0]) : null;
+  }
+
+  async listRecent(limit: number) {
+    const result = await pool.query<AgentRunRow>(
+      `
+        select *
+        from agent_runs
+        order by created_at desc
+        limit $1
+      `,
+      [limit],
+    );
+
+    return result.rows.map(mapAgentRun);
   }
 
   async listEvents(agentRunId: string) {

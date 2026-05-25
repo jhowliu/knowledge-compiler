@@ -1728,7 +1728,42 @@ Later:
 full-text search + concept index + links + pgvector
 ```
 
-### 34.9 Auth and Secrets
+### 34.9 Public UI Taxonomy
+
+The UI should keep the public language much smaller than the internal indexing language.
+
+Public user-facing terms:
+
+```text
+Raw Note
+Note
+Link
+Proposal
+Review Task
+Readiness
+```
+
+Network map cards should all be presented as `Note` cards. Internal distinctions such as `pattern`, `algorithm`, `problem_note`, and `review_map` should not become primary visual card categories on the canvas. They should appear only as small tags or in the selected-card inspector.
+
+Canvas rules:
+
+- Card primary type is always `Note`.
+- Cards show title plus at most 3 tags.
+- Link labels default to `related`.
+- Detailed relation types such as `prerequisite`, `example_of`, `contrasts_with`, and `part_of` live in the link editor or inspector.
+- Internal indexing terms stay available to the agent, search, and proposal engine, but should not dominate the main canvas.
+
+Internal taxonomy can remain richer:
+
+```text
+note_type: problem_note, pattern, algorithm, review_map
+concept_type: topic, pattern, algorithm, implementation_schema, problem, mistake
+relation_type: related_concept, prerequisite, example_of, contrasts_with, part_of
+```
+
+The design goal is Heptabase-like: the board is made of cards and links, while schema details stay behind the card.
+
+### 34.10 Auth and Secrets
 
 The app should use its own authentication and session model. It should not depend on Codex CLI authentication or read local Codex auth files.
 
@@ -1750,7 +1785,7 @@ SESSION_SECRET
 
 User browsers should never receive provider API keys.
 
-### 34.10 API Surface
+### 34.11 API Surface
 
 Recommended MVP endpoints:
 
@@ -1779,7 +1814,7 @@ GET /search
 
 The API should expose proposal status and agent run events so the UI can show progress and explain what the AI did.
 
-### 34.11 MVP Implementation Priority
+### 34.12 MVP Implementation Priority
 
 ```text
 1. Database schema and migrations

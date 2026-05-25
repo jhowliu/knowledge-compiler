@@ -37,13 +37,10 @@ type ProposalStatus = 'pending' | 'approved' | 'rejected'
 type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
 type ThemeMode = 'light' | 'dark'
-type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
+type BoardKey = 'default'
 
 const boardOptions: Array<{ key: BoardKey; label: string }> = [
-  { key: 'default', label: 'Default' },
-  { key: 'algorithms', label: 'Algorithms' },
-  { key: 'review-maps', label: 'Review maps' },
-  { key: 'mistakes', label: 'Mistakes' },
+  { key: 'default', label: 'All notes' },
 ]
 
 type DecisionRule = {
@@ -668,10 +665,43 @@ function noteTypeLabel(noteType: string) {
 }
 
 function noteTone(noteType: string) {
-  if (noteType === 'review_map') return 'border-violet/40 bg-violet/10 text-violet'
-  if (noteType === 'algorithm') return 'border-emerald-300 bg-emerald-50 text-emerald-800'
-  if (noteType === 'mistake') return 'border-orange-300 bg-orange-50 text-orange-800'
-  return 'border-gray-300 bg-white text-gray-700'
+  if (noteType === 'review_map') return 'border-violet/30 bg-violet/10 text-violet'
+  if (noteType === 'algorithm') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (noteType === 'mistake') return 'border-orange-200 bg-orange-50 text-orange-800'
+  return 'border-gray-200 bg-gray-50 text-gray-600'
+}
+
+function publicNoteTags(note: CompiledNote | undefined) {
+  if (!note) return []
+  const tags = new Set<string>()
+  const structuredData = isRecord(note.structuredData) ? note.structuredData : {}
+  const addStringArray = (value: unknown) => {
+    if (!Array.isArray(value)) return
+    for (const item of value) {
+      if (typeof item === 'string' && item.trim()) {
+        tags.add(item.trim())
+      }
+    }
+  }
+
+  if (note.noteType === 'review_map') tags.add('Guide')
+
+  addStringArray(structuredData.patterns)
+  addStringArray(structuredData.algorithms)
+  addStringArray(structuredData.linkedAlgorithms)
+
+  if (Array.isArray(structuredData.concepts)) {
+    for (const concept of structuredData.concepts) {
+      if (!isRecord(concept)) continue
+      const name = typeof concept.name === 'string' ? concept.name.trim() : ''
+      const conceptType = typeof concept.conceptType === 'string' ? concept.conceptType : ''
+      if (name && conceptType !== 'problem') {
+        tags.add(name)
+      }
+    }
+  }
+
+  return [...tags].filter((tag) => tag.toLowerCase() !== note.title.toLowerCase()).slice(0, 3)
 }
 
 function noteKeywords(note: CompiledNote | undefined) {
@@ -711,6 +741,10 @@ function connectedNoteId(link: NoteLink, noteId: string) {
 
 function relationLabel(relationType: string) {
   return relationType.replaceAll('_', ' ')
+}
+
+function publicRelationLabel(_relationType: string) {
+  return 'related'
 }
 
 function relationOptionLabel(relationType: string) {
@@ -832,7 +866,7 @@ function KnowledgeCanvas({
         ? {
             note,
             score: link.confidence === 'high' ? 10 : link.confidence === 'medium' ? 8 : 6,
-            reason: relationLabel(link.relationType),
+            reason: publicRelationLabel(link.relationType),
             link,
           }
         : null
@@ -851,13 +885,7 @@ function KnowledgeCanvas({
       return {
         note,
         score: (titleMatch ? 4 : 0) + (algorithmMatch ? 3 : 0) + keywordMatches,
-        reason: titleMatch
-          ? 'Backlink by title mention'
-          : algorithmMatch
-            ? 'Shares review-map algorithm'
-            : keywordMatches > 1
-              ? 'Shares indexed concepts'
-              : 'Nearby compiled note',
+        reason: 'related',
       }
     })
     .filter((match) => match.score > 0)
@@ -1095,22 +1123,24 @@ function KnowledgeCanvas({
           <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
             Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {boardOptions.map((board) => (
-              <button
-                className={`h-8 rounded-md border px-3 text-xs font-extrabold ${
-                  board.key === activeBoardKey
-                    ? 'border-violet bg-violet text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-ink'
-                }`}
-                key={board.key}
-                onClick={() => onBoardChange(board.key)}
-                type="button"
-              >
-                {board.label}
-              </button>
-            ))}
-          </div>
+          {boardOptions.length > 1 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {boardOptions.map((board) => (
+                <button
+                  className={`h-8 rounded-md border px-3 text-xs font-extrabold ${
+                    board.key === activeBoardKey
+                      ? 'border-violet bg-violet text-white'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-ink'
+                  }`}
+                  key={board.key}
+                  onClick={() => onBoardChange(board.key)}
+                  type="button"
+                >
+                  {board.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="absolute right-7 top-6 z-20 flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
@@ -1191,7 +1221,7 @@ function KnowledgeCanvas({
                           x={labelX}
                           y={labelY}
                         >
-                          {relationOptionLabel(node.link.relationType)}
+                          {publicRelationLabel(node.link.relationType)}
                         </text>
                       ) : null}
                     </g>
@@ -1214,6 +1244,7 @@ function KnowledgeCanvas({
           {graphNodes.length ? (
             graphNodes.map((node) => {
               const isSelected = node.note.id === selectedNote?.id
+              const tags = publicNoteTags(node.note)
               return (
                 <button
                   className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
@@ -1241,8 +1272,8 @@ function KnowledgeCanvas({
                     }}
                   />
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
-                      {noteTypeLabel(node.note.noteType)}
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
+                      Note
                     </span>
                     {isSelected ? (
                       <GitBranch size={15} className="text-violet" />
@@ -1253,9 +1284,22 @@ function KnowledgeCanvas({
                   <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">
                     {node.note.title}
                   </p>
-                  <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-gray-500">
-                    {node.relation}
-                  </p>
+                  <div className="mt-2 flex min-h-[22px] flex-wrap gap-1">
+                    {tags.length ? (
+                      tags.map((tag) => (
+                        <span
+                          className={`max-w-[86px] truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${noteTone(node.note.noteType)}`}
+                          key={tag}
+                        >
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
+                        related
+                      </span>
+                    )}
+                  </div>
                 </button>
               )
             })
@@ -1286,9 +1330,19 @@ function KnowledgeCanvas({
         {selectedNote ? (
           <>
             <header className="border-b border-[#303030] px-6 py-5">
-              <span className="mb-3 inline-flex rounded-full border border-[#3A3A3A] bg-[#202020] px-2.5 py-1 text-[11px] font-bold capitalize text-gray-300">
-                {noteTypeLabel(selectedNote.noteType)}
-              </span>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-full border border-[#3A3A3A] bg-[#202020] px-2.5 py-1 text-[11px] font-bold uppercase text-gray-300">
+                  Note
+                </span>
+                {publicNoteTags(selectedNote).map((tag) => (
+                  <span
+                    className="inline-flex rounded-full border border-[#303030] bg-[#171717] px-2.5 py-1 text-[11px] font-bold text-gray-400"
+                    key={tag}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
               <h2 className="text-xl font-extrabold leading-7 text-white">{selectedNote.title}</h2>
               <div className="mt-4 grid grid-cols-3 gap-2">
                 {[
@@ -1305,6 +1359,24 @@ function KnowledgeCanvas({
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Details</h3>
+                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="font-bold uppercase tracking-wide text-gray-500">Format</p>
+                      <p className="mt-1 font-semibold capitalize text-gray-200">
+                        {noteTypeLabel(selectedNote.noteType)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-bold uppercase tracking-wide text-gray-500">Domain</p>
+                      <p className="mt-1 font-semibold capitalize text-gray-200">{selectedNote.domain}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               <section className="mb-6">
                 <h3 className="mb-3 text-sm font-extrabold text-gray-100">Content</h3>
                 <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">

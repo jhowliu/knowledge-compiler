@@ -40,6 +40,8 @@
 - Added lightweight multi-board layout controls for Notes Graph: fixed board tabs for Default, Algorithms, Review maps, and Mistakes; card positions load/save per board key; Reset layout clears only the active board.
 - Added the first agentic runtime skeleton: queued `reindex_links` agent runs, in-process worker processing, deterministic note-link reindexing, agent run events, pending link suggestions, `GET/POST /agent-runs`, and Notes Graph Agent Activity UI.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
+- Started taxonomy cleanup on `codex/taxonomy-cleanup`: Notes Graph cards now present as generic `Note` cards with up to 3 tags, canvas link labels default to `related`, detailed note type moves to the inspector, and visible board tabs are collapsed to the single all-notes board.
+- Added PRD guidance separating public UI taxonomy from richer internal indexing taxonomy.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -68,6 +70,7 @@
 - Multi-board support starts with fixed board keys and no separate boards table; add custom board creation only after the default board interaction model settles.
 - Agentic writes should continue to enter approval flows first: the re-index worker creates pending `note_links` and records agent events instead of directly approving knowledge changes.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
+- Public canvas taxonomy should stay small: `Note`, `Link`, `Proposal`, `Review Task`, and `Readiness`; pattern/algorithm/review-map/problem distinctions are internal facets or inspector details.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -93,6 +96,7 @@
 - Multi-board validation: browser smoke test switched to the Review maps board, dragged a card, confirmed saved positions used `boardKey=review-maps`, reloaded and confirmed placement persisted, reset that board layout, and confirmed the Default board still retained its positions.
 - Agent runtime validation: `POST /agent-runs` queued `reindex_links`, worker completed it with events and pending link suggestions, and browser smoke test confirmed the Re-index links button, Agent completed status, Agent Activity panel, and pending link refresh.
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
+- Taxonomy cleanup validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test all pass; graph cards now hide schema type tags such as Algorithm/Pattern/Problem on the canvas.
 
 ## Next Target
 - Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, and links to generated pending note links.

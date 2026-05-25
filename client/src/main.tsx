@@ -116,6 +116,16 @@ type NoteCardPosition = {
   updatedAt: string
 }
 
+type AgentRun = {
+  id: string
+  runType: string
+  status: string
+  output: unknown
+  error: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
 type Mistake = {
   id: string
   domain: string
@@ -147,6 +157,7 @@ type WorkspaceData = {
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]
   noteCardPositions: NoteCardPosition[]
+  agentRuns: AgentRun[]
   reviewMaps: CompiledNote[]
   mistakes: Mistake[]
   reviewTasks: ReviewTask[]
@@ -174,6 +185,7 @@ const emptyWorkspaceData: WorkspaceData = {
   compiledNotes: [],
   noteLinks: [],
   noteCardPositions: [],
+  agentRuns: [],
   reviewMaps: [],
   mistakes: [],
   reviewTasks: [],
@@ -219,6 +231,7 @@ async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
     compiledNotes,
     noteLinks,
     noteCardPositions,
+    agentRuns,
     reviewMaps,
     mistakes,
     reviewTasks,
@@ -232,6 +245,7 @@ async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
       requestJson<{ noteCardPositions: NoteCardPosition[] }>(
         `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
       ),
+      requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
@@ -244,6 +258,7 @@ async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
     compiledNotes: compiledNotes.compiledNotes,
     noteLinks: noteLinks.noteLinks,
     noteCardPositions: noteCardPositions.noteCardPositions,
+    agentRuns: agentRuns.agentRuns,
     reviewMaps: reviewMaps.reviewMaps,
     mistakes: mistakes.mistakes,
     reviewTasks: reviewTasks.reviewTasks,
@@ -597,9 +612,19 @@ function LeftNavigation({
   )
 }
 
-function TopToolbar({ noteCount, compiledCount, taskCount }: {
+function TopToolbar({
+  agentRunStatus,
+  compiledCount,
+  isAgentRunning,
+  noteCount,
+  onReindexLinks,
+  taskCount,
+}: {
+  agentRunStatus: string
   noteCount: number
   compiledCount: number
+  isAgentRunning: boolean
+  onReindexLinks: () => void
   taskCount: number
 }) {
   return (
@@ -624,11 +649,16 @@ function TopToolbar({ noteCount, compiledCount, taskCount }: {
       </IconButton>
       <button
         type="button"
-        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white"
+        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isAgentRunning}
+        onClick={onReindexLinks}
       >
         <RotateCw size={16} />
-        Re-index links
+        {isAgentRunning ? 'Re-indexing' : 'Re-index links'}
       </button>
+      <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-500">
+        Agent {agentRunStatus}
+      </span>
     </header>
   )
 }
@@ -685,6 +715,10 @@ function relationLabel(relationType: string) {
 
 function relationOptionLabel(relationType: string) {
   return relationOptions.find(([value]) => value === relationType)?.[1] ?? relationLabel(relationType)
+}
+
+function agentRunLabel(runType: string) {
+  return runType.replaceAll('_', ' ')
 }
 
 function edgePath(start: { x: number; y: number }, end: { x: number; y: number }) {
@@ -1428,6 +1462,36 @@ function KnowledgeCanvas({
 
               <section>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <RotateCw size={15} className="text-violet" />
+                  Agent activity
+                </h3>
+                <div className="mb-6 space-y-2">
+                  {data.agentRuns.length ? (
+                    data.agentRuns.slice(0, 3).map((agentRun) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={agentRun.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[13px] font-extrabold capitalize text-white">
+                              {agentRunLabel(agentRun.runType)}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-gray-400">
+                              {agentRun.error ?? 'Background run tracked with proposal-safe writes.'}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
+                            {agentRun.status}
+                          </span>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No agent runs yet. Start with Re-index links.
+                    </p>
+                  )}
+                </div>
+
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
                   <Sparkles size={15} className="text-violet" />
                   Agent queue
                 </h3>
@@ -2096,6 +2160,10 @@ function App() {
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const weakCount = workspaceData.readinessItems.filter((item) => item.status === 'Weak').length
   const openTaskCount = workspaceData.reviewTasks.filter((task) => task.status === 'open').length
+  const latestAgentRun = workspaceData.agentRuns[0] ?? null
+  const isAgentRunning = workspaceData.agentRuns.some((agentRun) =>
+    ['queued', 'running'].includes(agentRun.status),
+  )
 
   async function refresh() {
     setIsLoading(true)
@@ -2409,6 +2477,27 @@ function App() {
     }
   }
 
+  async function startReindexLinksRun() {
+    try {
+      const result = await requestJson<{ agentRun: AgentRun }>('/agent-runs', {
+        method: 'POST',
+        body: JSON.stringify({ runType: 'reindex_links' }),
+      })
+      setWorkspaceData((current) => ({
+        ...current,
+        agentRuns: [result.agentRun, ...current.agentRuns],
+      }))
+      setNotice('Agent re-index started.')
+      setError(null)
+      window.setTimeout(() => {
+        void refresh()
+      }, 900)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to start agent run')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -2429,8 +2518,11 @@ function App() {
         {activeView === 'knowledge_map' ? (
           <>
             <TopToolbar
+              agentRunStatus={latestAgentRun?.status ?? 'idle'}
               compiledCount={workspaceData.compiledNotes.length}
+              isAgentRunning={isAgentRunning}
               noteCount={workspaceData.rawNotes.length}
+              onReindexLinks={() => void startReindexLinksRun()}
               taskCount={openTaskCount}
             />
             {error ? (

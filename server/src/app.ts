@@ -19,6 +19,7 @@ import { createNoteLinkRoutes } from "./routes/noteLink.routes.js";
 import { createNoteCardPositionRoutes } from "./routes/noteCardPosition.routes.js";
 import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawNoteRoutes } from "./routes/rawNote.routes.js";
+import { AgentRunQueueService } from "./services/agentRunQueue.service.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import { NoteLinkService } from "./services/noteLink.service.js";
 import { NoteCardPositionService } from "./services/noteCardPosition.service.js";
@@ -64,6 +65,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   const dashboardService = new DashboardService(knowledgeRepository);
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
+  const agentRunQueueService = new AgentRunQueueService(
+    agentRunRepository,
+    knowledgeRepository,
+    noteLinkRepository,
+  );
 
   app.use(cors(corsOptions));
   app.use(express.json({ limit: "1mb" }));
@@ -74,7 +80,10 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   app.use("/raw-notes", createRawNoteRoutes(rawNoteService));
   if (phaseOneWorkflowService) {
-    app.use("/agent-runs", createAgentRunRoutes(phaseOneWorkflowService, agentRunRepository));
+    app.use(
+      "/agent-runs",
+      createAgentRunRoutes(phaseOneWorkflowService, agentRunRepository, agentRunQueueService),
+    );
   }
   app.use("/update-proposals", createProposalRoutes(proposalService));
   app.use("/note-links", createNoteLinkRoutes(noteLinkService));

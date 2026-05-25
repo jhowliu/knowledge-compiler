@@ -3,7 +3,7 @@
 ## Summary
 - Created `PRD.md` from the existing Interview Knowledge Compiler PRD.
 - Added Section 34, Technical Specification, covering the agreed React + Express + self-hosted Postgres direction.
-- Captured the no-ORM decision: use `pg` with hand-written SQL and plain migrations.
+- Captured the no-ORM decision: use the `postgres` Node.js client with hand-written SQL and plain migrations.
 - Added agent runtime guidance using OpenAI Agents SDK, approval-gated durable writes, and an LLM-wiki concept index for related-note search.
 - Added initial `client/` and `server/` project structure.
 - Added root npm workspaces, local env examples, Docker Compose Postgres config, README setup instructions, and the first SQL migration.
@@ -44,10 +44,11 @@
 - Improved Coding extraction for constrained shortest-path variants such as K stops / edge budget notes, including Dijkstra misspelling handling, priority queue detection, `dist[node][state]` implementation-schema concepts, and avoiding false review-map classification from a single `=>`.
 - Wired the Raw Notes UI to keep the selected note after compile, show queued agentic indexing notices, and render an indexing trace panel with run/proposal/item counts.
 - Updated `PRD.md` with the agentic raw-note indexing flow, trace events, variant indexing behavior, and the new API surface.
+- Started DB client cleanup on `codex/postgres-client-cleanup`: replaced raw `pg Pool` usage with the `postgres` Node.js client behind `server/src/db/postgres.ts`, updated repositories and migrations to use the helper, removed `pg` / `@types/pg`, and updated README/PRD wording.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
-- Backend: Express, TypeScript, `node-postgres` / `pg`.
+- Backend: Express, TypeScript, `postgres` Node.js client.
 - Database: self-hosted Postgres as source of truth.
 - Folder split: `client/` for React and `server/` for Express.
 - Search MVP: Postgres full-text search plus LLM-maintained concept index and note links.
@@ -74,6 +75,7 @@
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
 - Raw-note compilation now defaults to queued `compile_raw_note` runs when the queue is configured; immediate compiled-knowledge writes still require proposal approval.
 - The wiki indexer should treat algorithm variants as indexable wiki concepts instead of flattening them into only the base algorithm.
+- Database access remains no-ORM hand-written SQL, but repositories should import the shared `query` helper instead of touching raw connection pool objects.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -101,6 +103,7 @@
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
 - Raw-note wiki-indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass.
 - Browser smoke test verified selecting a raw note, clicking `Compile saved`, seeing the queued agentic indexing notice, and seeing the Raw Notes indexing trace panel with completed run/proposal counts. A stale local `node dist/index.js` process initially served an old API without the trace route and was stopped before retesting.
+- DB client cleanup validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` all pass.
 
 ## Next Target
 - Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, generated proposal links, and generated pending note links.

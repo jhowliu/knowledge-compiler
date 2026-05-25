@@ -1,13 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { pool, closePool } from "./pool.js";
+import { closeDatabase, query, transaction } from "./postgres.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, "../../db/migrations");
 
 async function ensureMigrationsTable() {
-  await pool.query(`
+  await query(`
     create table if not exists schema_migrations (
       version text primary key,
       applied_at timestamptz not null default now()
@@ -16,7 +16,7 @@ async function ensureMigrationsTable() {
 }
 
 async function appliedVersions() {
-  const result = await pool.query<{ version: string }>(
+  const result = await query<{ version: string }>(
     "select version from schema_migrations order by version",
   );
   return new Set(result.rows.map((row) => row.version));
@@ -35,14 +35,13 @@ async function run() {
     }
 
     const sql = await readFile(path.join(migrationsDir, file), "utf8");
-    await pool.query("begin");
     try {
-      await pool.query(sql);
-      await pool.query("insert into schema_migrations (version) values ($1)", [file]);
-      await pool.query("commit");
+      await transaction(async (transactionQuery) => {
+        await transactionQuery(sql);
+        await transactionQuery("insert into schema_migrations (version) values ($1)", [file]);
+      });
       console.log(`applied ${file}`);
     } catch (error) {
-      await pool.query("rollback");
       throw error;
     }
   }
@@ -54,5 +53,5 @@ run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await closePool();
+    await closeDatabase();
   });

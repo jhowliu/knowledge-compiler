@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type { NoteCardPosition } from "../domain/knowledge.js";
 
 type NoteCardPositionRow = {
@@ -39,7 +39,7 @@ export interface NoteCardPositionRepository {
 
 export class PostgresNoteCardPositionRepository implements NoteCardPositionRepository {
   async listForBoard(boardKey: string) {
-    const result = await pool.query<NoteCardPositionRow>(
+    const result = await query<NoteCardPositionRow>(
       `
         select *
         from note_card_positions
@@ -59,7 +59,7 @@ export class PostgresNoteCardPositionRepository implements NoteCardPositionRepos
     x: number;
     y: number;
   }) {
-    const result = await pool.query<NoteCardPositionRow>(
+    const result = await query<NoteCardPositionRow>(
       `
         insert into note_card_positions (
           user_id,
@@ -82,7 +82,7 @@ export class PostgresNoteCardPositionRepository implements NoteCardPositionRepos
   }
 
   async deleteForBoard(boardKey: string) {
-    const result = await pool.query(
+    const result = await query(
       `
         delete from note_card_positions
         where board_key = $1

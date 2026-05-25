@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type { AgentRun, AgentRunEvent } from "../domain/knowledge.js";
 
 type AgentRunRow = {
@@ -62,7 +62,7 @@ export interface AgentRunRepository {
 
 export class PostgresAgentRunRepository implements AgentRunRepository {
   async enqueue(input: { userId?: string | null; runType: string; input: unknown }) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         insert into agent_runs (user_id, run_type, status, input)
         values ($1, $2, 'queued', $3)
@@ -75,7 +75,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async create(input: { userId?: string | null; runType: string; input: unknown }) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         insert into agent_runs (user_id, run_type, status, input, started_at)
         values ($1, $2, 'running', $3, now())
@@ -88,7 +88,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async addEvent(input: { agentRunId: string; eventType: string; payload: unknown }) {
-    const result = await pool.query<AgentRunEventRow>(
+    const result = await query<AgentRunEventRow>(
       `
         insert into agent_run_events (agent_run_id, event_type, payload)
         values ($1, $2, $3)
@@ -101,7 +101,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async start(id: string) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         update agent_runs
         set status = 'running',
@@ -116,7 +116,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async complete(id: string, output: unknown) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         update agent_runs
         set status = 'completed',
@@ -132,7 +132,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async fail(id: string, error: string) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         update agent_runs
         set status = 'failed',
@@ -148,12 +148,12 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async getById(id: string) {
-    const result = await pool.query<AgentRunRow>("select * from agent_runs where id = $1", [id]);
+    const result = await query<AgentRunRow>("select * from agent_runs where id = $1", [id]);
     return result.rows[0] ? mapAgentRun(result.rows[0]) : null;
   }
 
   async listRecent(limit: number) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         select *
         from agent_runs
@@ -167,7 +167,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async listByRawNote(rawNoteId: string) {
-    const result = await pool.query<AgentRunRow>(
+    const result = await query<AgentRunRow>(
       `
         select *
         from agent_runs
@@ -181,7 +181,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async listEvents(agentRunId: string) {
-    const result = await pool.query<AgentRunEventRow>(
+    const result = await query<AgentRunEventRow>(
       `
         select *
         from agent_run_events

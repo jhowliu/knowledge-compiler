@@ -99,6 +99,15 @@ type NoteLink = {
   updatedAt: string
 }
 
+type NoteCardPosition = {
+  id: string
+  boardKey: string
+  noteId: string
+  x: number
+  y: number
+  updatedAt: string
+}
+
 type Mistake = {
   id: string
   domain: string
@@ -129,6 +138,7 @@ type WorkspaceData = {
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]
+  noteCardPositions: NoteCardPosition[]
   reviewMaps: CompiledNote[]
   mistakes: Mistake[]
   reviewTasks: ReviewTask[]
@@ -155,6 +165,7 @@ const emptyWorkspaceData: WorkspaceData = {
   proposals: [],
   compiledNotes: [],
   noteLinks: [],
+  noteCardPositions: [],
   reviewMaps: [],
   mistakes: [],
   reviewTasks: [],
@@ -194,12 +205,23 @@ async function requestVoid(path: string, init?: RequestInit): Promise<void> {
 }
 
 async function loadWorkspaceData(): Promise<WorkspaceData> {
-  const [rawNotes, proposals, compiledNotes, noteLinks, reviewMaps, mistakes, reviewTasks, readinessItems] =
+  const [
+    rawNotes,
+    proposals,
+    compiledNotes,
+    noteLinks,
+    noteCardPositions,
+    reviewMaps,
+    mistakes,
+    reviewTasks,
+    readinessItems,
+  ] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
+      requestJson<{ noteCardPositions: NoteCardPosition[] }>('/note-card-positions'),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
       requestJson<{ mistakes: Mistake[] }>('/mistakes'),
       requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
@@ -211,6 +233,7 @@ async function loadWorkspaceData(): Promise<WorkspaceData> {
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
     noteLinks: noteLinks.noteLinks,
+    noteCardPositions: noteCardPositions.noteCardPositions,
     reviewMaps: reviewMaps.reviewMaps,
     mistakes: mistakes.mistakes,
     reviewTasks: reviewTasks.reviewTasks,
@@ -682,16 +705,19 @@ function KnowledgeCanvas({
   data,
   onCreateNoteLink,
   onDecideNoteLink,
+  onMoveNoteCard,
   onRemoveNoteLink,
   onUpdateNoteLink,
 }: {
   data: WorkspaceData
   onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
+  onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
   onRemoveNoteLink: (linkId: string) => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
+  const latestNodePositionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -719,6 +745,19 @@ function KnowledgeCanvas({
     start: { x: number; y: number }
     current: { x: number; y: number }
   } | null>(null)
+  const persistedNodePositions = useMemo(() => {
+    return Object.fromEntries(
+      data.noteCardPositions.map((position) => [
+        position.noteId,
+        { x: position.x, y: position.y },
+      ]),
+    ) as Record<string, { x: number; y: number }>
+  }, [data.noteCardPositions])
+
+  useEffect(() => {
+    latestNodePositionsRef.current = persistedNodePositions
+    setNodePositions(persistedNodePositions)
+  }, [persistedNodePositions])
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) ??
     data.reviewMaps[0] ??
@@ -883,7 +922,6 @@ function KnowledgeCanvas({
   function resetCanvasView() {
     setCanvasZoom(1)
     setCanvasPan({ x: 0, y: 0 })
-    setNodePositions({})
   }
 
   function startPan(event: React.PointerEvent) {
@@ -945,7 +983,11 @@ function KnowledgeCanvas({
       x: Math.min(86, Math.max(14, dragState.origin.x + ((event.clientX - dragState.startClientX) / (rect.width * canvasZoom)) * 100)),
       y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / (rect.height * canvasZoom)) * 100)),
     }
-    setNodePositions((positions) => ({ ...positions, [dragState.noteId]: nextPosition }))
+    setNodePositions((positions) => {
+      const nextPositions = { ...positions, [dragState.noteId]: nextPosition }
+      latestNodePositionsRef.current = nextPositions
+      return nextPositions
+    })
   }
 
   function finishPointer(event: React.PointerEvent) {
@@ -959,6 +1001,11 @@ function KnowledgeCanvas({
           targetNoteId,
           relationType: 'related_concept',
         })
+      }
+    } else if (dragState) {
+      const position = latestNodePositionsRef.current[dragState.noteId]
+      if (position) {
+        onMoveNoteCard(dragState.noteId, position)
       }
     }
     setConnectState(null)
@@ -2265,6 +2312,32 @@ function App() {
     }
   }
 
+  async function saveNoteCardPosition(noteId: string, position: { x: number; y: number }) {
+    try {
+      const result = await requestJson<{ noteCardPosition: NoteCardPosition }>(
+        `/note-card-positions/${noteId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(position),
+        },
+      )
+      setWorkspaceData((current) => ({
+        ...current,
+        noteCardPositions: [
+          result.noteCardPosition,
+          ...current.noteCardPositions.filter(
+            (item) =>
+              item.boardKey !== result.noteCardPosition.boardKey ||
+              item.noteId !== result.noteCardPosition.noteId,
+          ),
+        ],
+      }))
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to save card position')
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -2304,6 +2377,7 @@ function App() {
                 data={workspaceData}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
+                onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />

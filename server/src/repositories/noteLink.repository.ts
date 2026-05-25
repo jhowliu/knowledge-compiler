@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type { Confidence, NoteLink, NoteLinkStatus } from "../domain/knowledge.js";
 
 type NoteLinkRow = {
@@ -134,7 +134,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
       return null;
     }
 
-    const result = await pool.query<NoteLinkRow>(
+    const result = await query<NoteLinkRow>(
       `
         with upserted as (
           insert into note_links (
@@ -195,7 +195,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
   }
 
   async listForGraph(input: { statuses: NoteLinkStatus[]; limit: number }) {
-    const result = await pool.query<NoteLinkRow>(
+    const result = await query<NoteLinkRow>(
       `
         ${noteLinkSelect}
         where note_links.status = any($1::text[])
@@ -215,7 +215,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
     statuses: NoteLinkStatus[];
     limit: number;
   }) {
-    const result = await pool.query<NoteLinkRow>(
+    const result = await query<NoteLinkRow>(
       `
         ${noteLinkSelect}
         where note_links.status = any($1::text[])
@@ -240,7 +240,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
     confidence?: Confidence;
     rationale?: string | null;
   }) {
-    const result = await pool.query<NoteLinkRow>(
+    const result = await query<NoteLinkRow>(
       `
         with updated as (
           update note_links
@@ -268,7 +268,7 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
   }
 
   async setStatus(id: string, status: NoteLinkStatus) {
-    const result = await pool.query<NoteLinkRow>(
+    const result = await query<NoteLinkRow>(
       `
         with updated as (
           update note_links

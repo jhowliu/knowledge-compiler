@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type {
   ProposalItem,
   ProposalStatus,
@@ -84,7 +84,7 @@ export interface ProposalRepository {
 
 export class PostgresProposalRepository implements ProposalRepository {
   async create(input: { userId?: string | null; rawNoteId: string; draft: DraftUpdateProposal }) {
-    const proposalResult = await pool.query<ProposalRow>(
+    const proposalResult = await query<ProposalRow>(
       `
         insert into update_proposals (
           user_id,
@@ -113,7 +113,7 @@ export class PostgresProposalRepository implements ProposalRepository {
     const items: ProposalItem[] = [];
 
     for (const item of input.draft.items) {
-      const itemResult = await pool.query<ProposalItemRow>(
+      const itemResult = await query<ProposalItemRow>(
         `
           insert into proposal_items (
             proposal_id,
@@ -134,7 +134,7 @@ export class PostgresProposalRepository implements ProposalRepository {
   }
 
   async getById(id: string) {
-    const proposalResult = await pool.query<ProposalRow>(
+    const proposalResult = await query<ProposalRow>(
       "select * from update_proposals where id = $1",
       [id],
     );
@@ -143,7 +143,7 @@ export class PostgresProposalRepository implements ProposalRepository {
       return null;
     }
 
-    const itemResult = await pool.query<ProposalItemRow>(
+    const itemResult = await query<ProposalItemRow>(
       `
         select *
         from proposal_items
@@ -160,7 +160,7 @@ export class PostgresProposalRepository implements ProposalRepository {
   }
 
   async listRecent(limit: number) {
-    const proposalResult = await pool.query<ProposalRow>(
+    const proposalResult = await query<ProposalRow>(
       `
         select *
         from update_proposals
@@ -182,7 +182,7 @@ export class PostgresProposalRepository implements ProposalRepository {
   }
 
   async listByRawNote(rawNoteId: string) {
-    const proposalResult = await pool.query<ProposalRow>(
+    const proposalResult = await query<ProposalRow>(
       `
         select *
         from update_proposals
@@ -204,7 +204,7 @@ export class PostgresProposalRepository implements ProposalRepository {
   }
 
   async setStatus(id: string, status: ProposalStatus) {
-    const result = await pool.query<ProposalRow>(
+    const result = await query<ProposalRow>(
       `
         update update_proposals
         set status = $2,
@@ -219,7 +219,7 @@ export class PostgresProposalRepository implements ProposalRepository {
   }
 
   async setItemStatus(proposalId: string, status: ProposalStatus) {
-    await pool.query(
+    await query(
       `
         update proposal_items
         set status = $2
@@ -235,7 +235,7 @@ export class PostgresProposalRepository implements ProposalRepository {
     decision: ProposalStatus;
     comment?: string | null;
   }) {
-    await pool.query(
+    await query(
       `
         insert into approval_decisions (proposal_id, user_id, decision, comment)
         values ($1, $2, $3, $4)

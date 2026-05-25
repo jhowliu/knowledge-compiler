@@ -1499,7 +1499,7 @@ Frontend:
 Backend:
 - Express
 - TypeScript
-- node-postgres / pg
+- postgres Node.js client
 - OpenAI Agents SDK
 
 Database:
@@ -1513,7 +1513,7 @@ Deployment:
 - Separate web, API, worker, and Postgres services when needed
 ```
 
-The product should not use an ORM for the MVP. Database access should use hand-written SQL through `pg`, organized into small query modules.
+The product should not use an ORM for the MVP. Database access should use hand-written SQL through the `postgres` Node.js client, organized behind a small database helper rather than raw pool usage in repositories.
 
 ### 34.3 Application Structure
 

@@ -7,7 +7,7 @@ Interview Knowledge Compiler turns raw interview practice notes into structured 
 - Client: React, Vite, TypeScript
 - Server: Express, TypeScript
 - Database: self-hosted PostgreSQL
-- DB access: `pg` with hand-written SQL
+- DB access: `postgres` with hand-written SQL
 - Agent runtime: OpenAI Agents SDK
 
 ## Local Setup
@@ -66,7 +66,7 @@ server/src/repositories  Persistence interfaces and SQL-backed implementations
 server/src/domain        Shared domain types
 server/src/middleware    Cross-cutting Express middleware
 server/src/validators    Boundary validation schemas
-server/src/db            Postgres pool and migration runner
+server/src/db            Postgres client and migration runner
 server/db/migrations     Versioned SQL migrations
 server/tests             Service and validation tests
 ```

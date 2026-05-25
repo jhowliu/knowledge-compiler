@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type { CreateRawNoteInput, RawNote, UpdateRawNoteInput } from "../domain/rawNote.js";
 
 type RawNoteRow = {
@@ -36,7 +36,7 @@ function mapRawNote(row: RawNoteRow): RawNote {
 
 export class PostgresRawNoteRepository implements RawNoteRepository {
   async create(input: CreateRawNoteInput) {
-    const result = await pool.query<RawNoteRow>(
+    const result = await query<RawNoteRow>(
       `
         insert into raw_notes (
           user_id,
@@ -61,7 +61,7 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
   }
 
   async getById(id: string) {
-    const result = await pool.query<RawNoteRow>(
+    const result = await query<RawNoteRow>(
       `
         select *
         from raw_notes
@@ -74,7 +74,7 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
   }
 
   async listRecent(limit: number) {
-    const result = await pool.query<RawNoteRow>(
+    const result = await query<RawNoteRow>(
       `
         select *
         from raw_notes
@@ -88,7 +88,7 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
   }
 
   async update(id: string, input: UpdateRawNoteInput) {
-    const result = await pool.query<RawNoteRow>(
+    const result = await query<RawNoteRow>(
       `
         update raw_notes
         set domain = $2,
@@ -105,7 +105,7 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
   }
 
   async delete(id: string) {
-    const result = await pool.query(
+    const result = await query(
       `
         delete from raw_notes
         where id = $1
@@ -117,7 +117,7 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
   }
 
   async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
-    const result = await pool.query<RawNoteRow>(
+    const result = await query<RawNoteRow>(
       `
         update raw_notes
         set extracted_data = $2,

@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { query } from "../db/postgres.js";
 import type {
   CompiledNote,
   Concept,
@@ -241,7 +241,7 @@ export interface KnowledgeRepository {
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
   async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }) {
     const normalizedName = normalizeConcept(input.name);
-    const result = await pool.query<ConceptRow>(
+    const result = await query<ConceptRow>(
       `
         insert into concepts (user_id, name, normalized_name, concept_type)
         values ($1, $2, $3, $4)
@@ -264,7 +264,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     confidence: string;
     source: string;
   }) {
-    await pool.query(
+    await query(
       `
         insert into concept_index (
           user_id,
@@ -294,7 +294,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
   async searchRelated(input: { query: string; conceptNames: string[]; limit: number }) {
     const normalizedConcepts = input.conceptNames.map(normalizeConcept);
-    const result = await pool.query<SearchResultRow>(
+    const result = await query<SearchResultRow>(
       `
         with query as (
           select plainto_tsquery('english', $1) as ts_query
@@ -375,7 +375,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     bodyMarkdown: string;
     structuredData: unknown;
   }) {
-    const existing = await pool.query<CompiledNoteRow>(
+    const existing = await query<CompiledNoteRow>(
       `
         select *
         from compiled_notes
@@ -389,7 +389,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     const result = existing.rows[0]
-      ? await pool.query<CompiledNoteRow>(
+      ? await query<CompiledNoteRow>(
           `
             update compiled_notes
             set body_markdown = $2,
@@ -400,7 +400,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           `,
           [existing.rows[0].id, input.bodyMarkdown, input.structuredData],
         )
-      : await pool.query<CompiledNoteRow>(
+      : await query<CompiledNoteRow>(
           `
             insert into compiled_notes (
               user_id,
@@ -427,7 +427,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async listCompiledNotes(limit: number) {
-    const result = await pool.query<CompiledNoteRow>(
+    const result = await query<CompiledNoteRow>(
       `
         select *
         from compiled_notes
@@ -442,7 +442,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async listReviewMaps(limit: number) {
-    const result = await pool.query<CompiledNoteRow>(
+    const result = await query<CompiledNoteRow>(
       `
         select *
         from compiled_notes
@@ -464,7 +464,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     title: string;
     description: string;
   }) {
-    const existing = await pool.query<MistakeRow>(
+    const existing = await query<MistakeRow>(
       `
         select *
         from mistakes
@@ -477,7 +477,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     const result = existing.rows[0]
-      ? await pool.query<MistakeRow>(
+      ? await query<MistakeRow>(
           `
             update mistakes
             set evidence_count = evidence_count + 1,
@@ -491,7 +491,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           `,
           [existing.rows[0].id, input.description],
         )
-      : await pool.query<MistakeRow>(
+      : await query<MistakeRow>(
           `
             insert into mistakes (
               user_id,
@@ -511,7 +511,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async listMistakes(limit: number) {
-    const result = await pool.query<MistakeRow>(
+    const result = await query<MistakeRow>(
       `
         select *
         from mistakes
@@ -532,7 +532,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     sourceType?: string | null;
     sourceId?: string | null;
   }) {
-    const result = await pool.query<ReviewTaskRow>(
+    const result = await query<ReviewTaskRow>(
       `
         insert into review_tasks (
           user_id,
@@ -559,7 +559,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async listReviewTasks(limit: number) {
-    const result = await pool.query<ReviewTaskRow>(
+    const result = await query<ReviewTaskRow>(
       `
         select *
         from review_tasks
@@ -574,7 +574,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async completeReviewTask(id: string) {
-    const result = await pool.query<ReviewTaskRow>(
+    const result = await query<ReviewTaskRow>(
       `
         update review_tasks
         set status = 'completed',
@@ -595,7 +595,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     status: "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
     rationale: string;
   }) {
-    const existing = await pool.query<ReadinessItemRow>(
+    const existing = await query<ReadinessItemRow>(
       `
         select *
         from readiness_items
@@ -608,7 +608,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     const result = existing.rows[0]
-      ? await pool.query<ReadinessItemRow>(
+      ? await query<ReadinessItemRow>(
           `
             update readiness_items
             set status = $2,
@@ -620,7 +620,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           `,
           [existing.rows[0].id, input.status, input.rationale],
         )
-      : await pool.query<ReadinessItemRow>(
+      : await query<ReadinessItemRow>(
           `
             insert into readiness_items (
               user_id,
@@ -640,7 +640,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async listReadinessItems(limit: number) {
-    const result = await pool.query<ReadinessItemRow>(
+    const result = await query<ReadinessItemRow>(
       `
         select *
         from readiness_items
@@ -663,7 +663,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     impactLevel: number;
     approvalStatus: string;
   }) {
-    await pool.query(
+    await query(
       `
         insert into evidence_links (
           user_id,

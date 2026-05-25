@@ -16,6 +16,7 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().url().default("http://localhost:5173"),
   SESSION_SECRET: z.string().min(16).default("change-me-in-development"),
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_WIKI_INDEX_MODEL: z.string().default("gpt-5-mini"),
 });
 
 export const env = envSchema.parse(process.env);

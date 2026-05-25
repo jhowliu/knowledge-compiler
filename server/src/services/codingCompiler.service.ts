@@ -19,10 +19,20 @@ const ALGORITHM_KEYWORDS = [
   "Dynamic Programming",
   "Stack",
   "Heap",
+  "Priority Queue",
   "Trie",
 ];
 
 const PATTERN_RULES: Array<{ pattern: string; terms: string[] }> = [
+  {
+    pattern: "Shortest Path With State",
+    terms: ["k stops", "k 次", "k+1", "k + 1", "k+2", "dist[n][k", "dist[node]", "edges_used", "extra state"],
+  },
+  {
+    pattern: "Constrained Shortest Path",
+    terms: ["k stops", "k 次", "at most k", "edge budget", "remaining stops", "limited stops"],
+  },
+  { pattern: "K Stops / Edge Budget", terms: ["k stops", "k 次", "k+1", "k + 1", "k+2"] },
   { pattern: "All-Pairs Shortest Path", terms: ["all-pairs", "all pairs", "floyd"] },
   { pattern: "Shortest Path", terms: ["shortest path", "dijkstra", "bellman", "floyd"] },
   { pattern: "Stack with State", terms: ["stack", "counter", "count", "state"] },
@@ -76,7 +86,14 @@ function detectReviewMapName(rawTitle: string | null, text: string) {
 }
 
 function detectAlgorithms(text: string) {
-  return ALGORITHM_KEYWORDS.filter((algorithm) => includesTerm(text, algorithm));
+  const algorithms = ALGORITHM_KEYWORDS.filter((algorithm) => includesTerm(text, algorithm));
+  if (/\bdij?i?sk?stra\b|dijistra|dijkstra/i.test(text)) {
+    algorithms.push("Dijkstra");
+  }
+  if (/\bheap|priority queue|heappush|heappop\b/i.test(text)) {
+    algorithms.push("Priority Queue");
+  }
+  return unique(algorithms);
 }
 
 function detectPatterns(text: string, algorithms: string[]) {
@@ -96,7 +113,11 @@ function detectKnowledgeType(text: string, problemNumber: string | null): Coding
     return "problem_reflection";
   }
 
-  if (/\b(if|when).*(=>|->|then)|(?:=>|->|→)|decision|guide|map/i.test(text)) {
+  const decisionRuleCount = extractDecisionRules(text).length;
+  if (
+    decisionRuleCount >= 2 ||
+    /\b(if|when).*(=>|->|then)|decision|guide|map/i.test(text)
+  ) {
     return "review_map";
   }
 
@@ -144,6 +165,20 @@ function extractCommonTraps(text: string) {
   );
 }
 
+function extractStateModelDetails(text: string) {
+  const details = [];
+  if (/dist\s*=\s*\[\[|dist\s*\[.*\]\s*\[|dist\[n\]\[k/i.test(text)) {
+    details.push("Use dist[node][state] instead of dist[node] when constraints change path equivalence.");
+  }
+  if (/k\s*\+\s*1|k\s*次|k stops|k\+1/i.test(text)) {
+    details.push("For k stops, the path can use at most k + 1 edges.");
+  }
+  if (/heap\s*=\s*\[\(|cost,\s*node,\s*time|heappush|heappop/i.test(text)) {
+    details.push("Heap state should include cost, node, and edges/stops used.");
+  }
+  return details;
+}
+
 function buildConcepts(extraction: Omit<CodingExtraction, "concepts">): ExtractedConcept[] {
   const concepts: ExtractedConcept[] = [];
 
@@ -153,6 +188,12 @@ function buildConcepts(extraction: Omit<CodingExtraction, "concepts">): Extracte
 
   for (const algorithm of extraction.algorithms) {
     concepts.push({ name: algorithm, conceptType: "algorithm", confidence: "high" });
+  }
+
+  for (const detail of extraction.implementationDetails) {
+    if (/dist\[node\]\[state\]|k \+ 1 edges|edges\/stops/i.test(detail)) {
+      concepts.push({ name: detail, conceptType: "implementation_schema", confidence: "medium" });
+    }
   }
 
   if (extraction.problemTitle) {
@@ -226,7 +267,7 @@ export class CodingCompilerService {
     const commonTraps = knowledgeType === "review_map" ? extractCommonTraps(text) : [];
     const mistakes = extractSentences(
       text,
-      /\b(miss|missed|mistake|wrong|forgot|did not|didn't|not realize|weak|struggle)/i,
+      /\b(miss|missed|mistake|wrong|forgot|did not|didn't|not realize|weak|struggle)|忘記/i,
       knowledgeType === "review_map" ? undefined : "Needs review based on this practice note.",
     );
     const keyInsights =
@@ -237,24 +278,35 @@ export class CodingCompilerService {
             /\b(realize|realized|insight|key|should|use|pattern|approach|idea)/i,
             "Convert this practice note into reusable pattern knowledge.",
           );
-    const implementationDetails = sentenceSplit(text).filter((sentence) =>
-      /\b(tuple|list|array|map|set|heap|mutable|immutable|edge case|complexity|implementation)/i.test(
-        sentence,
+    const implementationDetails = unique([
+      ...extractStateModelDetails(text),
+      ...sentenceSplit(text).filter((sentence) =>
+        /\b(tuple|list|array|map|set|heap|mutable|immutable|edge case|complexity|implementation)/i.test(
+          sentence,
+        ),
       ),
-    );
-    const reviewActions =
-      knowledgeType === "review_map"
-        ? [
-            `Use ${reviewMapName ?? "this review map"} as a pre-interview decision sheet and test each rule with one representative problem.`,
-          ]
-        : patterns.length
-          ? [`Practice 2 more ${patterns[0]} problems and explain the recognition signal aloud.`]
-          : ["Review this note and identify the reusable pattern before the next practice session."];
-    const recognitionSignals = decisionRules.length
-      ? decisionRules.map((rule) => rule.signal)
-      : patterns.length
-        ? [`Look for ${patterns[0].toLowerCase()} cues in the problem statement.`]
-        : ["Look for the decision signal that should trigger the chosen approach."];
+    ]);
+    let reviewActions = ["Review this note and identify the reusable pattern before the next practice session."];
+    if (knowledgeType === "review_map") {
+      reviewActions = [
+        `Use ${reviewMapName ?? "this review map"} as a pre-interview decision sheet and test each rule with one representative problem.`,
+      ];
+    } else if (patterns.includes("Shortest Path With State")) {
+      reviewActions = ["Redo a constrained shortest path problem and explain why dist[node] is insufficient."];
+    } else if (patterns.length) {
+      reviewActions = [`Practice 2 more ${patterns[0]} problems and explain the recognition signal aloud.`];
+    }
+
+    let recognitionSignals = ["Look for the decision signal that should trigger the chosen approach."];
+    if (decisionRules.length) {
+      recognitionSignals = decisionRules.map((rule) => rule.signal);
+    } else if (patterns.includes("Shortest Path With State")) {
+      recognitionSignals = [
+        "Shortest path has an extra constraint; model state as node plus resource/edge count.",
+      ];
+    } else if (patterns.length) {
+      recognitionSignals = [`Look for ${patterns[0].toLowerCase()} cues in the problem statement.`];
+    }
 
     const partialExtraction = {
       domain: "coding" as const,

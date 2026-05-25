@@ -12,6 +12,7 @@ export function createRawNoteRoutes(rawNoteService: RawNoteService) {
   router.post("/", validateBody(createRawNoteSchema), controller.create);
   router.patch("/:id", validateBody(updateRawNoteSchema), controller.update);
   router.delete("/:id", controller.delete);
+  router.get("/:id/indexing-trace", controller.indexingTrace);
   router.post("/:id/compile", controller.compile);
 
   return router;

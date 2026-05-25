@@ -40,6 +40,10 @@
 - Added lightweight multi-board layout controls for Notes Graph: fixed board tabs for Default, Algorithms, Review maps, and Mistakes; card positions load/save per board key; Reset layout clears only the active board.
 - Added the first agentic runtime skeleton: queued `reindex_links` agent runs, in-process worker processing, deterministic note-link reindexing, agent run events, pending link suggestions, `GET/POST /agent-runs`, and Notes Graph Agent Activity UI.
 - Updated the selected `YkuqB` frame in `deisgn.pen` to match the current React Raw Notes UI: dark recent-notes sidebar, dark Markdown editor, New/Save/Delete/Compile saved header actions, and live Markdown preview instead of the older extraction proposal panel.
+- Added the agentic raw-note wiki-indexing flow: `compile_raw_note` agent runs, LLM-wiki indexer service with deterministic fallback, raw-note extraction updates, concept indexing, related-note search, proposal creation, agent run events, and `GET /raw-notes/:id/indexing-trace`.
+- Improved Coding extraction for constrained shortest-path variants such as K stops / edge budget notes, including Dijkstra misspelling handling, priority queue detection, `dist[node][state]` implementation-schema concepts, and avoiding false review-map classification from a single `=>`.
+- Wired the Raw Notes UI to keep the selected note after compile, show queued agentic indexing notices, and render an indexing trace panel with run/proposal/item counts.
+- Updated `PRD.md` with the agentic raw-note indexing flow, trace events, variant indexing behavior, and the new API surface.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -68,6 +72,8 @@
 - Multi-board support starts with fixed board keys and no separate boards table; add custom board creation only after the default board interaction model settles.
 - Agentic writes should continue to enter approval flows first: the re-index worker creates pending `note_links` and records agent events instead of directly approving knowledge changes.
 - Pencil raw-note draft should track the implemented dark Raw Notes editor rather than the earlier white three-column proposal/extraction concept.
+- Raw-note compilation now defaults to queued `compile_raw_note` runs when the queue is configured; immediate compiled-knowledge writes still require proposal approval.
+- The wiki indexer should treat algorithm variants as indexable wiki concepts instead of flattening them into only the base algorithm.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -93,10 +99,12 @@
 - Multi-board validation: browser smoke test switched to the Review maps board, dragged a card, confirmed saved positions used `boardKey=review-maps`, reloaded and confirmed placement persisted, reset that board layout, and confirmed the Default board still retained its positions.
 - Agent runtime validation: `POST /agent-runs` queued `reindex_links`, worker completed it with events and pending link suggestions, and browser smoke test confirmed the Re-index links button, Agent completed status, Agent Activity panel, and pending link refresh.
 - `deisgn.pen` validation for `YkuqB` reported no layout problems after the Raw Notes UI alignment pass.
+- Raw-note wiki-indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass.
+- Browser smoke test verified selecting a raw note, clicking `Compile saved`, seeing the queued agentic indexing notice, and seeing the Raw Notes indexing trace panel with completed run/proposal counts. A stale local `node dist/index.js` process initially served an old API without the trace route and was stopped before retesting.
 
 ## Next Target
-- Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, and links to generated pending note links.
+- Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, generated proposal links, and generated pending note links.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
-- Replace the deterministic compiler with an OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
+- Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

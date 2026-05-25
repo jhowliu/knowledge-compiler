@@ -52,4 +52,14 @@ export class RawNoteController {
       next(error);
     }
   };
+
+  indexingTrace = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        indexingTrace: await this.rawNoteService.getIndexingTrace(requireStringParam(request, "id")),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

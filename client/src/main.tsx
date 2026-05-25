@@ -126,6 +126,14 @@ type AgentRun = {
   completedAt: string | null
 }
 
+type RawNoteIndexingTrace = {
+  rawNote: RawNote
+  status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected'
+  agentRuns: AgentRun[]
+  proposals: Proposal[]
+  extractedData: unknown
+}
+
 type Mistake = {
   id: string
   domain: string
@@ -264,6 +272,13 @@ async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
     reviewTasks: reviewTasks.reviewTasks,
     readinessItems: readinessItems.readinessItems,
   }
+}
+
+async function loadRawNoteIndexingTrace(rawNoteId: string) {
+  const result = await requestJson<{ indexingTrace: RawNoteIndexingTrace }>(
+    `/raw-notes/${rawNoteId}/indexing-trace`,
+  )
+  return result.indexingTrace
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1575,6 +1590,7 @@ function KnowledgeCanvas({
 }
 
 function RawNoteEditorPage({
+  indexingTrace,
   rawNotes,
   selectedRawNoteId,
   isDirty,
@@ -1592,6 +1608,7 @@ function RawNoteEditorPage({
   onDelete,
   onSubmit,
 }: {
+  indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
   selectedRawNoteId: string | null
   isDirty: boolean
@@ -1665,9 +1682,16 @@ function RawNoteEditorPage({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
               {selectedRawNote ? (isDirty ? 'Editing saved raw note' : 'Saved raw note') : 'New raw note'}
             </p>
-            <h2 className="text-[15px] font-bold text-gray-100">
-              {selectedRawNote?.title ?? 'Capture interview evidence'}
-            </h2>
+            <div className="mt-1 flex items-center gap-3">
+              <h2 className="text-[15px] font-bold text-gray-100">
+                {selectedRawNote?.title ?? 'Capture interview evidence'}
+              </h2>
+              {selectedRawNote && indexingTrace ? (
+                <span className="rounded-full border border-[#3A3A3A] px-2.5 py-1 text-[11px] font-bold text-gray-300">
+                  {indexingTrace.status}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -1748,6 +1772,37 @@ function RawNoteEditorPage({
               <Eye size={16} className="text-gray-500" />
               Preview
             </div>
+            {selectedRawNote && indexingTrace ? (
+              <div className="mb-5 rounded-lg border border-[#303030] bg-[#202020] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[12px] font-extrabold text-gray-100">Indexing trace</p>
+                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
+                    {indexingTrace.agentRuns[0]?.status ?? 'idle'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[
+                    ['Runs', indexingTrace.agentRuns.length],
+                    ['Proposals', indexingTrace.proposals.length],
+                    ['Items', indexingTrace.proposals[0]?.items.length ?? 0],
+                  ].map(([label, value]) => (
+                    <div className="rounded-md border border-[#303030] bg-[#171717] p-2" key={label}>
+                      <p className="text-[10px] font-bold uppercase text-gray-500">{label}</p>
+                      <p className="mt-1 text-base font-extrabold text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                {indexingTrace.proposals[0] ? (
+                  <p className="mt-3 text-xs leading-5 text-gray-400">
+                    {indexingTrace.proposals[0].rationale ?? 'Proposal generated from this raw note.'}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs leading-5 text-gray-500">
+                    Compile this raw note to create an agent run and proposal.
+                  </p>
+                )}
+              </div>
+            ) : null}
             {title.trim() ? (
               <h2 className="mb-5 text-2xl font-bold tracking-normal text-white">{title}</h2>
             ) : null}
@@ -2141,6 +2196,7 @@ function App() {
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
+  const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
   const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
   const [selectedReviewMapId, setSelectedReviewMapId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -2174,6 +2230,15 @@ function App() {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function refreshSelectedRawNoteTrace(rawNoteId: string) {
+    try {
+      setSelectedRawNoteTrace(await loadRawNoteIndexingTrace(rawNoteId))
+    } catch (nextError) {
+      setSelectedRawNoteTrace(null)
+      setError(nextError instanceof Error ? nextError.message : 'Unable to load indexing trace')
     }
   }
 
@@ -2238,6 +2303,7 @@ function App() {
       setNotice('Raw note saved.')
       setError(null)
       await refresh()
+      await refreshSelectedRawNoteTrace(result.rawNote.id)
       return result.rawNote
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
@@ -2259,6 +2325,7 @@ function App() {
       setTitle('')
       setBodyMarkdown('')
       setSelectedRawNoteId(null)
+      setSelectedRawNoteTrace(null)
       setIsRawNoteDirty(false)
       setNotice('Raw note deleted.')
       setError(null)
@@ -2280,7 +2347,7 @@ function App() {
 
     setIsSubmitting(true)
     try {
-      let result: { proposal: Proposal | null }
+      let result: { rawNote?: RawNote; proposal: Proposal | null; agentRunId?: string | null }
       const isCompilingSavedNote = Boolean(selectedRawNoteId)
       if (selectedRawNoteId) {
         if (isRawNoteDirty) {
@@ -2289,7 +2356,7 @@ function App() {
             body: JSON.stringify(rawNotePayload()),
           })
         }
-        result = await requestJson<{ proposal: Proposal | null }>(
+        result = await requestJson<{ proposal: Proposal | null; agentRunId?: string | null }>(
           `/raw-notes/${selectedRawNoteId}/compile`,
           {
             method: 'POST',
@@ -2297,27 +2364,45 @@ function App() {
           },
         )
       } else {
-        result = await requestJson<{ proposal: Proposal | null }>('/raw-notes', {
+        result = await requestJson<{
+          rawNote: RawNote
+          proposal: Proposal | null
+          agentRunId?: string | null
+        }>('/raw-notes', {
           method: 'POST',
           body: JSON.stringify(rawNotePayload()),
         })
       }
       setSelectedProposalId(result.proposal?.id ?? null)
-      setSelectedRawNoteId(null)
+      const nextRawNoteId = selectedRawNoteId ?? result.rawNote?.id ?? null
+      setSelectedRawNoteId(nextRawNoteId)
       setIsRawNoteDirty(false)
-      setTitle('')
-      setBodyMarkdown('')
+      if (result.rawNote) {
+        setTitle(result.rawNote.title ?? '')
+        setBodyMarkdown(result.rawNote.bodyMarkdown)
+      }
       setNotice(
-        result.proposal
-          ? isCompilingSavedNote
-            ? 'Raw note compiled. Review the generated update proposal.'
-            : 'Raw note captured. Review the generated update proposal.'
-          : isCompilingSavedNote
-            ? 'Raw note compiled.'
-            : 'Raw note captured.',
+        result.agentRunId
+          ? 'Raw note queued for agentic wiki indexing. Trace is available in this editor.'
+          : result.proposal
+            ? isCompilingSavedNote
+              ? 'Raw note compiled. Review the generated update proposal.'
+              : 'Raw note captured. Review the generated update proposal.'
+            : isCompilingSavedNote
+              ? 'Raw note compiled.'
+              : 'Raw note captured.',
       )
       setError(null)
       await refresh()
+      if (nextRawNoteId) {
+        await refreshSelectedRawNoteTrace(nextRawNoteId)
+        window.setTimeout(() => {
+          void refresh()
+          void refreshSelectedRawNoteTrace(nextRawNoteId)
+        }, 900)
+      } else {
+        setSelectedRawNoteTrace(null)
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
       setNotice(null)
@@ -2342,17 +2427,20 @@ function App() {
     setTitle('')
     setBodyMarkdown('')
     setSelectedRawNoteId(null)
+    setSelectedRawNoteTrace(null)
     setIsRawNoteDirty(false)
     openRawNotesView()
   }
 
   function selectRawNote(rawNote: RawNote) {
     setSelectedRawNoteId(rawNote.id)
+    setSelectedRawNoteTrace(null)
     setTitle(rawNote.title ?? '')
     setBodyMarkdown(rawNote.bodyMarkdown)
     setIsRawNoteDirty(false)
     setNotice(null)
     setError(null)
+    void refreshSelectedRawNoteTrace(rawNote.id)
   }
 
   function updateDraftTitle(value: string) {
@@ -2561,6 +2649,7 @@ function App() {
           <RawNoteEditorPage
             bodyMarkdown={bodyMarkdown}
             error={error}
+            indexingTrace={selectedRawNoteTrace}
             isDirty={isRawNoteDirty}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}

@@ -70,6 +70,7 @@ export interface ProposalRepository {
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems>;
   getById(id: string): Promise<ProposalWithItems | null>;
+  listByRawNote(rawNoteId: string): Promise<ProposalWithItems[]>;
   listRecent(limit: number): Promise<ProposalWithItems[]>;
   setStatus(id: string, status: ProposalStatus): Promise<UpdateProposal>;
   setItemStatus(proposalId: string, status: ProposalStatus): Promise<void>;
@@ -167,6 +168,28 @@ export class PostgresProposalRepository implements ProposalRepository {
         limit $1
       `,
       [limit],
+    );
+
+    const proposals: ProposalWithItems[] = [];
+    for (const row of proposalResult.rows) {
+      const proposal = await this.getById(row.id);
+      if (proposal) {
+        proposals.push(proposal);
+      }
+    }
+
+    return proposals;
+  }
+
+  async listByRawNote(rawNoteId: string) {
+    const proposalResult = await pool.query<ProposalRow>(
+      `
+        select *
+        from update_proposals
+        where raw_note_id = $1
+        order by created_at desc
+      `,
+      [rawNoteId],
     );
 
     const proposals: ProposalWithItems[] = [];

@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
@@ -79,7 +80,8 @@ describe("agent run routes", () => {
     expect(response.status).toBe(400);
   });
 
-  test("enqueues compile_raw_note and produces a proposal", async () => {
+  test("enqueues compile_raw_note and fails without LLM configuration", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
     const agentRunRepository = new InMemoryAgentRunRepository();
     const rawNoteRepository = new InMemoryRawNoteRepository();
     const proposalRepository = new InMemoryProposalRepository();
@@ -102,10 +104,12 @@ describe("agent run routes", () => {
     expect(response.status).toBe(202);
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals).toHaveLength(0);
     expect(agentRunRepository.agentRuns[0]).toMatchObject({
       runType: "compile_raw_note",
-      status: "completed",
+      status: "failed",
+      error: "OPENAI_API_KEY is required for LLM wiki indexing",
     });
+    consoleError.mockRestore();
   });
 });

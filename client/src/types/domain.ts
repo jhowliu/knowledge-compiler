@@ -102,7 +102,7 @@ export type AgentRunDetail = {
 
 export type RawNoteIndexingTrace = {
   rawNote: RawNote
-  status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected'
+  status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected' | 'Failed'
   agentRuns: AgentRun[]
   proposals: Proposal[]
   extractedData: unknown

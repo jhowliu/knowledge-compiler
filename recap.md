@@ -45,6 +45,7 @@
 - Wired the Raw Notes UI to keep the selected note after compile, show queued agentic indexing notices, and render an indexing trace panel with run/proposal/item counts.
 - Updated `PRD.md` with the agentic raw-note indexing flow, trace events, variant indexing behavior, and the new API surface.
 - Started DB client cleanup on `codex/postgres-client-cleanup`: replaced raw `pg Pool` usage with the `postgres` Node.js client behind `server/src/db/postgres.ts`, updated repositories and migrations to use the helper, removed `pg` / `@types/pg`, and updated README/PRD wording.
+- Started Agent Run detail drawer on `codex/agent-run-detail-drawer`: Agent Activity rows open a drawer with run status, event timeline payloads, output/error summary, generated proposal summary, and generated note-link list.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -104,9 +105,10 @@
 - Raw-note wiki-indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass.
 - Browser smoke test verified selecting a raw note, clicking `Compile saved`, seeing the queued agentic indexing notice, and seeing the Raw Notes indexing trace panel with completed run/proposal counts. A stale local `node dist/index.js` process initially served an old API without the trace route and was stopped before retesting.
 - DB client cleanup validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` all pass.
+- Agent Run drawer validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test all pass; the drawer opened from Agent Activity and displayed the timeline plus generated output sections.
 
 ## Next Target
-- Add an Agent Run detail drawer with event timeline, output summary, retry/failure display, generated proposal links, and generated pending note links.
+- Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

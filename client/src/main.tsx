@@ -5,6 +5,7 @@ import { LeftNavigation, TopToolbar } from './components/AppShell'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
 import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
+import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { ReviewMapsPage } from './features/review-maps/ReviewMapsPage'
 import { loadAgentRunDetail, loadRawNoteIndexingTrace, loadWorkspaceData, requestJson, requestVoid } from './lib/api'
 import { boardOptions, emptyWorkspaceData } from './lib/constants'
@@ -58,10 +59,13 @@ function App() {
   async function refresh() {
     setIsLoading(true)
     try {
-      setWorkspaceData(await loadWorkspaceData(activeBoardKey))
+      const nextData = await loadWorkspaceData(activeBoardKey)
+      setWorkspaceData(nextData)
       setError(null)
+      return nextData
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
+      return null
     } finally {
       setIsLoading(false)
     }
@@ -248,12 +252,32 @@ function App() {
               : 'Raw note captured.',
       )
       setError(null)
-      await refresh()
+      const refreshedData = await refresh()
+      const nextProposalId =
+        result.proposal?.id ??
+        (nextRawNoteId
+          ? refreshedData?.proposals.find((proposal) => proposal.rawNoteId === nextRawNoteId)?.id
+          : null) ??
+        null
+      if (nextProposalId) {
+        setSelectedProposalId(nextProposalId)
+        setActiveView('update_proposals')
+      }
       if (nextRawNoteId) {
         await refreshSelectedRawNoteTrace(nextRawNoteId)
         window.setTimeout(() => {
-          void refresh()
-          void refreshSelectedRawNoteTrace(nextRawNoteId)
+          void (async () => {
+            const delayedData = await refresh()
+            const delayedProposal = delayedData?.proposals.find(
+              (proposal) => proposal.rawNoteId === nextRawNoteId,
+            )
+            if (delayedProposal) {
+              setSelectedProposalId(delayedProposal.id)
+              setActiveView('update_proposals')
+              setNotice('Agent finished wiki indexing. Review the proposed incremental updates.')
+            }
+            await refreshSelectedRawNoteTrace(nextRawNoteId)
+          })()
         }, 900)
       } else {
         setSelectedRawNoteTrace(null)
@@ -274,6 +298,12 @@ function App() {
 
   function openReviewMapsView() {
     setActiveView('review_maps')
+    setNotice(null)
+    setError(null)
+  }
+
+  function openUpdateProposalsView() {
+    setActiveView('update_proposals')
     setNotice(null)
     setError(null)
   }
@@ -309,11 +339,27 @@ function App() {
   }
 
   async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
-    await requestJson(`/update-proposals/${proposalId}/${decision}`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
-    await refresh()
+    setIsSubmitting(true)
+    try {
+      await requestJson(`/update-proposals/${proposalId}/${decision}`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      const nextData = await refresh()
+      const nextPending = nextData?.proposals.find((proposal) => proposal.status === 'pending')
+      setSelectedProposalId(nextPending?.id ?? proposalId)
+      setNotice(
+        decision === 'approve'
+          ? 'Updates applied to compiled knowledge. Review any new link suggestions on the right.'
+          : 'Proposal rejected. No compiled knowledge was changed.',
+      )
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to update proposal')
+      setNotice(null)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function decideNoteLink(linkId: string, decision: 'approve' | 'reject') {
@@ -451,6 +497,7 @@ function App() {
         onKnowledgeMapClick={() => setActiveView('knowledge_map')}
         onRawNotesClick={openRawNotesView}
         onReviewMapsClick={openReviewMapsView}
+        onUpdateProposalsClick={openUpdateProposalsView}
         onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
@@ -500,6 +547,22 @@ function App() {
             rawNotes={workspaceData.rawNotes}
             reviewMaps={workspaceData.reviewMaps}
             selectedReviewMapId={selectedReviewMapId}
+          />
+        ) : activeView === 'update_proposals' ? (
+          <ReviewQueuePage
+            error={error}
+            isSubmitting={isSubmitting || isLoading}
+            noteLinks={workspaceData.noteLinks}
+            notice={notice}
+            onApproveNoteLink={(linkId) => void decideNoteLink(linkId, 'approve')}
+            onApproveProposal={(proposalId) => void decideProposal(proposalId, 'approve')}
+            onRefresh={() => void refresh()}
+            onRejectNoteLink={(linkId) => void decideNoteLink(linkId, 'reject')}
+            onRejectProposal={(proposalId) => void decideProposal(proposalId, 'reject')}
+            onSelectProposal={setSelectedProposalId}
+            proposals={workspaceData.proposals}
+            rawNotes={workspaceData.rawNotes}
+            selectedProposalId={selectedProposal?.id ?? null}
           />
         ) : (
           <RawNoteEditorPage

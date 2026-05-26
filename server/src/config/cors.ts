@@ -8,8 +8,13 @@ function isAllowedDevOrigin(origin: string) {
 export const corsOptions: CorsOptions = {
   credentials: true,
   origin(origin, callback) {
-    if (!origin || origin === env.CLIENT_ORIGIN || isAllowedDevOrigin(origin)) {
+    if (!origin) {
       callback(null, true);
+      return;
+    }
+
+    if (origin === env.CLIENT_ORIGIN || isAllowedDevOrigin(origin)) {
+      callback(null, origin);
       return;
     }
 

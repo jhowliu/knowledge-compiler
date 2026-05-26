@@ -104,6 +104,7 @@ type NoteLink = {
   confidence: string
   status: NoteLinkStatus
   rationale: string | null
+  createdByAgentRunId: string | null
   updatedAt: string
 }
 
@@ -120,10 +121,25 @@ type AgentRun = {
   id: string
   runType: string
   status: string
+  input: unknown
   output: unknown
   error: string | null
+  startedAt: string | null
   createdAt: string
   completedAt: string | null
+}
+
+type AgentRunEvent = {
+  id: string
+  agentRunId: string
+  eventType: string
+  payload: unknown
+  createdAt: string
+}
+
+type AgentRunDetail = {
+  agentRun: AgentRun | null
+  events: AgentRunEvent[]
 }
 
 type RawNoteIndexingTrace = {
@@ -279,6 +295,10 @@ async function loadRawNoteIndexingTrace(rawNoteId: string) {
     `/raw-notes/${rawNoteId}/indexing-trace`,
   )
   return result.indexingTrace
+}
+
+async function loadAgentRunDetail(agentRunId: string) {
+  return requestJson<AgentRunDetail>(`/agent-runs/${agentRunId}`)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -736,6 +756,47 @@ function agentRunLabel(runType: string) {
   return runType.replaceAll('_', ' ')
 }
 
+function compactJson(value: unknown) {
+  if (value === null || value === undefined) return 'None'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return 'Unable to render payload'
+  }
+}
+
+function shortTimestamp(value: string | null) {
+  if (!value) return 'Not started'
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function eventLabel(eventType: string) {
+  return eventType.replaceAll('_', ' ')
+}
+
+function agentRunOutputText(agentRun: AgentRun | null) {
+  if (!agentRun) return 'No agent run selected.'
+  if (agentRun.error) return agentRun.error
+  if (isRecord(agentRun.output)) {
+    const proposalId = typeof agentRun.output.proposalId === 'string' ? agentRun.output.proposalId : null
+    const suggestionsCreated =
+      typeof agentRun.output.suggestionsCreated === 'number' ? agentRun.output.suggestionsCreated : null
+    const relatedNoteCount =
+      typeof agentRun.output.relatedNoteCount === 'number' ? agentRun.output.relatedNoteCount : null
+    if (proposalId) return `Created proposal ${proposalId}.`
+    if (suggestionsCreated !== null) return `Created ${suggestionsCreated} pending link suggestions.`
+    if (relatedNoteCount !== null) return `Found ${relatedNoteCount} related notes.`
+  }
+  return compactJson(agentRun.output)
+}
+
 function edgePath(start: { x: number; y: number }, end: { x: number; y: number }) {
   const dx = end.x - start.x
   const bend = Math.max(8, Math.min(22, Math.abs(dx) * 0.45))
@@ -769,6 +830,7 @@ function KnowledgeCanvas({
   onMoveNoteCard,
   onResetBoardLayout,
   onRemoveNoteLink,
+  onSelectAgentRun,
   onUpdateNoteLink,
 }: {
   activeBoardKey: BoardKey
@@ -779,6 +841,7 @@ function KnowledgeCanvas({
   onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
   onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
+  onSelectAgentRun: (agentRunId: string) => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -1483,7 +1546,12 @@ function KnowledgeCanvas({
                 <div className="mb-6 space-y-2">
                   {data.agentRuns.length ? (
                     data.agentRuns.slice(0, 3).map((agentRun) => (
-                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={agentRun.id}>
+                      <button
+                        className="w-full rounded-lg border border-[#303030] bg-[#202020] p-3 text-left hover:border-violet/50"
+                        key={agentRun.id}
+                        onClick={() => onSelectAgentRun(agentRun.id)}
+                        type="button"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-[13px] font-extrabold capitalize text-white">
@@ -1497,7 +1565,7 @@ function KnowledgeCanvas({
                             {agentRun.status}
                           </span>
                         </div>
-                      </article>
+                      </button>
                     ))
                   ) : (
                     <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
@@ -2178,6 +2246,186 @@ function ProposalInspector({
   )
 }
 
+function AgentRunDrawer({
+  detail,
+  data,
+  isLoading,
+  onClose,
+}: {
+  detail: AgentRunDetail | null
+  data: WorkspaceData
+  isLoading: boolean
+  onClose: () => void
+}) {
+  const agentRun = detail?.agentRun ?? null
+  const output = isRecord(agentRun?.output) ? agentRun.output : {}
+  const generatedProposalId =
+    typeof output.proposalId === 'string' ? output.proposalId : null
+  const generatedProposal = generatedProposalId
+    ? data.proposals.find((proposal) => proposal.id === generatedProposalId) ?? null
+    : null
+  const generatedLinks = agentRun
+    ? data.noteLinks.filter((link) => link.createdByAgentRunId === agentRun.id)
+    : []
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
+      <button
+        aria-label="Close agent run detail"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        type="button"
+      />
+      <aside className="relative z-10 flex h-full w-[430px] flex-col border-l border-[#303030] bg-[#181818] text-white shadow-2xl">
+        <header className="border-b border-[#303030] px-6 py-5">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-violet">
+                Agent run
+              </p>
+              <h2 className="mt-1 text-xl font-extrabold capitalize text-white">
+                {agentRun ? agentRunLabel(agentRun.runType) : 'Loading run'}
+              </h2>
+            </div>
+            <button
+              aria-label="Close agent run detail"
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#303030] text-gray-400 hover:border-gray-500 hover:text-white"
+              onClick={onClose}
+              type="button"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              ['Status', agentRun?.status ?? (isLoading ? 'loading' : 'missing')],
+              ['Events', detail?.events.length ?? 0],
+              ['Started', shortTimestamp(agentRun?.startedAt ?? null)],
+            ].map(([label, value]) => (
+              <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+                <p className="mt-1 truncate text-xs font-extrabold uppercase text-gray-100">{value}</p>
+              </div>
+            ))}
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {isLoading ? (
+            <p className="rounded-lg border border-[#303030] bg-[#202020] p-4 text-sm text-gray-400">
+              Loading agent run details...
+            </p>
+          ) : null}
+
+          {!isLoading && !agentRun ? (
+            <p className="rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-100">
+              Agent run not found.
+            </p>
+          ) : null}
+
+          {agentRun ? (
+            <>
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Summary</h3>
+                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
+                  <p className="text-sm leading-6 text-gray-300">{agentRunOutputText(agentRun)}</p>
+                  {agentRun.error ? (
+                    <p className="mt-3 rounded-md border border-red-900/60 bg-red-950/40 p-3 text-xs leading-5 text-red-100">
+                      {agentRun.error}
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Timeline</h3>
+                <div className="space-y-2">
+                  {detail?.events.length ? (
+                    detail.events.map((event) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={event.id}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="text-[13px] font-extrabold capitalize text-white">
+                            {eventLabel(event.eventType)}
+                          </p>
+                          <span className="text-[11px] font-semibold text-gray-500">
+                            {shortTimestamp(event.createdAt)}
+                          </span>
+                        </div>
+                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-[#141414] p-2 text-[11px] leading-5 text-gray-400">
+                          {compactJson(event.payload)}
+                        </pre>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No timeline events recorded yet.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Generated proposal</h3>
+                {generatedProposal ? (
+                  <article className="rounded-lg border border-violet/30 bg-violet/10 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-[13px] font-extrabold capitalize text-white">
+                        {generatedProposal.detectedKnowledgeType ?? 'Knowledge update'}
+                      </p>
+                      <span className="rounded-full border border-violet/30 px-2 py-0.5 text-[10px] font-bold uppercase text-violet">
+                        {generatedProposal.status}
+                      </span>
+                    </div>
+                    <p className="text-xs leading-5 text-gray-300">
+                      {generatedProposal.rationale ?? 'Proposal generated by this run.'}
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold text-gray-500">
+                      {generatedProposal.items.length} suggested updates
+                    </p>
+                  </article>
+                ) : (
+                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                    This run did not report a proposal id.
+                  </p>
+                )}
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Generated links</h3>
+                <div className="space-y-2">
+                  {generatedLinks.length ? (
+                    generatedLinks.map((link) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={link.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="line-clamp-1 text-[13px] font-extrabold text-white">
+                              {link.sourceTitle ?? 'Note'} {'->'} {link.targetTitle ?? 'Note'}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-gray-400">
+                              {link.rationale ?? relationOptionLabel(link.relationType)}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
+                            {link.status}
+                          </span>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                      No generated note links are attached to this run.
+                    </p>
+                  )}
+                </div>
+              </section>
+            </>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [activeView, setActiveView] = useState<ActiveView>('knowledge_map')
@@ -2197,6 +2445,8 @@ function App() {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
   const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
+  const [selectedAgentRunDetail, setSelectedAgentRunDetail] = useState<AgentRunDetail | null>(null)
+  const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
   const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
   const [selectedReviewMapId, setSelectedReviewMapId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -2240,6 +2490,27 @@ function App() {
       setSelectedRawNoteTrace(null)
       setError(nextError instanceof Error ? nextError.message : 'Unable to load indexing trace')
     }
+  }
+
+  async function openAgentRunDetail(agentRunId: string) {
+    setIsAgentRunDetailLoading(true)
+    setSelectedAgentRunDetail({
+      agentRun: workspaceData.agentRuns.find((agentRun) => agentRun.id === agentRunId) ?? null,
+      events: [],
+    })
+    try {
+      setSelectedAgentRunDetail(await loadAgentRunDetail(agentRunId))
+      setError(null)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to load agent run')
+    } finally {
+      setIsAgentRunDetailLoading(false)
+    }
+  }
+
+  function closeAgentRunDetail() {
+    setSelectedAgentRunDetail(null)
+    setIsAgentRunDetailLoading(false)
   }
 
   useEffect(() => {
@@ -2633,6 +2904,7 @@ function App() {
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
                 onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
+                onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />
             </div>
@@ -2667,6 +2939,14 @@ function App() {
           />
         )}
       </section>
+      {selectedAgentRunDetail || isAgentRunDetailLoading ? (
+        <AgentRunDrawer
+          data={workspaceData}
+          detail={selectedAgentRunDetail}
+          isLoading={isAgentRunDetailLoading}
+          onClose={closeAgentRunDetail}
+        />
+      ) : null}
     </main>
   )
 }

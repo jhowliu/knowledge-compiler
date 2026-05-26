@@ -52,6 +52,17 @@ describe("agent run routes", () => {
       status: "completed",
     });
     expect(noteLinkRepository.noteLinks).toHaveLength(1);
+
+    const detailResponse = await request(app).get(`/agent-runs/${response.body.agentRun.id}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.agentRun).toMatchObject({
+      id: response.body.agentRun.id,
+      runType: "reindex_links",
+      status: "completed",
+    });
+    expect(detailResponse.body.events.map((event: { eventType: string }) => event.eventType))
+      .toEqual(expect.arrayContaining(["queued", "run_started", "run_completed"]));
   });
 
   test("rejects unsupported run types", async () => {

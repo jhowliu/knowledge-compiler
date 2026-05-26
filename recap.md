@@ -46,6 +46,7 @@
 - Updated `PRD.md` with the agentic raw-note indexing flow, trace events, variant indexing behavior, and the new API surface.
 - Started DB client cleanup on `codex/postgres-client-cleanup`: replaced raw `pg Pool` usage with the `postgres` Node.js client behind `server/src/db/postgres.ts`, updated repositories and migrations to use the helper, removed `pg` / `@types/pg`, and updated README/PRD wording.
 - Started Agent Run detail drawer on `codex/agent-run-detail-drawer`: Agent Activity rows open a drawer with run status, event timeline payloads, output/error summary, generated proposal summary, and generated note-link list.
+- Split the large client `main.tsx` into focused modules: shared domain types, constants, API helpers, knowledge helpers, app shell components, Markdown preview, Notes Graph canvas, Raw Notes editor, Review Maps page, and Agent Run drawer/view helpers.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -77,6 +78,7 @@
 - Raw-note compilation now defaults to queued `compile_raw_note` runs when the queue is configured; immediate compiled-knowledge writes still require proposal approval.
 - The wiki indexer should treat algorithm variants as indexable wiki concepts instead of flattening them into only the base algorithm.
 - Database access remains no-ORM hand-written SQL, but repositories should import the shared `query` helper instead of touching raw connection pool objects.
+- Client entrypoint should stay focused on app-level state, workspace view switching, and API command handlers; feature UI should live under `client/src/features/*`, reusable UI under `client/src/components`, shared helpers under `client/src/lib`, and shared shapes under `client/src/types`.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -106,6 +108,7 @@
 - Browser smoke test verified selecting a raw note, clicking `Compile saved`, seeing the queued agentic indexing notice, and seeing the Raw Notes indexing trace panel with completed run/proposal counts. A stale local `node dist/index.js` process initially served an old API without the trace route and was stopped before retesting.
 - DB client cleanup validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` all pass.
 - Agent Run drawer validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test all pass; the drawer opened from Agent Activity and displayed the timeline plus generated output sections.
+- Client module split validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test of Notes Graph, Raw Notes, and Review Maps all pass. Smoke-test dev servers were stopped afterward.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.

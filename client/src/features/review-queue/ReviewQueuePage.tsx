@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   ArrowRight,
   Check,
+  ChevronDown,
   FileText,
   GitBranch,
   ListChecks,
@@ -49,6 +50,36 @@ function summarizeProposal(proposal: Proposal) {
     reviews ? `${reviews} review${reviews > 1 ? 's' : ''}` : null,
     readiness ? `${readiness} readiness` : null,
   ].filter(Boolean).join(' · ')
+}
+
+function proposalGroups(proposal: Proposal) {
+  return [
+    {
+      actionType: 'upsert_compiled_note',
+      label: 'Notes',
+      description: 'Compiled knowledge cards to create or update.',
+    },
+    {
+      actionType: 'create_mistake',
+      label: 'Mistakes',
+      description: 'Recurring mistakes extracted from the raw note.',
+    },
+    {
+      actionType: 'create_review_task',
+      label: 'Reviews',
+      description: 'Practice or follow-up tasks to schedule.',
+    },
+    {
+      actionType: 'upsert_readiness',
+      label: 'Readiness',
+      description: 'Weak-area status changes for the dashboard.',
+    },
+  ]
+    .map((group) => ({
+      ...group,
+      items: proposal.items.filter((item) => item.actionType === group.actionType),
+    }))
+    .filter((group) => group.items.length > 0)
 }
 
 function EmptyState({ activeTab }: { activeTab: ReviewTab }) {
@@ -100,6 +131,7 @@ export function ReviewQueuePage({
   onRefresh: () => void
 }) {
   const [activeTab, setActiveTab] = useState<ReviewTab>('notes')
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false)
   const pendingProposals = useMemo(
     () => proposals.filter((proposal) => proposal.status === 'pending'),
     [proposals],
@@ -358,11 +390,11 @@ export function ReviewQueuePage({
         ) : selectedProposal ? (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(520px,1fr)_340px]">
             <div className="min-h-0 overflow-y-auto px-8 py-7">
-              <section className="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+              <section className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                      Agent proposes
+                      Review this raw note update
                     </p>
                     <h3 className="mt-1 text-lg font-extrabold text-ink">
                       {summarizeProposal(selectedProposal) || `${selectedProposal.items.length} updates`}
@@ -377,40 +409,92 @@ export function ReviewQueuePage({
                 </p>
               </section>
 
-              <div className="space-y-3">
-                {selectedProposal.items.map((item) => (
-                  <article className="rounded-lg border border-gray-200 bg-white p-4" key={item.id}>
-                    <div className="mb-3 flex items-start gap-3">
+              <section className="mb-4 grid gap-3 xl:grid-cols-2">
+                {proposalGroups(selectedProposal).map((group) => (
+                  <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.actionType}>
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                          {group.label}
+                        </p>
+                        <h4 className="mt-1 text-base font-extrabold text-ink">
+                          {group.items.length} change{group.items.length > 1 ? 's' : ''}
+                        </h4>
+                      </div>
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
                         <FileText size={17} />
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                          {itemVerb(item.actionType)} · {actionLabel(item.actionType)}
-                        </p>
-                        <h4 className="mt-1 text-base font-extrabold text-ink">
-                          {payloadLabel(item.payload)}
-                        </h4>
-                      </div>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(item.status)}`}>
-                        {item.status}
-                      </span>
                     </div>
-                    {item.rationale ? (
-                      <p className="mb-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
-                    ) : null}
-                    {payloadText(item.payload, 'bodyMarkdown') ? (
-                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
-                        {payloadText(item.payload, 'bodyMarkdown')}
-                      </pre>
-                    ) : (
-                      <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
-                        {payloadText(item.payload, 'rationale', 'This update will be applied after approval.')}
-                      </p>
-                    )}
+                    <p className="mb-3 text-sm leading-6 text-gray-600">{group.description}</p>
+                    <div className="space-y-2">
+                      {group.items.slice(0, 3).map((item) => (
+                        <p
+                          className="line-clamp-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-gray-700"
+                          key={item.id}
+                        >
+                          {payloadLabel(item.payload)}
+                        </p>
+                      ))}
+                    </div>
                   </article>
                 ))}
-              </div>
+              </section>
+
+              <section className="rounded-lg border border-gray-200 bg-white">
+                <button
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                  onClick={() => setShowAdvancedDetails((current) => !current)}
+                  type="button"
+                >
+                  <div>
+                    <p className="text-sm font-extrabold text-ink">Advanced details</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      Inspect each proposal item before applying this raw note update.
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`shrink-0 text-gray-500 transition ${showAdvancedDetails ? 'rotate-180' : ''}`}
+                    size={18}
+                  />
+                </button>
+
+                {showAdvancedDetails ? (
+                  <div className="space-y-3 border-t border-gray-200 p-4">
+                    {selectedProposal.items.map((item) => (
+                      <article className="rounded-lg border border-gray-200 bg-slate-50 p-4" key={item.id}>
+                        <div className="mb-3 flex items-start gap-3">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
+                            <FileText size={17} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                              {itemVerb(item.actionType)} · {actionLabel(item.actionType)}
+                            </p>
+                            <h4 className="mt-1 text-base font-extrabold text-ink">
+                              {payloadLabel(item.payload)}
+                            </h4>
+                          </div>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        {item.rationale ? (
+                          <p className="mb-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
+                        ) : null}
+                        {payloadText(item.payload, 'bodyMarkdown') ? (
+                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
+                            {payloadText(item.payload, 'bodyMarkdown')}
+                          </pre>
+                        ) : (
+                          <p className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
+                            {payloadText(item.payload, 'rationale', 'This update will be applied after approval.')}
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
             </div>
 
             <aside className="min-h-0 overflow-y-auto border-l border-gray-200 bg-white px-5 py-6">

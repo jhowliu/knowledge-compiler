@@ -51,6 +51,7 @@
 - Fixed local dev CORS so API responses reflect the active localhost/127.0.0.1 origin when Vite falls back to ports like 5174.
 - Redesigned the Review Queue page into a simpler Agent Review Inbox with Notes, Links, and Done tabs; note updates are the primary approval flow and link suggestions are reviewed separately.
 - Removed deterministic fallback from the `compile_raw_note` LLM wiki indexing path. Raw-note compilation now requires `OPENAI_API_KEY`; if OpenAI indexing is unavailable, the agent run fails and no proposal is created.
+- Simplified Agent Review Inbox content review so proposal items are summarized into note/mistake/review/readiness groups by default, with full item payloads hidden behind an Advanced details disclosure.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -118,6 +119,7 @@
 - Review Queue validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test all pass. The smoke test created and compiled a local `Flow smoke note`, auto-opened Update Proposals, applied the generated proposal, and showed the compiled-knowledge update notice with no console errors.
 - Agent Review Inbox prototype validation: `npm run typecheck`, `npm run build`, and browser smoke test of the empty inbox state pass with no console errors.
 - LLM-required indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass. Tests now cover a fake-LLM successful compile and a missing-key failure that creates no proposal.
+- Agent Review summary validation: `npm run typecheck`, `npm run build`, and browser smoke test of Update Proposals all pass with no console errors.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.

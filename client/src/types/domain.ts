@@ -1,6 +1,6 @@
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
-export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps'
+export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps' | 'update_proposals'
 export type ThemeMode = 'light' | 'dark'
 export type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
 
@@ -102,7 +102,7 @@ export type AgentRunDetail = {
 
 export type RawNoteIndexingTrace = {
   rawNote: RawNote
-  status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected'
+  status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected' | 'Failed'
   agentRuns: AgentRun[]
   proposals: Proposal[]
   extractedData: unknown

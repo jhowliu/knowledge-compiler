@@ -37,6 +37,7 @@ export function LeftNavigation({
   onKnowledgeMapClick,
   onReviewMapsClick,
   onRawNotesClick,
+  onUpdateProposalsClick,
   onThemeToggle,
 }: {
   activeView: ActiveView
@@ -48,6 +49,7 @@ export function LeftNavigation({
   onKnowledgeMapClick: () => void
   onReviewMapsClick: () => void
   onRawNotesClick: () => void
+  onUpdateProposalsClick: () => void
   onThemeToggle: () => void
 }) {
   const isDark = themeMode === 'dark'
@@ -111,7 +113,11 @@ export function LeftNavigation({
           <PencilLine size={16} className="text-gray-400" />
           Raw notes
         </button>
-        <button className={navItemClass(false)} type="button">
+        <button
+          className={navItemClass(activeView === 'update_proposals')}
+          onClick={onUpdateProposalsClick}
+          type="button"
+        >
           <Sparkles size={16} className="text-gray-400" />
           Update proposals
           {pendingCount > 0 ? (

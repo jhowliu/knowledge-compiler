@@ -6,7 +6,16 @@ import { CodingCompilerService } from "./codingCompiler.service.js";
 
 export type WikiIndexingResult = {
   extraction: CodingExtraction;
-  provider: "deterministic" | "openai";
+  provider: "openai";
+};
+
+export type WikiIndexer = {
+  extract(rawNote: RawNote): Promise<WikiIndexingResult>;
+  draftProposal(
+    rawNote: RawNote,
+    extraction: CodingExtraction,
+    relatedNotes: SearchResult[],
+  ): ReturnType<CodingCompilerService["draftProposal"]>;
 };
 
 const extractionSchema = {
@@ -106,18 +115,11 @@ export class WikiIndexerService {
   constructor(private readonly deterministicCompiler = new CodingCompilerService()) {}
 
   async extract(rawNote: RawNote): Promise<WikiIndexingResult> {
-    if (env.OPENAI_API_KEY) {
-      try {
-        return { extraction: await this.extractWithOpenAI(rawNote), provider: "openai" };
-      } catch (error) {
-        console.warn("OpenAI wiki indexing failed; falling back to deterministic indexer", error);
-      }
+    if (!env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
-    return {
-      extraction: this.deterministicCompiler.extract(rawNote),
-      provider: "deterministic",
-    };
+    return { extraction: await this.extractWithOpenAI(rawNote), provider: "openai" };
   }
 
   draftProposal(rawNote: RawNote, extraction: CodingExtraction, relatedNotes: SearchResult[]) {

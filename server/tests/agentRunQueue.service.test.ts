@@ -1,9 +1,80 @@
 import { AgentRunQueueService } from "../src/services/agentRunQueue.service.js";
+import type { CodingExtraction } from "../src/domain/compiler.js";
+import type { SearchResult } from "../src/domain/knowledge.js";
+import type { RawNote } from "../src/domain/rawNote.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
+
+const llmWikiIndexer = {
+  async extract() {
+    return {
+      provider: "openai" as const,
+      extraction: {
+        domain: "coding" as const,
+        knowledgeType: "general_coding_note" as const,
+        problemNumber: null,
+        problemTitle: null,
+        reviewMapName: null,
+        decisionRules: [],
+        commonTraps: ["Forgetting bounded state in graph search"],
+        patterns: [
+          "Shortest Path With State",
+          "Constrained Shortest Path",
+          "K Stops / Edge Budget",
+        ],
+        algorithms: ["Dijkstra", "Priority Queue"],
+        recognitionSignals: ["k stops", "edge budget", "dist[node][state]"],
+        keyInsights: ["Track remaining stops as part of the distance state."],
+        mistakes: ["Used plain Dijkstra without the stop dimension."],
+        implementationDetails: ["Use dist[n][k+2] and heap tuples of cost, node, stops."],
+        reviewActions: ["Practice constrained shortest path variants."],
+        concepts: [
+          {
+            name: "Constrained Shortest Path",
+            conceptType: "pattern",
+            confidence: "high" as const,
+          },
+          {
+            name: "Dijkstra With State",
+            conceptType: "implementation_schema",
+            confidence: "high" as const,
+          },
+        ],
+        confidence: "high" as const,
+      },
+    };
+  },
+  draftProposal(
+    rawNote: RawNote,
+    extraction: CodingExtraction,
+    relatedNotes: SearchResult[],
+  ) {
+    return {
+      detectedDomain: extraction.domain,
+      detectedKnowledgeType: extraction.knowledgeType,
+      impactLevel: 3,
+      confidence: extraction.confidence,
+      rationale: `LLM indexed ${relatedNotes.length} related notes for ${rawNote.title ?? "raw note"}.`,
+      items: [
+        {
+          actionType: "upsert_compiled_note",
+          targetType: "compiled_note",
+          payload: {
+            domain: extraction.domain,
+            noteType: "algorithm",
+            title: "Dijkstra With State",
+            bodyMarkdown: extraction.keyInsights.join("\n"),
+            structuredData: { concepts: extraction.concepts },
+          },
+          rationale: "LLM proposed a compiled note.",
+        },
+      ],
+    };
+  },
+};
 
 describe("agent run queue service", () => {
   test("runs deterministic reindex links and creates pending link suggestions", async () => {
@@ -69,7 +140,7 @@ describe("agent run queue service", () => {
     );
   });
 
-  test("runs compile_raw_note with wiki-style variant indexing", async () => {
+  test("runs compile_raw_note with LLM wiki-style variant indexing", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
@@ -81,6 +152,7 @@ describe("agent run queue service", () => {
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
+      llmWikiIndexer,
     );
     const rawNote = await rawNoteRepository.create({
       title: "Review notes",
@@ -99,7 +171,7 @@ describe("agent run queue service", () => {
     expect(completedRun?.status).toBe("completed");
     expect(completedRun?.output).toMatchObject({
       rawNoteId: rawNote.id,
-      provider: "deterministic",
+      provider: "openai",
       detectedKnowledgeType: "general_coding_note",
     });
     expect(proposalRepository.proposals).toHaveLength(1);
@@ -121,5 +193,37 @@ describe("agent run queue service", () => {
         "run_completed",
       ]),
     );
+  });
+
+  test("fails compile_raw_note instead of falling back when LLM indexing is unavailable", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+    );
+    const rawNote = await rawNoteRepository.create({
+      title: "Not shortest path",
+      bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
+    });
+
+    const agentRun = await service.enqueue({
+      runType: "compile_raw_note",
+      input: { rawNoteId: rawNote.id },
+    });
+
+    await expect(service.process(agentRun.id)).rejects.toThrow("OPENAI_API_KEY is required");
+
+    const failedRun = await agentRunRepository.getById(agentRun.id);
+    expect(failedRun?.status).toBe("failed");
+    expect(proposalRepository.proposals).toHaveLength(0);
+    expect(rawNoteRepository.notes[0].extractedData).toEqual({});
+    expect(agentRunRepository.events.map((event) => event.eventType)).toContain("run_failed");
   });
 });

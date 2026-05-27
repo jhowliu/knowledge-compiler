@@ -47,6 +47,11 @@
 - Started DB client cleanup on `codex/postgres-client-cleanup`: replaced raw `pg Pool` usage with the `postgres` Node.js client behind `server/src/db/postgres.ts`, updated repositories and migrations to use the helper, removed `pg` / `@types/pg`, and updated README/PRD wording.
 - Started Agent Run detail drawer on `codex/agent-run-detail-drawer`: Agent Activity rows open a drawer with run status, event timeline payloads, output/error summary, generated proposal summary, and generated note-link list.
 - Split the large client `main.tsx` into focused modules: shared domain types, constants, API helpers, knowledge helpers, app shell components, Markdown preview, Notes Graph canvas, Raw Notes editor, Review Maps page, and Agent Run drawer/view helpers.
+- Added a Review Queue page that makes the full raw-note flow visible and actionable: pending update proposals, raw-note source evidence, wiki-indexing flow steps, proposal approval/rejection, and pending note-link suggestions after compiled knowledge is updated.
+- Fixed local dev CORS so API responses reflect the active localhost/127.0.0.1 origin when Vite falls back to ports like 5174.
+- Redesigned the Review Queue page into a simpler Agent Review Inbox with Notes, Links, and Done tabs; note updates are the primary approval flow and link suggestions are reviewed separately.
+- Removed deterministic fallback from the `compile_raw_note` LLM wiki indexing path. Raw-note compilation now requires `OPENAI_API_KEY`; if OpenAI indexing is unavailable, the agent run fails and no proposal is created.
+- Simplified Agent Review Inbox content review so proposal items are summarized into note/mistake/review/readiness groups by default, with full item payloads hidden behind an Advanced details disclosure.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -59,7 +64,7 @@
 - MVP DB access: no ORM; plain SQL migrations and query modules.
 - Server feature files should use purpose suffixes such as `.routes.ts`, `.controller.ts`, `.service.ts`, and `.repository.ts`.
 - Migrations now live under `server/db/migrations`, with `npm run migrate --workspace=server` as the preferred command.
-- Phase 1 compiler is deterministic/local for now so the MVP works without `OPENAI_API_KEY`; it preserves the proposal/agent-run boundary for later OpenAI Agents SDK integration.
+- Raw-note wiki indexing must use OpenAI/LLM extraction only. The deterministic compiler can remain for legacy tests or explicit non-agent paths, but `compile_raw_note` must not silently fall back because incorrect local classification damages trust.
 - Web UI now uses Tailwind via `client/src/index.css`; old ad hoc `styles.css` was removed.
 - Phase 2 keeps review maps high-level: they link out to algorithm notes instead of expanding every representative problem into the map.
 - Knowledge graph UX should center on bidirectional note-to-note links and agent-maintained link suggestions instead of a complex spatial canvas.
@@ -79,6 +84,8 @@
 - The wiki indexer should treat algorithm variants as indexable wiki concepts instead of flattening them into only the base algorithm.
 - Database access remains no-ORM hand-written SQL, but repositories should import the shared `query` helper instead of touching raw connection pool objects.
 - Client entrypoint should stay focused on app-level state, workspace view switching, and API command handlers; feature UI should live under `client/src/features/*`, reusable UI under `client/src/components`, shared helpers under `client/src/lib`, and shared shapes under `client/src/types`.
+- User-facing agentic indexing should always surface the approval boundary: raw notes can be indexed automatically, but compiled knowledge and note-link changes remain visible in Review Queue before/after approval.
+- Review UI should treat note/content approval as the main workflow and link approval as a secondary cleanup workflow.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -109,6 +116,10 @@
 - DB client cleanup validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` all pass.
 - Agent Run drawer validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke test all pass; the drawer opened from Agent Activity and displayed the timeline plus generated output sections.
 - Client module split validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test of Notes Graph, Raw Notes, and Review Maps all pass. Smoke-test dev servers were stopped afterward.
+- Review Queue validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test all pass. The smoke test created and compiled a local `Flow smoke note`, auto-opened Update Proposals, applied the generated proposal, and showed the compiled-knowledge update notice with no console errors.
+- Agent Review Inbox prototype validation: `npm run typecheck`, `npm run build`, and browser smoke test of the empty inbox state pass with no console errors.
+- LLM-required indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass. Tests now cover a fake-LLM successful compile and a missing-key failure that creates no proposal.
+- Agent Review summary validation: `npm run typecheck`, `npm run build`, and browser smoke test of Update Proposals all pass with no console errors.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.

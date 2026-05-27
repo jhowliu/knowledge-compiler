@@ -210,9 +210,14 @@ export function RawNoteEditorPage({
                   <p className="mt-3 text-xs leading-5 text-gray-400">
                     {indexingTrace.proposals[0].rationale ?? 'Proposal generated from this raw note.'}
                   </p>
+                ) : indexingTrace.status === 'Failed' ? (
+                  <p className="mt-3 rounded-md border border-red-900/60 bg-red-950/40 p-3 text-xs leading-5 text-red-100">
+                    {indexingTrace.agentRuns[0]?.error ??
+                      'LLM wiki indexing failed. No proposal was created.'}
+                  </p>
                 ) : (
                   <p className="mt-3 text-xs leading-5 text-gray-500">
-                    Compile this raw note to create an agent run and proposal.
+                    Compile this raw note with LLM wiki indexing to create a proposal.
                   </p>
                 )}
               </div>

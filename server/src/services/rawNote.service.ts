@@ -96,9 +96,12 @@ export class RawNoteService {
       ["queued", "running"].includes(agentRun.status),
     );
     const latestProposal = proposals[0] ?? null;
+    const latestFailedRun = agentRuns.find((agentRun) => agentRun.status === "failed");
     const status = hasActiveRun
       ? "Indexing"
-      : latestProposal?.status === "approved"
+      : latestFailedRun && !latestProposal
+        ? "Failed"
+        : latestProposal?.status === "approved"
         ? "Approved"
         : latestProposal?.status === "rejected"
           ? "Rejected"

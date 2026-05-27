@@ -4,7 +4,7 @@ import type { KnowledgeRepository } from "../repositories/knowledge.repository.j
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
-import { WikiIndexerService } from "./wikiIndexer.service.js";
+import { WikiIndexerService, type WikiIndexer } from "./wikiIndexer.service.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -52,7 +52,7 @@ export class AgentRunQueueService {
     private readonly noteLinkRepository: NoteLinkRepository,
     private readonly rawNoteRepository?: RawNoteRepository,
     private readonly proposalRepository?: ProposalRepository,
-    private readonly wikiIndexerService = new WikiIndexerService(),
+    private readonly wikiIndexerService: WikiIndexer = new WikiIndexerService(),
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
@@ -230,7 +230,7 @@ export class AgentRunQueueService {
         targetId: rawNote.id,
         relationType: "mentions",
         confidence: concept.confidence,
-        source: provider === "openai" ? "openai_wiki_indexer" : "deterministic_wiki_indexer",
+        source: "openai_wiki_indexer",
       });
     }
 

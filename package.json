@@ -14,8 +14,7 @@
     "build": "npm run build --workspace=client && npm run build --workspace=server",
     "typecheck": "npm run typecheck --workspace=client && npm run typecheck --workspace=server",
     "test": "npm run test --workspace=server",
-    "migrate": "npm run migrate --workspace=server",
-    "db:migrate": "npm run db:migrate --workspace=server"
+    "migrate": "npm run migrate --workspace=server"
   },
   "engines": {
     "node": ">=20.11"

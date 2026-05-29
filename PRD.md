@@ -1616,9 +1616,6 @@ readiness_items
 
 agent_runs
 agent_run_events
-agent_sessions
-agent_messages
-tool_calls
 ```
 
 Compiled notes should store human-readable Markdown plus structured fields.

@@ -1,4 +1,4 @@
-import type { ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
+import type { CompiledNote, Confidence, ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
@@ -12,6 +12,18 @@ function stringValue(payload: Record<string, unknown>, key: string, fallback = "
   const value = payload[key];
   return typeof value === "string" ? value : fallback;
 }
+
+function confidenceValue(value: unknown, fallback: Confidence): Confidence {
+  return value === "low" || value === "medium" || value === "high" ? value : fallback;
+}
+
+function normalizedTitle(value: string) {
+  return value.trim().toLowerCase();
+}
+
+type ApplyContext = {
+  compiledNoteByTitle: Map<string, CompiledNote>;
+};
 
 export class ProposalService {
   constructor(
@@ -38,8 +50,9 @@ export class ProposalService {
       return proposal;
     }
 
+    const context: ApplyContext = { compiledNoteByTitle: new Map() };
     for (const item of proposal.items) {
-      await this.applyItem(proposal, item);
+      await this.applyItem(proposal, item, context);
     }
 
     await this.proposalRepository.setItemStatus(id, "approved");
@@ -67,18 +80,25 @@ export class ProposalService {
     return this.getProposal(id);
   }
 
-  private async applyItem(proposal: ProposalWithItems, item: ProposalItem) {
+  private async applyItem(proposal: ProposalWithItems, item: ProposalItem, context: ApplyContext) {
     const payload = asRecord(item.payload);
 
-    if (item.actionType === "upsert_compiled_note") {
+    if (item.actionType === "upsert_compiled_note" || item.actionType === "upsert_knowledge") {
+      const title = stringValue(payload, "title", "Untitled Note");
+      const noteType = stringValue(
+        payload,
+        "noteType",
+        stringValue(payload, "knowledgeType", "note"),
+      );
       const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
         userId: proposal.userId,
         domain: stringValue(payload, "domain", "coding"),
-        noteType: stringValue(payload, "noteType", "note"),
-        title: stringValue(payload, "title", "Untitled Note"),
+        noteType,
+        title,
         bodyMarkdown: stringValue(payload, "bodyMarkdown"),
         structuredData: payload.structuredData ?? {},
       });
+      context.compiledNoteByTitle.set(normalizedTitle(compiledNote.title), compiledNote);
 
       await this.knowledgeRepository.createEvidenceLink({
         userId: proposal.userId,
@@ -148,6 +168,32 @@ export class ProposalService {
         title: compiledNote.title,
         bodyMarkdown: compiledNote.bodyMarkdown,
         conceptNames,
+      });
+      return;
+    }
+
+    if (item.actionType === "create_link") {
+      const sourceNoteType = stringValue(payload, "sourceNoteType", "compiled_note");
+      const sourceNoteId =
+        stringValue(payload, "sourceNoteId") ||
+        context.compiledNoteByTitle.get(normalizedTitle(stringValue(payload, "sourceTitle")))?.id ||
+        "";
+      const targetNoteType = stringValue(payload, "targetNoteType", "compiled_note");
+      const targetNoteId = stringValue(payload, "targetNoteId");
+
+      if (!sourceNoteId || !targetNoteId) {
+        return;
+      }
+
+      await this.noteLinkRepository.createSuggestion({
+        userId: proposal.userId,
+        sourceNoteType,
+        sourceNoteId,
+        targetNoteType,
+        targetNoteId,
+        relationType: stringValue(payload, "relationType", "related_concept"),
+        confidence: confidenceValue(payload.confidence, proposal.confidence),
+        rationale: item.rationale ?? (stringValue(payload, "rationale") || null),
       });
       return;
     }

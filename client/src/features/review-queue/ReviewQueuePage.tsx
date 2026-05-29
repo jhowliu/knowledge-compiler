@@ -32,6 +32,8 @@ function rawNoteTitle(rawNote: RawNote | undefined) {
 }
 
 function itemVerb(actionType: string) {
+  if (actionType === 'upsert_knowledge') return 'Knowledge'
+  if (actionType === 'create_link') return 'Link'
   if (actionType === 'upsert_compiled_note') return 'Note'
   if (actionType === 'create_mistake') return 'Mistake'
   if (actionType === 'create_review_task') return 'Review'
@@ -40,12 +42,16 @@ function itemVerb(actionType: string) {
 }
 
 function summarizeProposal(proposal: Proposal) {
-  const notes = proposal.items.filter((item) => item.actionType === 'upsert_compiled_note').length
+  const notes = proposal.items.filter((item) =>
+    ['upsert_knowledge', 'upsert_compiled_note'].includes(item.actionType),
+  ).length
+  const links = proposal.items.filter((item) => item.actionType === 'create_link').length
   const mistakes = proposal.items.filter((item) => item.actionType === 'create_mistake').length
   const reviews = proposal.items.filter((item) => item.actionType === 'create_review_task').length
   const readiness = proposal.items.filter((item) => item.actionType === 'upsert_readiness').length
   return [
     notes ? `${notes} note${notes > 1 ? 's' : ''}` : null,
+    links ? `${links} link${links > 1 ? 's' : ''}` : null,
     mistakes ? `${mistakes} mistake${mistakes > 1 ? 's' : ''}` : null,
     reviews ? `${reviews} review${reviews > 1 ? 's' : ''}` : null,
     readiness ? `${readiness} readiness` : null,
@@ -55,29 +61,34 @@ function summarizeProposal(proposal: Proposal) {
 function proposalGroups(proposal: Proposal) {
   return [
     {
-      actionType: 'upsert_compiled_note',
-      label: 'Notes',
-      description: 'Compiled knowledge cards to create or update.',
+      actionTypes: ['upsert_knowledge', 'upsert_compiled_note'],
+      label: 'Knowledge',
+      description: 'Approved knowledge cards to create or update.',
     },
     {
-      actionType: 'create_mistake',
+      actionTypes: ['create_link'],
+      label: 'Links',
+      description: 'Related-note links suggested by the agent.',
+    },
+    {
+      actionTypes: ['create_mistake'],
       label: 'Mistakes',
       description: 'Recurring mistakes extracted from the raw note.',
     },
     {
-      actionType: 'create_review_task',
+      actionTypes: ['create_review_task'],
       label: 'Reviews',
       description: 'Practice or follow-up tasks to schedule.',
     },
     {
-      actionType: 'upsert_readiness',
+      actionTypes: ['upsert_readiness'],
       label: 'Readiness',
       description: 'Weak-area status changes for the dashboard.',
     },
   ]
     .map((group) => ({
       ...group,
-      items: proposal.items.filter((item) => item.actionType === group.actionType),
+      items: proposal.items.filter((item) => group.actionTypes.includes(item.actionType)),
     }))
     .filter((group) => group.items.length > 0)
 }
@@ -411,7 +422,7 @@ export function ReviewQueuePage({
 
               <section className="mb-4 grid gap-3 xl:grid-cols-2">
                 {proposalGroups(selectedProposal).map((group) => (
-                  <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.actionType}>
+                  <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.label}>
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">

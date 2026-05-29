@@ -208,4 +208,73 @@ describe("ProposalService", () => {
     expect(knowledge.knowledgeSources[0].currentVersionId).toBe("knowledge-version-2");
     expect(knowledge.knowledgeBlocks.map((block) => block.status)).toEqual(["archived", "active"]);
   });
+
+  test("approves generalized knowledge updates and creates pending link suggestions", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+
+    const existing = await knowledge.upsertCompiledNote({
+      domain: "coding",
+      noteType: "algorithm",
+      title: "BFS",
+      bodyMarkdown: "Use BFS for unweighted shortest paths.",
+      structuredData: {},
+    });
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-3",
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "algorithm",
+        impactLevel: 3,
+        confidence: "high",
+        rationale: "Generalized LLM wiki proposal.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "coding",
+              knowledgeType: "algorithm",
+              title: "Dijkstra",
+              bodyMarkdown: "Use Dijkstra for positive weighted shortest paths.",
+              structuredData: {
+                concepts: [{ name: "Shortest Path", conceptType: "pattern" }],
+              },
+            },
+            rationale: "Create approved knowledge.",
+          },
+          {
+            actionType: "create_link",
+            targetType: "note_link",
+            payload: {
+              sourceTitle: "Dijkstra",
+              targetNoteType: "compiled_note",
+              targetNoteId: existing.id,
+              relationType: "related_concept",
+              confidence: "high",
+            },
+            rationale: "Connect related shortest-path knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.compiledNotes).toHaveLength(2);
+    expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.knowledgeSources[0]).toMatchObject({
+      knowledgeType: "algorithm",
+      title: "Dijkstra",
+    });
+    expect(noteLinks.noteLinks).toHaveLength(1);
+    expect(noteLinks.noteLinks[0]).toMatchObject({
+      sourceNoteId: "compiled-2",
+      targetNoteId: existing.id,
+      relationType: "related_concept",
+      status: "pending",
+    });
+  });
 });

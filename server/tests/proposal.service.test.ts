@@ -70,6 +70,20 @@ describe("ProposalService", () => {
 
     expect(approved.status).toBe("approved");
     expect(knowledge.compiledNotes).toHaveLength(1);
+    expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.knowledgeVersions).toHaveLength(1);
+    expect(knowledge.knowledgeBlocks).toHaveLength(1);
+    expect(knowledge.knowledgeSources[0]).toMatchObject({
+      domain: "coding",
+      knowledgeType: "problem_note",
+      title: "1334. Find the City",
+      currentVersionId: "knowledge-version-1",
+    });
+    expect(knowledge.knowledgeVersions[0]).toMatchObject({
+      compiledNoteId: "compiled-1",
+      proposalId: proposal.id,
+      versionNumber: 1,
+    });
     expect(knowledge.mistakes).toHaveLength(1);
     expect(knowledge.reviewTasks).toHaveLength(1);
     expect(knowledge.readinessItems).toHaveLength(1);
@@ -129,5 +143,69 @@ describe("ProposalService", () => {
       status: "pending",
       confidence: "high",
     });
+  });
+
+  test("creates a new knowledge version and archives old blocks on repeated approval", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+
+    const firstProposal = await proposals.create({
+      rawNoteId: "raw-note-1",
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "general_coding_note",
+        impactLevel: 2,
+        confidence: "medium",
+        rationale: "Initial note.",
+        items: [
+          {
+            actionType: "upsert_compiled_note",
+            targetType: "compiled_note",
+            payload: {
+              domain: "coding",
+              noteType: "algorithm",
+              title: "Dijkstra",
+              bodyMarkdown: "Use a priority queue for positive weighted shortest paths.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Create algorithm note.",
+          },
+        ],
+      },
+    });
+    await service.approveProposal(firstProposal.id);
+
+    const secondProposal = await proposals.create({
+      rawNoteId: "raw-note-2",
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "general_coding_note",
+        impactLevel: 2,
+        confidence: "medium",
+        rationale: "Update note.",
+        items: [
+          {
+            actionType: "upsert_compiled_note",
+            targetType: "compiled_note",
+            payload: {
+              domain: "coding",
+              noteType: "algorithm",
+              title: "Dijkstra",
+              bodyMarkdown: "Track extra state when constraints limit stops or edges.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Update algorithm note.",
+          },
+        ],
+      },
+    });
+    await service.approveProposal(secondProposal.id);
+
+    expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.knowledgeVersions.map((version) => version.versionNumber)).toEqual([1, 2]);
+    expect(knowledge.knowledgeSources[0].currentVersionId).toBe("knowledge-version-2");
+    expect(knowledge.knowledgeBlocks.map((block) => block.status)).toEqual(["archived", "active"]);
   });
 });

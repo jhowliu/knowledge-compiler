@@ -25,6 +25,52 @@ export type CompiledNote = {
   updatedAt: Date;
 };
 
+export type KnowledgeSource = {
+  id: string;
+  userId: string | null;
+  domain: string;
+  knowledgeType: string;
+  title: string;
+  status: string;
+  currentVersionId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type KnowledgeVersion = {
+  id: string;
+  knowledgeSourceId: string;
+  compiledNoteId: string | null;
+  proposalId: string | null;
+  versionNumber: number;
+  title: string;
+  bodyMarkdown: string;
+  structuredData: unknown;
+  changeSummary: string | null;
+  createdAt: Date;
+};
+
+export type KnowledgeBlock = {
+  id: string;
+  knowledgeSourceId: string;
+  knowledgeVersionId: string;
+  blockIndex: number;
+  heading: string | null;
+  bodyMarkdown: string;
+  tokenEstimate: number;
+  status: string;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type KnowledgeSourceSnapshot = {
+  source: KnowledgeSource;
+  version: KnowledgeVersion;
+  blocks: KnowledgeBlock[];
+};
+
 export type ProposalStatus = "pending" | "approved" | "rejected";
 export type NoteLinkStatus = "pending" | "approved" | "rejected";
 
@@ -156,4 +202,12 @@ export type SearchResult = {
   noteType: string | null;
   rank: number;
   createdAt: Date;
+};
+
+export type CreateKnowledgeBlockInput = {
+  blockIndex: number;
+  heading?: string | null;
+  bodyMarkdown: string;
+  tokenEstimate: number;
+  metadata?: Record<string, unknown>;
 };

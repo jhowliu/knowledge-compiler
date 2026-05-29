@@ -1,6 +1,11 @@
 import type {
   CompiledNote,
   Concept,
+  CreateKnowledgeBlockInput,
+  KnowledgeBlock,
+  KnowledgeSource,
+  KnowledgeSourceSnapshot,
+  KnowledgeVersion,
   Mistake,
   ReadinessItem,
   ReviewTask,
@@ -11,6 +16,9 @@ import type { KnowledgeRepository } from "../../src/repositories/knowledge.repos
 export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly concepts: Concept[] = [];
   readonly compiledNotes: CompiledNote[] = [];
+  readonly knowledgeSources: KnowledgeSource[] = [];
+  readonly knowledgeVersions: KnowledgeVersion[] = [];
+  readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly mistakes: Mistake[] = [];
   readonly reviewTasks: ReviewTask[] = [];
   readonly readinessItems: ReadinessItem[] = [];
@@ -70,6 +78,91 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async listReviewMaps(): Promise<CompiledNote[]> {
     return this.compiledNotes.filter((note) => note.noteType === "review_map");
+  }
+
+  async upsertKnowledgeSourceVersion(input: {
+    userId?: string | null;
+    domain: string;
+    knowledgeType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    compiledNoteId?: string | null;
+    proposalId?: string | null;
+    changeSummary?: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+  }): Promise<KnowledgeSourceSnapshot> {
+    let source = this.knowledgeSources.find(
+      (item) =>
+        item.userId === (input.userId ?? null) &&
+        item.domain === input.domain &&
+        item.knowledgeType === input.knowledgeType &&
+        item.title.toLowerCase() === input.title.toLowerCase() &&
+        item.status === "active",
+    );
+
+    if (!source) {
+      source = {
+        id: `knowledge-source-${this.knowledgeSources.length + 1}`,
+        userId: input.userId ?? null,
+        domain: input.domain,
+        knowledgeType: input.knowledgeType,
+        title: input.title,
+        status: "active",
+        currentVersionId: null,
+        metadata: {},
+        createdAt: new Date("2026-05-24T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+      };
+      this.knowledgeSources.push(source);
+    }
+
+    const version: KnowledgeVersion = {
+      id: `knowledge-version-${this.knowledgeVersions.length + 1}`,
+      knowledgeSourceId: source.id,
+      compiledNoteId: input.compiledNoteId ?? null,
+      proposalId: input.proposalId ?? null,
+      versionNumber:
+        this.knowledgeVersions.filter((item) => item.knowledgeSourceId === source.id).length + 1,
+      title: input.title,
+      bodyMarkdown: input.bodyMarkdown,
+      structuredData: input.structuredData,
+      changeSummary: input.changeSummary ?? null,
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+    };
+    this.knowledgeVersions.push(version);
+    source.currentVersionId = version.id;
+    source.updatedAt = new Date("2026-05-24T00:00:00.000Z");
+
+    for (const block of this.knowledgeBlocks) {
+      if (block.knowledgeSourceId === source.id && block.status === "active") {
+        block.status = "archived";
+      }
+    }
+
+    const blocks = input.blocks.map((block) => {
+      const savedBlock: KnowledgeBlock = {
+        id: `knowledge-block-${this.knowledgeBlocks.length + 1}`,
+        knowledgeSourceId: source.id,
+        knowledgeVersionId: version.id,
+        blockIndex: block.blockIndex,
+        heading: block.heading ?? null,
+        bodyMarkdown: block.bodyMarkdown,
+        tokenEstimate: block.tokenEstimate,
+        status: "active",
+        metadata: block.metadata ?? {},
+        createdAt: new Date("2026-05-24T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+      };
+      this.knowledgeBlocks.push(savedBlock);
+      return savedBlock;
+    });
+
+    return { source, version, blocks };
+  }
+
+  async listActiveKnowledgeBlocks(): Promise<KnowledgeBlock[]> {
+    return this.knowledgeBlocks.filter((block) => block.status === "active");
   }
 
   async upsertMistake(input: {

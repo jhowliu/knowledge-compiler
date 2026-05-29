@@ -1,3 +1,4 @@
+import type { CreateKnowledgeBlockInput } from "../domain/knowledge.js";
 import type { CreateRawSourceChunkInput } from "../domain/rawSource.js";
 
 const maxChunkCharacters = 1800;
@@ -15,6 +16,20 @@ function headingFrom(markdown: string) {
 }
 
 export function chunkSourceMarkdown(markdown: string): CreateRawSourceChunkInput[] {
+  return chunkMarkdown(markdown);
+}
+
+export function chunkKnowledgeMarkdown(markdown: string): CreateKnowledgeBlockInput[] {
+  return chunkMarkdown(markdown).map((chunk) => ({
+    blockIndex: chunk.chunkIndex,
+    heading: chunk.heading,
+    bodyMarkdown: chunk.bodyMarkdown,
+    tokenEstimate: chunk.tokenEstimate,
+    metadata: chunk.metadata,
+  }));
+}
+
+function chunkMarkdown(markdown: string): CreateRawSourceChunkInput[] {
   const blocks = markdown
     .split(/\n{2,}/)
     .map((block) => block.trim())

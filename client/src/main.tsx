@@ -7,9 +7,30 @@ import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { ReviewMapsPage } from './features/review-maps/ReviewMapsPage'
-import { loadAgentRunDetail, loadRawNoteIndexingTrace, loadWorkspaceData, requestJson, requestVoid } from './lib/api'
+import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
+import {
+  loadAgentRunDetail,
+  loadRawNoteIndexingTrace,
+  loadWorkspaceData,
+  requestJson,
+  requestVoid,
+  searchKnowledgeBlocks,
+} from './lib/api'
 import { boardOptions, emptyWorkspaceData } from './lib/constants'
-import type { ActiveView, AgentRun, AgentRunDetail, BoardKey, NoteCardPosition, Proposal, RawNote, RawNoteIndexingTrace, RawSourceRole, ThemeMode, WorkspaceData } from './types/domain'
+import type {
+  ActiveView,
+  AgentRun,
+  AgentRunDetail,
+  BoardKey,
+  KnowledgeSearchResult,
+  NoteCardPosition,
+  Proposal,
+  RawNote,
+  RawNoteIndexingTrace,
+  RawSourceRole,
+  ThemeMode,
+  WorkspaceData,
+} from './types/domain'
 
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -33,6 +54,12 @@ function App() {
   const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
   const [selectedAgentRunDetail, setSelectedAgentRunDetail] = useState<AgentRunDetail | null>(null)
   const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([])
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [includeArchivedSearch, setIncludeArchivedSearch] = useState(false)
   const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
   const [selectedReviewMapId, setSelectedReviewMapId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -100,6 +127,34 @@ function App() {
   function closeAgentRunDetail() {
     setSelectedAgentRunDetail(null)
     setIsAgentRunDetailLoading(false)
+  }
+
+  async function runKnowledgeSearch(nextQuery = searchQuery, includeArchived = includeArchivedSearch) {
+    const trimmedQuery = nextQuery.trim()
+    setIsSearchOpen(true)
+    setSearchError(null)
+
+    if (!trimmedQuery) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearchLoading(true)
+    try {
+      setSearchResults(await searchKnowledgeBlocks(trimmedQuery, includeArchived))
+    } catch (nextError) {
+      setSearchError(nextError instanceof Error ? nextError.message : 'Unable to search knowledge')
+      setSearchResults([])
+    } finally {
+      setIsSearchLoading(false)
+    }
+  }
+
+  function updateIncludeArchivedSearch(value: boolean) {
+    setIncludeArchivedSearch(value)
+    if (isSearchOpen && searchQuery.trim()) {
+      void runKnowledgeSearch(searchQuery, value)
+    }
   }
 
   function openProposalFromAgentRun(proposalId: string) {
@@ -553,6 +608,9 @@ function App() {
               isAgentRunning={isAgentRunning}
               noteCount={workspaceData.rawNotes.length}
               onReindexLinks={() => void startReindexLinksRun()}
+              onSearchQueryChange={setSearchQuery}
+              onSearchSubmit={() => void runKnowledgeSearch()}
+              searchQuery={searchQuery}
               taskCount={openTaskCount}
             />
             {error ? (
@@ -638,6 +696,18 @@ function App() {
           onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
         />
       ) : null}
+      <KnowledgeSearchPanel
+        error={searchError}
+        includeArchived={includeArchivedSearch}
+        isLoading={isSearchLoading}
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onIncludeArchivedChange={updateIncludeArchivedSearch}
+        onQueryChange={setSearchQuery}
+        onSubmit={() => void runKnowledgeSearch()}
+        query={searchQuery}
+        results={searchResults}
+      />
     </main>
   )
 }

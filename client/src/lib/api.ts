@@ -4,6 +4,7 @@ import type {
   AgentRunDetail,
   BoardKey,
   CompiledNote,
+  KnowledgeSearchResult,
   KnowledgeSourceTimeline,
   Mistake,
   NoteCardPosition,
@@ -106,4 +107,16 @@ export async function loadKnowledgeTimelineForCompiledNote(compiledNoteId: strin
     `/compiled-notes/${compiledNoteId}/timeline`,
   )
   return result.timeline
+}
+
+export async function searchKnowledgeBlocks(query: string, includeArchived: boolean) {
+  const params = new URLSearchParams({ q: query })
+  if (includeArchived) {
+    params.set('includeArchived', 'true')
+  }
+
+  const result = await requestJson<{ results: KnowledgeSearchResult[] }>(
+    `/search?${params.toString()}`,
+  )
+  return result.results
 }

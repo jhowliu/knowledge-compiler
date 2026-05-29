@@ -13,10 +13,10 @@ import {
 import { actionLabel, payloadLabel, payloadText } from '../../lib/knowledge'
 import type { NoteLink, Proposal, RawNote } from '../../types/domain'
 
-type ReviewTab = 'notes' | 'links' | 'done'
+type ReviewTab = 'updates' | 'links' | 'done'
 
 const tabs: Array<{ key: ReviewTab; label: string }> = [
-  { key: 'notes', label: 'Notes' },
+  { key: 'updates', label: 'Updates' },
   { key: 'links', label: 'Links' },
   { key: 'done', label: 'Done' },
 ]
@@ -34,27 +34,20 @@ function rawNoteTitle(rawNote: RawNote | undefined) {
 function itemVerb(actionType: string) {
   if (actionType === 'upsert_knowledge') return 'Knowledge'
   if (actionType === 'create_link') return 'Link'
-  if (actionType === 'upsert_compiled_note') return 'Note'
-  if (actionType === 'create_mistake') return 'Mistake'
-  if (actionType === 'create_review_task') return 'Review'
-  if (actionType === 'upsert_readiness') return 'Readiness'
+  if (actionType === 'upsert_compiled_note') return 'Knowledge'
   return 'Update'
 }
 
 function summarizeProposal(proposal: Proposal) {
-  const notes = proposal.items.filter((item) =>
+  const updates = proposal.items.filter((item) =>
     ['upsert_knowledge', 'upsert_compiled_note'].includes(item.actionType),
   ).length
   const links = proposal.items.filter((item) => item.actionType === 'create_link').length
-  const mistakes = proposal.items.filter((item) => item.actionType === 'create_mistake').length
-  const reviews = proposal.items.filter((item) => item.actionType === 'create_review_task').length
-  const readiness = proposal.items.filter((item) => item.actionType === 'upsert_readiness').length
+  const other = proposal.items.length - updates - links
   return [
-    notes ? `${notes} note${notes > 1 ? 's' : ''}` : null,
+    updates ? `${updates} update${updates > 1 ? 's' : ''}` : null,
     links ? `${links} link${links > 1 ? 's' : ''}` : null,
-    mistakes ? `${mistakes} mistake${mistakes > 1 ? 's' : ''}` : null,
-    reviews ? `${reviews} review${reviews > 1 ? 's' : ''}` : null,
-    readiness ? `${readiness} readiness` : null,
+    other ? `${other} other` : null,
   ].filter(Boolean).join(' · ')
 }
 
@@ -62,28 +55,21 @@ function proposalGroups(proposal: Proposal) {
   return [
     {
       actionTypes: ['upsert_knowledge', 'upsert_compiled_note'],
-      label: 'Knowledge',
-      description: 'Approved knowledge cards to create or update.',
+      label: 'Updates',
+      description: 'Approved knowledge to create or update.',
+      icon: FileText,
     },
     {
       actionTypes: ['create_link'],
       label: 'Links',
-      description: 'Related-note links suggested by the agent.',
+      description: 'Relationship suggestions created after the update is applied.',
+      icon: GitBranch,
     },
     {
-      actionTypes: ['create_mistake'],
-      label: 'Mistakes',
-      description: 'Recurring mistakes extracted from the raw note.',
-    },
-    {
-      actionTypes: ['create_review_task'],
-      label: 'Reviews',
-      description: 'Practice or follow-up tasks to schedule.',
-    },
-    {
-      actionTypes: ['upsert_readiness'],
-      label: 'Readiness',
-      description: 'Weak-area status changes for the dashboard.',
+      actionTypes: ['create_mistake', 'create_review_task', 'upsert_readiness'],
+      label: 'Other updates',
+      description: 'Additional compatibility updates from older proposals.',
+      icon: ListChecks,
     },
   ]
     .map((group) => ({
@@ -96,10 +82,10 @@ function proposalGroups(proposal: Proposal) {
 function EmptyState({ activeTab }: { activeTab: ReviewTab }) {
   const copy =
     activeTab === 'links'
-      ? 'No link suggestions waiting. Links appear after note updates are applied.'
+      ? 'No link suggestions waiting. Links appear after updates are applied.'
       : activeTab === 'done'
         ? 'No reviewed updates yet.'
-        : 'No note updates waiting. Capture and compile a raw note to start.'
+        : 'No updates waiting. Capture and compile a source to start.'
 
   return (
     <div className="grid h-full place-items-center px-8">
@@ -141,7 +127,7 @@ export function ReviewQueuePage({
   onRejectNoteLink: (linkId: string) => void
   onRefresh: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<ReviewTab>('notes')
+  const [activeTab, setActiveTab] = useState<ReviewTab>('updates')
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false)
   const pendingProposals = useMemo(
     () => proposals.filter((proposal) => proposal.status === 'pending'),
@@ -186,7 +172,7 @@ export function ReviewQueuePage({
         <div className="mb-5 grid grid-cols-3 rounded-lg border border-gray-200 bg-slate-50 p-1">
           {tabs.map((tab) => {
             const count =
-              tab.key === 'notes'
+              tab.key === 'updates'
                 ? pendingProposals.length
                 : tab.key === 'links'
                   ? pendingNoteLinks.length
@@ -215,7 +201,7 @@ export function ReviewQueuePage({
             ? 'Suggested note links'
             : activeTab === 'done'
               ? 'Reviewed updates'
-              : 'Note updates'}
+              : 'Knowledge updates'}
         </div>
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
@@ -291,7 +277,7 @@ export function ReviewQueuePage({
             })
           ) : (
             <p className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm leading-6 text-gray-500">
-              {activeTab === 'done' ? 'No reviewed updates yet.' : 'No note updates waiting.'}
+              {activeTab === 'done' ? 'No reviewed updates yet.' : 'No updates waiting.'}
             </p>
           )}
         </div>
@@ -302,7 +288,7 @@ export function ReviewQueuePage({
           <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                {activeTab === 'links' ? 'Relationship review' : 'Knowledge update review'}
+                {activeTab === 'links' ? 'Relationship review' : 'Update review'}
               </p>
               <h2 className="mt-1 truncate text-2xl font-extrabold text-ink">
                 {activeTab === 'links'
@@ -314,7 +300,7 @@ export function ReviewQueuePage({
               <p className="mt-2 max-w-[760px] text-sm leading-6 text-gray-500">
                 {activeTab === 'links'
                   ? 'Links are optional relationship suggestions after content has been applied.'
-                  : 'Review the agent proposal, then apply the note updates to compiled knowledge.'}
+                  : 'Review the agent proposal, then apply approved changes to knowledge.'}
               </p>
             </div>
             {activeTab !== 'links' && selectedProposal ? (
@@ -335,7 +321,7 @@ export function ReviewQueuePage({
                   type="button"
                 >
                   <Check size={15} />
-                  Apply note updates
+                  Apply updates
                 </button>
               </div>
             ) : null}
@@ -405,7 +391,7 @@ export function ReviewQueuePage({
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                      Review this raw note update
+                      Review this proposed update
                     </p>
                     <h3 className="mt-1 text-lg font-extrabold text-ink">
                       {summarizeProposal(selectedProposal) || `${selectedProposal.items.length} updates`}
@@ -416,39 +402,42 @@ export function ReviewQueuePage({
                   </span>
                 </div>
                 <p className="text-sm leading-6 text-gray-600">
-                  {selectedProposal.rationale ?? 'Agent found incremental knowledge changes from this raw note.'}
+                  {selectedProposal.rationale ?? 'Agent found incremental knowledge changes from this source.'}
                 </p>
               </section>
 
               <section className="mb-4 grid gap-3 xl:grid-cols-2">
-                {proposalGroups(selectedProposal).map((group) => (
-                  <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.label}>
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                          {group.label}
-                        </p>
-                        <h4 className="mt-1 text-base font-extrabold text-ink">
-                          {group.items.length} change{group.items.length > 1 ? 's' : ''}
-                        </h4>
+                {proposalGroups(selectedProposal).map((group) => {
+                  const Icon = group.icon
+                  return (
+                    <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.label}>
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                            {group.label}
+                          </p>
+                          <h4 className="mt-1 text-base font-extrabold text-ink">
+                            {group.items.length} change{group.items.length > 1 ? 's' : ''}
+                          </h4>
+                        </div>
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
+                          <Icon size={17} />
+                        </span>
                       </div>
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
-                        <FileText size={17} />
-                      </span>
-                    </div>
-                    <p className="mb-3 text-sm leading-6 text-gray-600">{group.description}</p>
-                    <div className="space-y-2">
-                      {group.items.slice(0, 3).map((item) => (
-                        <p
-                          className="line-clamp-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-gray-700"
-                          key={item.id}
-                        >
-                          {payloadLabel(item.payload)}
-                        </p>
-                      ))}
-                    </div>
-                  </article>
-                ))}
+                      <p className="mb-3 text-sm leading-6 text-gray-600">{group.description}</p>
+                      <div className="space-y-2">
+                        {group.items.slice(0, 3).map((item) => (
+                          <p
+                            className="line-clamp-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-gray-700"
+                            key={item.id}
+                          >
+                            {payloadLabel(item.payload)}
+                          </p>
+                        ))}
+                      </div>
+                    </article>
+                  )
+                })}
               </section>
 
               <section className="rounded-lg border border-gray-200 bg-white">
@@ -460,7 +449,7 @@ export function ReviewQueuePage({
                   <div>
                     <p className="text-sm font-extrabold text-ink">Advanced details</p>
                     <p className="mt-1 text-xs leading-5 text-gray-500">
-                      Inspect each proposal item before applying this raw note update.
+                      Inspect each proposal item before applying this update.
                     </p>
                   </div>
                   <ChevronDown
@@ -510,7 +499,7 @@ export function ReviewQueuePage({
 
             <aside className="min-h-0 overflow-y-auto border-l border-gray-200 bg-white px-5 py-6">
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-ink">Source raw note</h3>
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Source</h3>
                 <article className="rounded-lg border border-gray-200 bg-slate-50 p-4">
                   <p className="text-[13px] font-extrabold text-ink">{rawNoteTitle(sourceRawNote)}</p>
                   <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-600">

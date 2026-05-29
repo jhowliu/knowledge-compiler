@@ -56,6 +56,7 @@
 - Started issue #19 implementation: added `raw_sources` and `raw_source_chunks` schema migration, raw source domain/repository/service/controller/routes/validators, Markdown chunk generation, raw-note-to-source compatibility bridging, and a Raw Notes UI source role switch for My Notes vs Paper.
 - Started issue #20 implementation on `codex/knowledge-sources`: added `knowledge_sources`, `knowledge_versions`, and `knowledge_blocks`; approval now creates a versioned canonical knowledge snapshot and active blocks while preserving `compiled_notes` compatibility.
 - Started issue #21 implementation on `codex/simplified-indexer-output`: LLM wiki indexing now drafts only generalized `upsert_knowledge` and `create_link` proposal items; proposal approval accepts those actions while keeping legacy deterministic compiler actions compatible.
+- Started issue #22 implementation on `codex/review-inbox-updates-links`: Review Inbox now uses Updates, Links, and Done tabs, summarizes proposals as knowledge updates plus relationship links, and hides legacy interview-specific proposal actions under a generic compatibility group.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -97,6 +98,7 @@
 - `/raw-notes` remains the compatibility endpoint for the current UI, but new writes now create a linked raw source and chunks when the raw source repository is configured.
 - `compiled_notes` remains the current UI compatibility model, while `knowledge_sources` / `knowledge_versions` / `knowledge_blocks` becomes the canonical approved knowledge model for upcoming retrieval and timeline work.
 - The agentic LLM compile path should not emit interview-specific proposal items. Legacy actions remain supported only for compatibility with deterministic/non-agent paths.
+- Review Inbox should present generalized knowledge updates first, link approval second, and avoid exposing interview-specific categories in the primary review surface.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -134,10 +136,11 @@
 - Source ingestion validation: `npm run migrate --workspace=server` applied `004_raw_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
 - Knowledge source validation: `npm run migrate --workspace=server` applied `005_knowledge_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
 - Simplified indexer validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass.
+- Updates/Links/Done Review Inbox validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
-- Continue to #22 after #21 lands, so the Review Inbox can focus on Updates, Links, and Done without interview-specific grouping.
+- Continue to #23 after #22 lands, so Search/Ask can retrieve from approved knowledge blocks.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

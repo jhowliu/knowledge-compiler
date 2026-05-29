@@ -109,6 +109,13 @@ export async function loadKnowledgeTimelineForCompiledNote(compiledNoteId: strin
   return result.timeline
 }
 
+export async function loadKnowledgeSourceTimeline(knowledgeSourceId: string) {
+  const result = await requestJson<{ timeline: KnowledgeSourceTimeline }>(
+    `/knowledge-sources/${knowledgeSourceId}/timeline`,
+  )
+  return result.timeline
+}
+
 export async function searchKnowledgeBlocks(query: string, includeArchived: boolean) {
   const params = new URLSearchParams({ q: query })
   if (includeArchived) {

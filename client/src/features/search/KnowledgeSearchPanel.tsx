@@ -1,5 +1,7 @@
 import { Archive, FileText, Link2, Search, X } from 'lucide-react'
-import type { KnowledgeSearchResult } from '../../types/domain'
+import { useEffect, useMemo, useState } from 'react'
+import { loadKnowledgeSourceTimeline } from '../../lib/api'
+import type { KnowledgeSearchResult, KnowledgeSourceTimeline } from '../../types/domain'
 
 function compactText(value: string, maxLength = 260) {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -45,6 +47,59 @@ export function KnowledgeSearchPanel({
   query: string
   results: KnowledgeSearchResult[]
 }) {
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null)
+  const [timeline, setTimeline] = useState<KnowledgeSourceTimeline | null>(null)
+  const [timelineStatus, setTimelineStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing'>(
+    'idle',
+  )
+
+  const selectedResult = useMemo(() => {
+    return (
+      results.find((result) => result.blockId === selectedResultId) ??
+      results[0] ??
+      null
+    )
+  }, [results, selectedResultId])
+
+  useEffect(() => {
+    if (!results.some((result) => result.blockId === selectedResultId)) {
+      setSelectedResultId(results[0]?.blockId ?? null)
+    }
+  }, [results, selectedResultId])
+
+  useEffect(() => {
+    let isCurrent = true
+
+    if (!isOpen || !selectedResult) {
+      setTimeline(null)
+      setTimelineStatus('idle')
+      return () => {
+        isCurrent = false
+      }
+    }
+
+    setTimelineStatus('loading')
+    loadKnowledgeSourceTimeline(selectedResult.knowledgeSourceId)
+      .then((nextTimeline) => {
+        if (!isCurrent) {
+          return
+        }
+        setTimeline(nextTimeline)
+        setTimelineStatus('loaded')
+      })
+      .catch(() => {
+        if (!isCurrent) {
+          return
+        }
+        setTimeline(null)
+        setTimelineStatus('missing')
+      })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [isOpen, selectedResult])
+
   if (!isOpen) {
     return null
   }
@@ -92,7 +147,7 @@ export function KnowledgeSearchPanel({
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_270px]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-h-0 overflow-y-auto bg-canvas p-5">
             <div className="mb-4 flex items-end justify-between gap-4">
               <div>
@@ -140,9 +195,15 @@ export function KnowledgeSearchPanel({
             ) : (
               <div className="space-y-3">
                 {results.map((result) => (
-                  <article
-                    className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                  <button
+                    className={`w-full rounded-lg border bg-white p-4 text-left shadow-sm ${
+                      selectedResult?.blockId === result.blockId
+                        ? 'border-violet ring-2 ring-violet/15'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
                     key={result.blockId}
+                    onClick={() => setSelectedResultId(result.blockId)}
+                    type="button"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
@@ -202,19 +263,131 @@ export function KnowledgeSearchPanel({
                         ))}
                       </div>
                     ) : null}
-                  </article>
+                  </button>
                 ))}
               </div>
             )}
           </div>
 
-          <aside className="border-l border-gray-200 bg-white p-5">
-            <p className="text-sm font-bold text-ink">Retrieval corpus</p>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
-              <p>Search targets approved knowledge blocks.</p>
-              <p>Evidence links show the raw notes, papers, or chunks that shaped each block.</p>
-              <p>Archived versions stay hidden unless the archive toggle is enabled.</p>
-            </div>
+          <aside className="min-h-0 overflow-y-auto border-l border-gray-200 bg-white p-5">
+            {selectedResult ? (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-violet">
+                    Selected Block
+                  </p>
+                  <h3 className="mt-2 text-lg font-bold leading-6 text-ink">
+                    {selectedResult.title}
+                  </h3>
+                  {selectedResult.heading ? (
+                    <p className="mt-2 text-sm font-semibold text-gray-700">
+                      {selectedResult.heading}
+                    </p>
+                  ) : null}
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-600">
+                    {selectedResult.bodyMarkdown}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-gray-200 bg-canvas p-3">
+                    <p className="font-bold text-gray-500">Version</p>
+                    <p className="mt-1 font-bold text-ink">v{selectedResult.versionNumber}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-canvas p-3">
+                    <p className="font-bold text-gray-500">Status</p>
+                    <p className="mt-1 font-bold text-ink">{selectedResult.status}</p>
+                  </div>
+                </div>
+
+                <section>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-ink">Evidence</p>
+                    <span className="text-xs font-bold text-gray-500">
+                      {selectedResult.evidenceReferences.length}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {selectedResult.evidenceReferences.length > 0 ? (
+                      selectedResult.evidenceReferences.map((evidence) => (
+                        <div
+                          className="rounded-lg border border-gray-200 bg-canvas p-3"
+                          key={evidence.id}
+                        >
+                          <p className="text-xs font-bold text-ink">
+                            {evidence.rawSourceTitle ?? evidence.sourceTitle ?? 'Evidence'}
+                          </p>
+                          {evidence.chunkHeading ? (
+                            <p className="mt-1 text-xs font-semibold text-gray-600">
+                              {evidence.chunkHeading}
+                            </p>
+                          ) : null}
+                          {evidence.chunkBodyMarkdown ? (
+                            <p className="mt-2 text-xs leading-5 text-gray-500">
+                              {compactText(evidence.chunkBodyMarkdown, 220)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-lg border border-dashed border-gray-300 p-3 text-sm leading-6 text-gray-500">
+                        No evidence links attached to this block yet.
+                      </p>
+                    )}
+                  </div>
+                </section>
+
+                <section>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-ink">Evolution</p>
+                    <span className="text-xs font-bold text-gray-500">
+                      {timelineStatus === 'loading'
+                        ? 'Loading'
+                        : timeline
+                          ? `${timeline.versions.length} versions`
+                          : 'No timeline'}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {timeline?.versions.map((version) => (
+                      <div
+                        className="rounded-lg border border-gray-200 bg-canvas p-3"
+                        key={version.id}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold text-ink">v{version.versionNumber}</p>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-gray-500">
+                            {version.state}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {formatDate(version.createdAt)}
+                        </p>
+                        {version.changeSummary ? (
+                          <p className="mt-2 text-xs leading-5 text-gray-600">
+                            {version.changeSummary}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                    {timelineStatus === 'missing' ? (
+                      <p className="rounded-lg border border-dashed border-gray-300 p-3 text-sm leading-6 text-gray-500">
+                        Timeline is not available for this result.
+                      </p>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-bold text-ink">Retrieval corpus</p>
+                <div className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
+                  <p>Search targets approved knowledge blocks.</p>
+                  <p>Evidence links show the raw notes, papers, or chunks that shaped each block.</p>
+                  <p>Archived versions stay hidden unless the archive toggle is enabled.</p>
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       </section>

@@ -127,11 +127,11 @@
 - Agent Review Inbox prototype validation: `npm run typecheck`, `npm run build`, and browser smoke test of the empty inbox state pass with no console errors.
 - LLM-required indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass. Tests now cover a fake-LLM successful compile and a missing-key failure that creates no proposal.
 - Agent Review summary validation: `npm run typecheck`, `npm run build`, and browser smoke test of Update Proposals all pass with no console errors.
-- Source ingestion validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass. `npm run migrate --workspace=server` could not run locally because Postgres was not listening on 5432 and Docker Desktop was not running.
+- Source ingestion validation: `npm run migrate --workspace=server` applied `004_raw_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
-- Finish issue #19 by applying `004_raw_sources.sql` against a running local Postgres and smoke-testing source creation from the UI, then continue to #20 and #21.
+- Continue to #20 and #21 after PR #25 lands, so the simplified source -> indexing -> approval model can write approved knowledge sources, versions, and blocks.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

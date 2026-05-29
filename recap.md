@@ -58,6 +58,7 @@
 - Started issue #21 implementation on `codex/simplified-indexer-output`: LLM wiki indexing now drafts only generalized `upsert_knowledge` and `create_link` proposal items; proposal approval accepts those actions while keeping legacy deterministic compiler actions compatible.
 - Started issue #22 implementation on `codex/review-inbox-updates-links`: Review Inbox now uses Updates, Links, and Done tabs, summarizes proposals as knowledge updates plus relationship links, and hides legacy interview-specific proposal actions under a generic compatibility group.
 - Started issue #23 implementation on `codex/knowledge-block-retrieval`: `/search` now retrieves approved active `knowledge_blocks`, supports explicit archived-block inclusion, and returns evidence references that can point back to raw source chunks.
+- Started issue #24 implementation on `codex/knowledge-evolution-timeline`: approval now creates raw-source-chunk evidence links for knowledge versions, backend exposes knowledge-source and compiled-note timeline endpoints, and the graph inspector shows a lightweight Evolution panel.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -101,6 +102,7 @@
 - The agentic LLM compile path should not emit interview-specific proposal items. Legacy actions remain supported only for compatibility with deterministic/non-agent paths.
 - Review Inbox should present generalized knowledge updates first, link approval second, and avoid exposing interview-specific categories in the primary review surface.
 - Search retrieval should use approved `knowledge_blocks` as the answer corpus; raw source chunks stay attached as evidence references rather than being searched as the primary corpus.
+- Knowledge evolution should be inspectable from the note card surface: current and historical versions, proposal IDs, dates, blocks, and source chunk evidence should live together in one timeline payload.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -140,10 +142,11 @@
 - Simplified indexer validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass.
 - Updates/Links/Done Review Inbox validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass.
 - Knowledge block retrieval validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass. Route tests cover active block search, evidence references, and opt-in archived block retrieval.
+- Knowledge evolution timeline validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover chunk evidence link creation during approval and timeline retrieval by knowledge source and compiled note.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
-- Continue to #24 after #23 lands, so knowledge evolution can show dated versions and evidence links over time.
+- Close issue #24 through the PR merge, then choose the next simplified workspace issue or add retry/navigation improvements for agent runs.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

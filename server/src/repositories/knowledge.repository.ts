@@ -8,6 +8,7 @@ import type {
   KnowledgeEvidenceReference,
   KnowledgeSource,
   KnowledgeSourceSnapshot,
+  KnowledgeSourceTimeline,
   KnowledgeVersion,
   Mistake,
   ReadinessItem,
@@ -341,6 +342,133 @@ function evidenceKey(targetType: string, targetId: string) {
   return `${targetType}:${targetId}`;
 }
 
+async function listEvidenceReferencesForTargets(input: {
+  blockIds?: string[];
+  versionIds?: string[];
+  sourceIds?: string[];
+}) {
+  const evidenceResult = await query<EvidenceReferenceRow>(
+    `
+      select
+        evidence_links.id,
+        evidence_links.source_type,
+        evidence_links.source_id,
+        coalesce(raw_notes.title, direct_sources.title, chunk_sources.title, note_sources.title, chunks.heading) as source_title,
+        coalesce(direct_chunks.raw_source_id, direct_sources.id, note_sources.id) as raw_source_id,
+        coalesce(chunk_sources.title, direct_sources.title, note_sources.title) as raw_source_title,
+        chunks.id as raw_source_chunk_id,
+        chunks.chunk_index,
+        chunks.heading as chunk_heading,
+        chunks.body_markdown as chunk_body_markdown,
+        evidence_links.confidence,
+        evidence_links.impact_level,
+        evidence_links.created_at,
+        evidence_links.target_type,
+        evidence_links.target_id
+      from evidence_links
+      left join raw_source_chunks direct_chunks
+        on evidence_links.source_type = 'raw_source_chunk'
+        and direct_chunks.id = evidence_links.source_id
+      left join raw_sources chunk_sources
+        on chunk_sources.id = direct_chunks.raw_source_id
+      left join raw_sources direct_sources
+        on evidence_links.source_type = 'raw_source'
+        and direct_sources.id = evidence_links.source_id
+      left join raw_notes
+        on evidence_links.source_type = 'raw_note'
+        and raw_notes.id = evidence_links.source_id
+      left join raw_sources note_sources
+        on note_sources.id = raw_notes.raw_source_id
+      left join lateral (
+        select raw_source_chunks.*
+        from raw_source_chunks
+        where raw_source_chunks.raw_source_id = coalesce(
+          direct_chunks.raw_source_id,
+          direct_sources.id,
+          note_sources.id
+        )
+          and (direct_chunks.id is null or raw_source_chunks.id = direct_chunks.id)
+        order by raw_source_chunks.chunk_index asc
+        limit 3
+      ) chunks on true
+      where evidence_links.approval_status = 'approved'
+        and (
+          (evidence_links.target_type = 'knowledge_block' and evidence_links.target_id = any($1::uuid[]))
+          or (evidence_links.target_type = 'knowledge_version' and evidence_links.target_id = any($2::uuid[]))
+          or (evidence_links.target_type = 'knowledge_source' and evidence_links.target_id = any($3::uuid[]))
+        )
+      order by evidence_links.created_at desc, chunks.chunk_index asc
+    `,
+    [input.blockIds ?? [], input.versionIds ?? [], input.sourceIds ?? []],
+  );
+
+  const evidenceByTarget = new Map<string, KnowledgeEvidenceReference[]>();
+  for (const row of evidenceResult.rows) {
+    const key = evidenceKey(row.target_type, row.target_id);
+    evidenceByTarget.set(key, [...(evidenceByTarget.get(key) ?? []), mapEvidenceReference(row)]);
+  }
+  return evidenceByTarget;
+}
+
+async function buildKnowledgeSourceTimeline(source: KnowledgeSource): Promise<KnowledgeSourceTimeline> {
+  const versionResult = await query<KnowledgeVersionRow>(
+    `
+      select *
+      from knowledge_versions
+      where knowledge_source_id = $1
+      order by version_number desc
+    `,
+    [source.id],
+  );
+  const versions = versionResult.rows.map(mapKnowledgeVersion);
+  const versionIds = versions.map((version) => version.id);
+  const blockResult = await query<KnowledgeBlockRow>(
+    `
+      select *
+      from knowledge_blocks
+      where knowledge_version_id = any($1::uuid[])
+      order by knowledge_version_id, block_index asc
+    `,
+    [versionIds],
+  );
+  const blocksByVersion = new Map<string, KnowledgeBlock[]>();
+  for (const row of blockResult.rows) {
+    const block = mapKnowledgeBlock(row);
+    blocksByVersion.set(block.knowledgeVersionId, [
+      ...(blocksByVersion.get(block.knowledgeVersionId) ?? []),
+      block,
+    ]);
+  }
+
+  const evidenceByTarget = await listEvidenceReferencesForTargets({
+    blockIds: blockResult.rows.map((row) => row.id),
+    versionIds,
+    sourceIds: [source.id],
+  });
+
+  return {
+    source,
+    sourceEvidenceReferences: evidenceByTarget.get(evidenceKey("knowledge_source", source.id)) ?? [],
+    versions: versions.map((version) => {
+      const blocks = blocksByVersion.get(version.id) ?? [];
+      const blockEvidence = blocks.flatMap(
+        (block) => evidenceByTarget.get(evidenceKey("knowledge_block", block.id)) ?? [],
+      );
+      const isCurrent = version.id === source.currentVersionId;
+      return {
+        ...version,
+        isCurrent,
+        state: isCurrent ? "current" : "historical",
+        blocks,
+        evidenceReferences: [
+          ...(evidenceByTarget.get(evidenceKey("knowledge_version", version.id)) ?? []),
+          ...blockEvidence,
+        ],
+      };
+    }),
+  };
+}
+
 export interface KnowledgeRepository {
   upsertConcept(input: {
     userId?: string | null;
@@ -425,6 +553,17 @@ export interface KnowledgeRepository {
     impactLevel: number;
     approvalStatus: string;
   }): Promise<void>;
+  createEvidenceLinksFromRawNoteChunks(input: {
+    userId?: string | null;
+    rawNoteId: string;
+    targetType: string;
+    targetId: string;
+    confidence: string;
+    impactLevel: number;
+    approvalStatus: string;
+  }): Promise<number>;
+  getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null>;
+  getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null>;
 }
 
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
@@ -600,66 +739,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     const blockIds = blockResult.rows.map((row) => row.block_id);
     const versionIds = [...new Set(blockResult.rows.map((row) => row.knowledge_version_id))];
     const sourceIds = [...new Set(blockResult.rows.map((row) => row.knowledge_source_id))];
-    const evidenceResult = await query<EvidenceReferenceRow>(
-      `
-        select
-          evidence_links.id,
-          evidence_links.source_type,
-          evidence_links.source_id,
-          coalesce(raw_notes.title, direct_sources.title, chunk_sources.title, note_sources.title, chunks.heading) as source_title,
-          coalesce(direct_chunks.raw_source_id, direct_sources.id, note_sources.id) as raw_source_id,
-          coalesce(chunk_sources.title, direct_sources.title, note_sources.title) as raw_source_title,
-          chunks.id as raw_source_chunk_id,
-          chunks.chunk_index,
-          chunks.heading as chunk_heading,
-          chunks.body_markdown as chunk_body_markdown,
-          evidence_links.confidence,
-          evidence_links.impact_level,
-          evidence_links.created_at,
-          evidence_links.target_type,
-          evidence_links.target_id
-        from evidence_links
-        left join raw_source_chunks direct_chunks
-          on evidence_links.source_type = 'raw_source_chunk'
-          and direct_chunks.id = evidence_links.source_id
-        left join raw_sources chunk_sources
-          on chunk_sources.id = direct_chunks.raw_source_id
-        left join raw_sources direct_sources
-          on evidence_links.source_type = 'raw_source'
-          and direct_sources.id = evidence_links.source_id
-        left join raw_notes
-          on evidence_links.source_type = 'raw_note'
-          and raw_notes.id = evidence_links.source_id
-        left join raw_sources note_sources
-          on note_sources.id = raw_notes.raw_source_id
-        left join lateral (
-          select raw_source_chunks.*
-          from raw_source_chunks
-          where raw_source_chunks.raw_source_id = coalesce(
-            direct_chunks.raw_source_id,
-            direct_sources.id,
-            note_sources.id
-          )
-            and (direct_chunks.id is null or raw_source_chunks.id = direct_chunks.id)
-          order by raw_source_chunks.chunk_index asc
-          limit 3
-        ) chunks on true
-        where evidence_links.approval_status = 'approved'
-          and (
-            (evidence_links.target_type = 'knowledge_block' and evidence_links.target_id = any($1::uuid[]))
-            or (evidence_links.target_type = 'knowledge_version' and evidence_links.target_id = any($2::uuid[]))
-            or (evidence_links.target_type = 'knowledge_source' and evidence_links.target_id = any($3::uuid[]))
-          )
-        order by evidence_links.created_at desc, chunks.chunk_index asc
-      `,
-      [blockIds, versionIds, sourceIds],
-    );
-
-    const evidenceByTarget = new Map<string, KnowledgeEvidenceReference[]>();
-    for (const row of evidenceResult.rows) {
-      const key = evidenceKey(row.target_type, row.target_id);
-      evidenceByTarget.set(key, [...(evidenceByTarget.get(key) ?? []), mapEvidenceReference(row)]);
-    }
+    const evidenceByTarget = await listEvidenceReferencesForTargets({ blockIds, versionIds, sourceIds });
 
     return blockResult.rows.map((row) => {
       const evidenceReferences = [
@@ -958,6 +1038,36 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     return result.rows.map(mapKnowledgeBlock);
   }
 
+  async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {
+    const sourceResult = await query<KnowledgeSourceRow>(
+      `
+        select *
+        from knowledge_sources
+        where id = $1
+        limit 1
+      `,
+      [id],
+    );
+    const source = sourceResult.rows[0] ? mapKnowledgeSource(sourceResult.rows[0]) : null;
+    return source ? buildKnowledgeSourceTimeline(source) : null;
+  }
+
+  async getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null> {
+    const sourceResult = await query<KnowledgeSourceRow>(
+      `
+        select knowledge_sources.*
+        from knowledge_sources
+        join knowledge_versions on knowledge_versions.knowledge_source_id = knowledge_sources.id
+        where knowledge_versions.compiled_note_id = $1
+        order by knowledge_versions.created_at desc
+        limit 1
+      `,
+      [id],
+    );
+    const source = sourceResult.rows[0] ? mapKnowledgeSource(sourceResult.rows[0]) : null;
+    return source ? buildKnowledgeSourceTimeline(source) : null;
+  }
+
   async upsertMistake(input: {
     userId?: string | null;
     domain: string;
@@ -1189,5 +1299,55 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         input.approvalStatus,
       ],
     );
+  }
+
+  async createEvidenceLinksFromRawNoteChunks(input: {
+    userId?: string | null;
+    rawNoteId: string;
+    targetType: string;
+    targetId: string;
+    confidence: string;
+    impactLevel: number;
+    approvalStatus: string;
+  }) {
+    const result = await query<{ id: string }>(
+      `
+        insert into evidence_links (
+          user_id,
+          source_type,
+          source_id,
+          target_type,
+          target_id,
+          confidence,
+          impact_level,
+          approval_status
+        )
+        select
+          $1,
+          'raw_source_chunk',
+          raw_source_chunks.id,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7
+        from raw_notes
+        join raw_source_chunks on raw_source_chunks.raw_source_id = raw_notes.raw_source_id
+        where raw_notes.id = $2
+        order by raw_source_chunks.chunk_index asc
+        returning id
+      `,
+      [
+        input.userId ?? null,
+        input.rawNoteId,
+        input.targetType,
+        input.targetId,
+        input.confidence,
+        input.impactLevel,
+        input.approvalStatus,
+      ],
+    );
+
+    return result.rows.length;
   }
 }

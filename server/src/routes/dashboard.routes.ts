@@ -13,6 +13,8 @@ export function createDashboardRoutes(dashboardService: DashboardService) {
   router.post("/review-tasks/:id/complete", controller.completeReviewTask);
   router.get("/readiness-map", controller.readinessMap);
   router.get("/search", controller.search);
+  router.get("/knowledge-sources/:id/timeline", controller.knowledgeSourceTimeline);
+  router.get("/compiled-notes/:id/timeline", controller.compiledNoteTimeline);
 
   return router;
 }

@@ -72,4 +72,24 @@ export class DashboardController {
       next(error);
     }
   };
+
+  knowledgeSourceTimeline = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        timeline: await this.dashboardService.getKnowledgeSourceTimeline(requireStringParam(request, "id")),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  compiledNoteTimeline = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        timeline: await this.dashboardService.getCompiledNoteTimeline(requireStringParam(request, "id")),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

@@ -4,6 +4,7 @@ import type {
   AgentRunDetail,
   BoardKey,
   CompiledNote,
+  KnowledgeSourceTimeline,
   Mistake,
   NoteCardPosition,
   NoteLink,
@@ -98,4 +99,11 @@ export async function loadRawNoteIndexingTrace(rawNoteId: string) {
 
 export async function loadAgentRunDetail(agentRunId: string) {
   return requestJson<AgentRunDetail>(`/agent-runs/${agentRunId}`)
+}
+
+export async function loadKnowledgeTimelineForCompiledNote(compiledNoteId: string) {
+  const result = await requestJson<{ timeline: KnowledgeSourceTimeline }>(
+    `/compiled-notes/${compiledNoteId}/timeline`,
+  )
+  return result.timeline
 }

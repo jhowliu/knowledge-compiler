@@ -42,4 +42,20 @@ export class DashboardService {
       limit: options.limit ?? 20,
     });
   }
+
+  async getKnowledgeSourceTimeline(id: string) {
+    const timeline = await this.knowledgeRepository.getKnowledgeSourceTimeline(id);
+    if (!timeline) {
+      throw new Error("Knowledge source timeline not found");
+    }
+    return timeline;
+  }
+
+  async getCompiledNoteTimeline(id: string) {
+    const timeline = await this.knowledgeRepository.getKnowledgeSourceTimelineByCompiledNoteId(id);
+    if (!timeline) {
+      throw new Error("Knowledge source timeline not found");
+    }
+    return timeline;
+  }
 }

@@ -22,11 +22,17 @@ export class AgentRunController {
   enqueue = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const agentRun = await this.agentRunQueueService.enqueue(request.body);
-      setTimeout(() => {
-        this.agentRunQueueService.process(agentRun.id).catch((error) => {
-          console.error("agent run failed", error);
-        });
-      }, 0);
+      this.processSoon(agentRun.id);
+      response.status(202).json({ agentRun });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  retry = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const agentRun = await this.agentRunQueueService.retry(requireStringParam(request, "id"));
+      this.processSoon(agentRun.id);
       response.status(202).json({ agentRun });
     } catch (error) {
       next(error);
@@ -52,4 +58,12 @@ export class AgentRunController {
       next(error);
     }
   };
+
+  private processSoon(agentRunId: string) {
+    setTimeout(() => {
+      this.agentRunQueueService.process(agentRunId).catch((error) => {
+        console.error("agent run failed", error);
+      });
+    }, 0);
+  }
 }

@@ -102,6 +102,12 @@ function App() {
     setIsAgentRunDetailLoading(false)
   }
 
+  function openProposalFromAgentRun(proposalId: string) {
+    setSelectedProposalId(proposalId)
+    setActiveView('update_proposals')
+    closeAgentRunDetail()
+  }
+
   useEffect(() => {
     void refresh()
   }, [activeBoardKey])
@@ -499,6 +505,28 @@ function App() {
     }
   }
 
+  async function retryAgentRun(agentRunId: string) {
+    try {
+      const result = await requestJson<{ agentRun: AgentRun }>(`/agent-runs/${agentRunId}/retry`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      setWorkspaceData((current) => ({
+        ...current,
+        agentRuns: [result.agentRun, ...current.agentRuns],
+      }))
+      setNotice('Agent retry started.')
+      setError(null)
+      await openAgentRunDetail(result.agentRun.id)
+      window.setTimeout(() => {
+        void refresh()
+      }, 900)
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to retry agent run')
+      setNotice(null)
+    }
+  }
+
   return (
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
@@ -606,6 +634,8 @@ function App() {
           detail={selectedAgentRunDetail}
           isLoading={isAgentRunDetailLoading}
           onClose={closeAgentRunDetail}
+          onOpenProposal={openProposalFromAgentRun}
+          onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
         />
       ) : null}
     </main>

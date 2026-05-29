@@ -59,6 +59,7 @@
 - Started issue #22 implementation on `codex/review-inbox-updates-links`: Review Inbox now uses Updates, Links, and Done tabs, summarizes proposals as knowledge updates plus relationship links, and hides legacy interview-specific proposal actions under a generic compatibility group.
 - Started issue #23 implementation on `codex/knowledge-block-retrieval`: `/search` now retrieves approved active `knowledge_blocks`, supports explicit archived-block inclusion, and returns evidence references that can point back to raw source chunks.
 - Started issue #24 implementation on `codex/knowledge-evolution-timeline`: approval now creates raw-source-chunk evidence links for knowledge versions, backend exposes knowledge-source and compiled-note timeline endpoints, and the graph inspector shows a lightweight Evolution panel.
+- Started issue #31 implementation on `codex/agent-run-retry-navigation`: failed agent runs can be retried from a new retry endpoint and drawer action, and generated proposals can be opened directly in the Review Inbox.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -103,6 +104,7 @@
 - Review Inbox should present generalized knowledge updates first, link approval second, and avoid exposing interview-specific categories in the primary review surface.
 - Search retrieval should use approved `knowledge_blocks` as the answer corpus; raw source chunks stay attached as evidence references rather than being searched as the primary corpus.
 - Knowledge evolution should be inspectable from the note card surface: current and historical versions, proposal IDs, dates, blocks, and source chunk evidence should live together in one timeline payload.
+- Agent runs should stay actionable after failure: retry creates a new run with the original type/input plus retry lineage, while proposal navigation should move the user to the approval surface instead of making them hunt for the generated proposal.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -143,10 +145,10 @@
 - Updates/Links/Done Review Inbox validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass.
 - Knowledge block retrieval validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass. Route tests cover active block search, evidence references, and opt-in archived block retrieval.
 - Knowledge evolution timeline validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover chunk evidence link creation during approval and timeline retrieval by knowledge source and compiled note.
+- Agent run retry/navigation validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover retrying failed runs and rejecting retry on completed runs.
 
 ## Next Target
-- Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
-- Close issue #24 through the PR merge, then choose the next simplified workspace issue or add retry/navigation improvements for agent runs.
+- Close issue #31 through the PR merge, then revisit the remaining stale #12 spec issue and decide whether to close it as superseded by the LLM-only flow.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

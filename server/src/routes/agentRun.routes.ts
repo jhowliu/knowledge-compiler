@@ -21,6 +21,7 @@ export function createAgentRunRoutes(
   router.get("/", controller.list);
   router.post("/", validateBody(enqueueAgentRunSchema), controller.enqueue);
   router.post("/note-ingestion", validateBody(ingestRawNoteSchema), controller.ingestRawNote);
+  router.post("/:id/retry", controller.retry);
   router.get("/:id", controller.get);
 
   return router;

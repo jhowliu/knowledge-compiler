@@ -3,6 +3,8 @@ import type {
   Concept,
   CreateKnowledgeBlockInput,
   KnowledgeBlock,
+  KnowledgeBlockSearchResult,
+  KnowledgeEvidenceReference,
   KnowledgeSource,
   KnowledgeSourceSnapshot,
   KnowledgeVersion,
@@ -13,6 +15,19 @@ import type {
 } from "../../src/domain/knowledge.js";
 import type { KnowledgeRepository } from "../../src/repositories/knowledge.repository.js";
 
+type EvidenceLinkRecord = {
+  id: string;
+  userId: string | null;
+  sourceType: string;
+  sourceId: string;
+  targetType: string;
+  targetId: string;
+  confidence: string;
+  impactLevel: number;
+  approvalStatus: string;
+  createdAt: Date;
+};
+
 export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly concepts: Concept[] = [];
   readonly compiledNotes: CompiledNote[] = [];
@@ -22,6 +37,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly mistakes: Mistake[] = [];
   readonly reviewTasks: ReviewTask[] = [];
   readonly readinessItems: ReadinessItem[] = [];
+  readonly evidenceLinks: EvidenceLinkRecord[] = [];
   relatedResults: SearchResult[] = [];
 
   async upsertConcept(input: {
@@ -45,6 +61,69 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async searchRelated(): Promise<SearchResult[]> {
     return this.relatedResults;
+  }
+
+  async searchKnowledgeBlocks(input: {
+    query: string;
+    limit: number;
+    includeArchived?: boolean;
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = this.knowledgeBlocks
+      .filter((block) => input.includeArchived || block.status === "active")
+      .map((block) => {
+        const source = this.knowledgeSources.find((item) => item.id === block.knowledgeSourceId);
+        const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
+        const haystack = `${source?.title ?? ""} ${block.heading ?? ""} ${block.bodyMarkdown}`.toLowerCase();
+        const rank = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
+        return { block, source, version, rank };
+      })
+      .filter((item) => item.source && item.version && item.source.status === "active" && item.rank > 0)
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, input.limit);
+
+    return matches.map(({ block, source, version, rank }) => {
+      const evidenceReferences = this.evidenceLinks
+        .filter(
+          (link) =>
+            link.approvalStatus === "approved" &&
+            ((link.targetType === "knowledge_block" && link.targetId === block.id) ||
+              (link.targetType === "knowledge_version" && link.targetId === block.knowledgeVersionId) ||
+              (link.targetType === "knowledge_source" && link.targetId === block.knowledgeSourceId)),
+        )
+        .map((link): KnowledgeEvidenceReference => ({
+          id: link.id,
+          sourceType: link.sourceType,
+          sourceId: link.sourceId,
+          sourceTitle: null,
+          rawSourceId: link.sourceType === "raw_source" ? link.sourceId : null,
+          rawSourceTitle: null,
+          rawSourceChunkId: link.sourceType === "raw_source_chunk" ? link.sourceId : null,
+          chunkIndex: null,
+          chunkHeading: null,
+          chunkBodyMarkdown: null,
+          confidence: link.confidence,
+          impactLevel: link.impactLevel,
+          createdAt: link.createdAt,
+        }));
+
+      return {
+        blockId: block.id,
+        knowledgeSourceId: block.knowledgeSourceId,
+        knowledgeVersionId: block.knowledgeVersionId,
+        title: source?.title ?? "Untitled",
+        domain: source?.domain ?? "general",
+        knowledgeType: source?.knowledgeType ?? "note",
+        versionNumber: version?.versionNumber ?? 1,
+        blockIndex: block.blockIndex,
+        heading: block.heading,
+        bodyMarkdown: block.bodyMarkdown,
+        rank,
+        status: block.status,
+        updatedAt: block.updatedAt,
+        evidenceReferences,
+      };
+    });
   }
 
   async upsertCompiledNote(input: {
@@ -255,5 +334,27 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.readinessItems;
   }
 
-  async createEvidenceLink(): Promise<void> {}
+  async createEvidenceLink(input: {
+    userId?: string | null;
+    sourceType: string;
+    sourceId: string;
+    targetType: string;
+    targetId: string;
+    confidence: string;
+    impactLevel: number;
+    approvalStatus: string;
+  }): Promise<void> {
+    this.evidenceLinks.push({
+      id: `evidence-${this.evidenceLinks.length + 1}`,
+      userId: input.userId ?? null,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      confidence: input.confidence,
+      impactLevel: input.impactLevel,
+      approvalStatus: input.approvalStatus,
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+    });
+  }
 }

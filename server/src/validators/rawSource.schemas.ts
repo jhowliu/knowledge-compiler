@@ -3,19 +3,21 @@ import { rawSourceRoles } from "../domain/rawSource.js";
 
 const rawSourceRoleSchema = z.enum(rawSourceRoles);
 
-export const createRawNoteSchema = z.object({
+export const createRawSourceSchema = z.object({
   userId: z.string().uuid().nullable().optional(),
   domain: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),
   title: z.string().min(1).nullable().optional(),
   bodyMarkdown: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const updateRawNoteSchema = z.object({
+export const updateRawSourceSchema = z.object({
   domain: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),
   title: z.string().min(1).nullable().optional(),
   bodyMarkdown: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });

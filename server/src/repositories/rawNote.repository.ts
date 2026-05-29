@@ -4,8 +4,10 @@ import type { CreateRawNoteInput, RawNote, UpdateRawNoteInput } from "../domain/
 type RawNoteRow = {
   id: string;
   user_id: string | null;
+  raw_source_id: string | null;
   domain: string | null;
   source_type: string;
+  source_role: "reference" | "personal_note";
   title: string | null;
   body_markdown: string;
   extracted_data: unknown;
@@ -25,8 +27,10 @@ function mapRawNote(row: RawNoteRow): RawNote {
   return {
     id: row.id,
     userId: row.user_id,
+    rawSourceId: row.raw_source_id,
     domain: row.domain,
     sourceType: row.source_type,
+    sourceRole: row.source_role,
     title: row.title,
     bodyMarkdown: row.body_markdown,
     extractedData: row.extracted_data,
@@ -40,18 +44,22 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
       `
         insert into raw_notes (
           user_id,
+          raw_source_id,
           domain,
           source_type,
+          source_role,
           title,
           body_markdown
         )
-        values ($1, $2, $3, $4, $5)
+        values ($1, $2, $3, $4, $5, $6, $7)
         returning *
       `,
       [
         input.userId ?? null,
+        input.rawSourceId ?? null,
         input.domain ?? null,
         input.sourceType ?? "manual",
+        input.sourceRole ?? "personal_note",
         input.title ?? null,
         input.bodyMarkdown,
       ],
@@ -92,13 +100,22 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
       `
         update raw_notes
         set domain = $2,
-            title = $3,
-            body_markdown = $4,
+            source_type = $3,
+            source_role = $4,
+            title = $5,
+            body_markdown = $6,
             extracted_data = '{}'::jsonb
         where id = $1
         returning *
       `,
-      [id, input.domain ?? null, input.title ?? null, input.bodyMarkdown],
+      [
+        id,
+        input.domain ?? null,
+        input.sourceType ?? "manual",
+        input.sourceRole ?? "personal_note",
+        input.title ?? null,
+        input.bodyMarkdown,
+      ],
     );
 
     return result.rows[0] ? mapRawNote(result.rows[0]) : null;

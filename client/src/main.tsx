@@ -9,7 +9,7 @@ import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { ReviewMapsPage } from './features/review-maps/ReviewMapsPage'
 import { loadAgentRunDetail, loadRawNoteIndexingTrace, loadWorkspaceData, requestJson, requestVoid } from './lib/api'
 import { boardOptions, emptyWorkspaceData } from './lib/constants'
-import type { ActiveView, AgentRun, AgentRunDetail, BoardKey, NoteCardPosition, Proposal, RawNote, RawNoteIndexingTrace, ThemeMode, WorkspaceData } from './types/domain'
+import type { ActiveView, AgentRun, AgentRunDetail, BoardKey, NoteCardPosition, Proposal, RawNote, RawNoteIndexingTrace, RawSourceRole, ThemeMode, WorkspaceData } from './types/domain'
 
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -26,6 +26,7 @@ function App() {
   })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
+  const [sourceRole, setSourceRole] = useState<RawSourceRole>('personal_note')
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
@@ -137,6 +138,8 @@ function App() {
   function rawNotePayload() {
     return {
       title: title.trim() || null,
+      sourceRole,
+      sourceType: sourceRole === 'reference' ? 'paper' : 'manual',
       bodyMarkdown,
     }
   }
@@ -183,6 +186,7 @@ function App() {
       await requestVoid(`/raw-notes/${selectedRawNoteId}`, { method: 'DELETE' })
       setTitle('')
       setBodyMarkdown('')
+      setSourceRole('personal_note')
       setSelectedRawNoteId(null)
       setSelectedRawNoteTrace(null)
       setIsRawNoteDirty(false)
@@ -238,6 +242,7 @@ function App() {
       setIsRawNoteDirty(false)
       if (result.rawNote) {
         setTitle(result.rawNote.title ?? '')
+        setSourceRole(result.rawNote.sourceRole)
         setBodyMarkdown(result.rawNote.bodyMarkdown)
       }
       setNotice(
@@ -311,6 +316,7 @@ function App() {
   function openNewRawNoteEditor() {
     setTitle('')
     setBodyMarkdown('')
+    setSourceRole('personal_note')
     setSelectedRawNoteId(null)
     setSelectedRawNoteTrace(null)
     setIsRawNoteDirty(false)
@@ -321,6 +327,7 @@ function App() {
     setSelectedRawNoteId(rawNote.id)
     setSelectedRawNoteTrace(null)
     setTitle(rawNote.title ?? '')
+    setSourceRole(rawNote.sourceRole)
     setBodyMarkdown(rawNote.bodyMarkdown)
     setIsRawNoteDirty(false)
     setNotice(null)
@@ -335,6 +342,11 @@ function App() {
 
   function updateDraftBody(value: string) {
     setBodyMarkdown(value)
+    setIsRawNoteDirty(true)
+  }
+
+  function updateSourceRole(value: RawSourceRole) {
+    setSourceRole(value)
     setIsRawNoteDirty(true)
   }
 
@@ -577,10 +589,12 @@ function App() {
             onNewNote={openNewRawNoteEditor}
             onSave={() => void saveSelectedRawNote()}
             onSelectRawNote={selectRawNote}
+            onSourceRoleChange={updateSourceRole}
             onSubmit={submitRawNote}
             onTitleChange={updateDraftTitle}
             rawNotes={workspaceData.rawNotes}
             selectedRawNoteId={selectedRawNoteId}
+            sourceRole={sourceRole}
             title={title}
             titleInputRef={titleInputRef}
           />

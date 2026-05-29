@@ -7,8 +7,10 @@ describe("CodingCompilerService", () => {
     const extraction = service.extract({
       id: "raw-note-1",
       userId: null,
+      rawSourceId: null,
       domain: null,
       sourceType: "manual",
+      sourceRole: "personal_note" as const,
       title: null,
       bodyMarkdown:
         "1334. Find the City With the Smallest Number of Neighbors. I missed that this was all-pairs shortest path and should use Floyd-Warshall.",
@@ -30,8 +32,10 @@ describe("CodingCompilerService", () => {
     const rawNote = {
       id: "raw-note-1",
       userId: null,
+      rawSourceId: null,
       domain: null,
       sourceType: "manual",
+      sourceRole: "personal_note" as const,
       title: null,
       bodyMarkdown:
         "1209. Remove All Adjacent Duplicates in String II. I did not realize I could use a counter with a stack.",
@@ -58,8 +62,10 @@ describe("CodingCompilerService", () => {
     const rawNote = {
       id: "raw-note-2",
       userId: null,
+      rawSourceId: null,
       domain: null,
       sourceType: "manual",
+      sourceRole: "personal_note" as const,
       title: "Shortest Path Decision Guide",
       bodyMarkdown: [
         "Shortest Path",

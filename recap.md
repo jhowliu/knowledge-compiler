@@ -52,6 +52,8 @@
 - Redesigned the Review Queue page into a simpler Agent Review Inbox with Notes, Links, and Done tabs; note updates are the primary approval flow and link suggestions are reviewed separately.
 - Removed deterministic fallback from the `compile_raw_note` LLM wiki indexing path. Raw-note compilation now requires `OPENAI_API_KEY`; if OpenAI indexing is unavailable, the agent run fails and no proposal is created.
 - Simplified Agent Review Inbox content review so proposal items are summarized into note/mistake/review/readiness groups by default, with full item payloads hidden behind an Advanced details disclosure.
+- Opened GitHub issue cards for the simplified Agentic Knowledge Workspace direction: generalized source ingestion (#19), knowledge sources/versions/blocks (#20), simplified LLM indexer outputs (#21), Updates/Links/Done review inbox (#22), knowledge-block retrieval (#23), and knowledge evolution timeline/evidence links (#24).
+- Started issue #19 implementation: added `raw_sources` and `raw_source_chunks` schema migration, raw source domain/repository/service/controller/routes/validators, Markdown chunk generation, raw-note-to-source compatibility bridging, and a Raw Notes UI source role switch for My Notes vs Paper.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -86,6 +88,11 @@
 - Client entrypoint should stay focused on app-level state, workspace view switching, and API command handlers; feature UI should live under `client/src/features/*`, reusable UI under `client/src/components`, shared helpers under `client/src/lib`, and shared shapes under `client/src/types`.
 - User-facing agentic indexing should always surface the approval boundary: raw notes can be indexed automatically, but compiled knowledge and note-link changes remain visible in Review Queue before/after approval.
 - Review UI should treat note/content approval as the main workflow and link approval as a secondary cleanup workflow.
+- Generalized product flow should use two source entry roles, `reference` and `personal_note`, but both should produce the same proposal schema.
+- Generalized LLM indexing should only propose `upsert_knowledge` and `create_link`; recall questions, mistakes, review tasks, and readiness updates are out of scope for the next simplified flow.
+- Raw chunks are ingestion evidence and indexing input. Approved `knowledge_blocks` are the primary retrieval/search corpus.
+- Knowledge evolution should be represented by dated versions and evidence links from raw source chunks to approved knowledge.
+- `/raw-notes` remains the compatibility endpoint for the current UI, but new writes now create a linked raw source and chunks when the raw source repository is configured.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -120,9 +127,11 @@
 - Agent Review Inbox prototype validation: `npm run typecheck`, `npm run build`, and browser smoke test of the empty inbox state pass with no console errors.
 - LLM-required indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass. Tests now cover a fake-LLM successful compile and a missing-key failure that creates no proposal.
 - Agent Review summary validation: `npm run typecheck`, `npm run build`, and browser smoke test of Update Proposals all pass with no console errors.
+- Source ingestion validation: `npm run migrate --workspace=server` applied `004_raw_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
+- Continue to #20 and #21 after PR #25 lands, so the simplified source -> indexing -> approval model can write approved knowledge sources, versions, and blocks.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

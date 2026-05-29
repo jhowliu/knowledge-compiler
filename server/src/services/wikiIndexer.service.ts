@@ -139,11 +139,11 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "Extract a coding-study raw note into LLM-wiki indexing JSON. Use multi-axis indexing: algorithms, patterns, constraint models, implementation schemas, mistakes, and review actions. Do not invent problem numbers.",
+              "Extract the source into LLM-wiki indexing JSON. Source roles can be personal_note or reference; use the role only as context, and do not force an interview-specific classification when the text does not support it. Use multi-axis indexing: algorithms, patterns, constraint models, implementation schemas, mistakes, and review actions. Do not invent problem numbers.",
           },
           {
             role: "user",
-            content: `Title: ${rawNote.title ?? "Untitled"}\n\n${rawNote.bodyMarkdown}`,
+            content: `Source role: ${rawNote.sourceRole}\nSource type: ${rawNote.sourceType}\nTitle: ${rawNote.title ?? "Untitled"}\n\n${rawNote.bodyMarkdown}`,
           },
         ],
         text: {

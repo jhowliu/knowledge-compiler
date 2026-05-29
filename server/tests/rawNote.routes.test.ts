@@ -3,22 +3,32 @@ import { createApp } from "../src/app.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
+import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 
 describe("raw note routes", () => {
   test("POST /raw-notes returns 201 for a valid payload", async () => {
     const repository = new InMemoryRawNoteRepository();
-    const app = createApp({ rawNoteRepository: repository, enablePhaseOneWorkflow: false });
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawNoteRepository: repository,
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
 
     const response = await request(app).post("/raw-notes").send({
+      sourceRole: "personal_note",
       title: "Stack with state",
       bodyMarkdown: "I missed the mutable counter stack pattern.",
     });
 
     expect(response.status).toBe(201);
     expect(response.body.rawNote.title).toBe("Stack with state");
+    expect(response.body.rawNote.sourceRole).toBe("personal_note");
+    expect(response.body.rawNote.rawSourceId).toBe("raw-source-1");
     expect(response.body.rawNote.sourceType).toBe("manual");
     expect(response.body.proposal).toBeNull();
     expect(repository.notes).toHaveLength(1);
+    expect(rawSourceRepository.sources).toHaveLength(1);
   });
 
   test("POST /raw-notes returns 400 for an invalid payload", async () => {

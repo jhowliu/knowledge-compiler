@@ -8,8 +8,10 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
     const note: RawNote = {
       id: `raw-note-${this.notes.length + 1}`,
       userId: input.userId ?? null,
+      rawSourceId: input.rawSourceId ?? null,
       domain: input.domain ?? null,
       sourceType: input.sourceType ?? "manual",
+      sourceRole: input.sourceRole ?? "personal_note",
       title: input.title ?? null,
       bodyMarkdown: input.bodyMarkdown,
       extractedData: {},
@@ -34,6 +36,8 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
     }
 
     note.domain = input.domain ?? null;
+    note.sourceType = input.sourceType ?? "manual";
+    note.sourceRole = input.sourceRole ?? "personal_note";
     note.title = input.title ?? null;
     note.bodyMarkdown = input.bodyMarkdown;
     note.extractedData = {};

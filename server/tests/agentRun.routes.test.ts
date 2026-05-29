@@ -112,4 +112,61 @@ describe("agent run routes", () => {
     });
     consoleError.mockRestore();
   });
+
+  test("retries a failed agent run with the original input and retry lineage", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const failedRun = await agentRunRepository.enqueue({
+      runType: "reindex_links",
+      input: { boardKey: "default" },
+    });
+    await agentRunRepository.fail(failedRun.id, "Temporary failure");
+    const app = createApp({
+      agentRunRepository,
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+    });
+
+    const response = await request(app).post(`/agent-runs/${failedRun.id}/retry`);
+
+    expect(response.status).toBe(202);
+    expect(response.body.agentRun).toMatchObject({
+      runType: "reindex_links",
+      status: "queued",
+      input: {
+        boardKey: "default",
+        retryOfAgentRunId: failedRun.id,
+      },
+    });
+    expect(agentRunRepository.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agentRunId: failedRun.id,
+          eventType: "retry_queued",
+        }),
+        expect.objectContaining({
+          agentRunId: response.body.agentRun.id,
+          eventType: "retry_of",
+        }),
+      ]),
+    );
+  });
+
+  test("does not retry a completed agent run", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const completedRun = await agentRunRepository.enqueue({
+      runType: "reindex_links",
+      input: {},
+    });
+    await agentRunRepository.complete(completedRun.id, {});
+    const app = createApp({
+      agentRunRepository,
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+    });
+
+    const response = await request(app).post(`/agent-runs/${completedRun.id}/retry`);
+
+    expect(response.status).toBe(400);
+    expect(agentRunRepository.agentRuns).toHaveLength(1);
+  });
 });

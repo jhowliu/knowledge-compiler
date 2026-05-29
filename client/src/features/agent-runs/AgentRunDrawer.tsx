@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { ExternalLink, RotateCw, X } from 'lucide-react'
 import { isRecord } from '../../lib/knowledge'
 import type { AgentRunDetail, WorkspaceData } from '../../types/domain'
 import {
@@ -15,11 +15,15 @@ export function AgentRunDrawer({
   data,
   isLoading,
   onClose,
+  onOpenProposal,
+  onRetry,
 }: {
   detail: AgentRunDetail | null
   data: WorkspaceData
   isLoading: boolean
   onClose: () => void
+  onOpenProposal: (proposalId: string) => void
+  onRetry: (agentRunId: string) => void
 }) {
   const agentRun = detail?.agentRun ?? null
   const output = isRecord(agentRun?.output) ? agentRun.output : {}
@@ -98,6 +102,16 @@ export function AgentRunDrawer({
                       {agentRun.error}
                     </p>
                   ) : null}
+                  {agentRun.status === 'failed' ? (
+                    <button
+                      className="mt-3 inline-flex h-9 items-center gap-2 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark"
+                      onClick={() => onRetry(agentRun.id)}
+                      type="button"
+                    >
+                      <RotateCw size={14} />
+                      Retry run
+                    </button>
+                  ) : null}
                 </div>
               </section>
 
@@ -146,6 +160,14 @@ export function AgentRunDrawer({
                     <p className="mt-2 text-[11px] font-semibold text-gray-500">
                       {generatedProposal.items.length} suggested updates
                     </p>
+                    <button
+                      className="mt-3 inline-flex h-9 items-center gap-2 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark"
+                      onClick={() => onOpenProposal(generatedProposal.id)}
+                      type="button"
+                    >
+                      <ExternalLink size={14} />
+                      Open in Review Inbox
+                    </button>
                   </article>
                 ) : (
                   <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">

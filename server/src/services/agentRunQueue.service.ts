@@ -1,4 +1,5 @@
 import type { CompiledNote } from "../domain/knowledge.js";
+import { AppError } from "../domain/errors.js";
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
@@ -76,6 +77,41 @@ export class AgentRunQueueService {
     });
 
     return agentRun;
+  }
+
+  async retry(agentRunId: string) {
+    const originalRun = await this.agentRunRepository.getById(agentRunId);
+    if (!originalRun) {
+      throw new AppError("Agent run not found", 404);
+    }
+    if (originalRun.status !== "failed") {
+      throw new AppError("Only failed agent runs can be retried", 400);
+    }
+
+    const originalInput =
+      originalRun.input && typeof originalRun.input === "object"
+        ? (originalRun.input as Record<string, unknown>)
+        : {};
+    const retryRun = await this.enqueue({
+      userId: originalRun.userId,
+      runType: originalRun.runType,
+      input: {
+        ...originalInput,
+        retryOfAgentRunId: originalRun.id,
+      },
+    });
+    await this.agentRunRepository.addEvent({
+      agentRunId: originalRun.id,
+      eventType: "retry_queued",
+      payload: { retryAgentRunId: retryRun.id },
+    });
+    await this.agentRunRepository.addEvent({
+      agentRunId: retryRun.id,
+      eventType: "retry_of",
+      payload: { originalAgentRunId: originalRun.id },
+    });
+
+    return retryRun;
   }
 
   async process(agentRunId: string) {

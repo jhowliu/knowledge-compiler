@@ -62,6 +62,7 @@
 - Started issue #31 implementation on `codex/agent-run-retry-navigation`: failed agent runs can be retried from a new retry endpoint and drawer action, and generated proposals can be opened directly in the Review Inbox.
 - Started issue #33 implementation on `codex/knowledge-search-ui`: the Notes Graph toolbar search now opens a Knowledge Search panel backed by `/search`, with approved knowledge-block results, metadata, evidence snippets, archived-block toggle, and loading/empty/error states.
 - Started issue #35 implementation on `codex/search-result-inspector-cleanup`: search results can be selected to inspect the full block, evidence list, and knowledge-source evolution timeline; duplicate `db:migrate` scripts were removed; migration `006_drop_unused_agent_session_tables.sql` drops unused early agent session/tool-call tables.
+- Started issue #37 implementation on `codex/remove-legacy-review-surfaces`: removed legacy readiness/mistake/review-task UI/API surfaces, stopped generating/writing legacy proposal actions, removed frontend workspace dependencies on the old endpoints, and added migration `007_drop_legacy_review_surfaces.sql`.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -109,6 +110,7 @@
 - Agent runs should stay actionable after failure: retry creates a new run with the original type/input plus retry lineage, while proposal navigation should move the user to the approval surface instead of making them hunt for the generated proposal.
 - The first search UI should be an overlay from the Notes Graph toolbar rather than a new workspace page, so retrieval can be tested without adding another navigation surface.
 - Keep `agent_runs` and `agent_run_events` as the active runtime audit model; remove unused early `agent_sessions`, `agent_messages`, and `tool_calls` tables until a concrete runtime persistence design needs them.
+- Legacy mistake logs, review tasks, and readiness maps are removed from the active product model. Extraction may still keep `mistakes` as metadata, but durable writes now focus on approved knowledge, evidence links, and note links.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -152,10 +154,11 @@
 - Agent run retry/navigation validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover retrying failed runs and rejecting retry on completed runs.
 - Knowledge Search UI validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test all pass. The smoke test opened the panel from the toolbar, verified `/search` returned successfully, and confirmed no console errors; the local database returned zero matches for the tested query.
 - Search inspector / cleanup validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` all pass. Browser smoke test opened search, confirmed empty-state rendering and no console errors; the local database still has no active search hits to exercise a real selected-result detail.
+- Legacy review surface removal validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` all pass. Browser smoke test confirmed the app reloads without console errors and the removed `/mistakes`, `/review-tasks`, and `/readiness-map` endpoints return 404.
 
 ## Next Target
-- Close issue #35 through the PR merge.
-- Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
+- Close issue #37 through the PR merge, then start #38 canonical knowledge flow.
+- Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

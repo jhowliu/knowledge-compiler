@@ -1,7 +1,5 @@
 export type Confidence = "low" | "medium" | "high";
 
-export type ReadinessStatus = "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
-
 export type Concept = {
   id: string;
   userId: string | null;
@@ -148,45 +146,6 @@ export type ProposalItem = {
 
 export type ProposalWithItems = UpdateProposal & {
   items: ProposalItem[];
-};
-
-export type Mistake = {
-  id: string;
-  userId: string | null;
-  domain: string;
-  category: string | null;
-  title: string;
-  description: string;
-  status: string;
-  evidenceCount: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type ReviewTask = {
-  id: string;
-  userId: string | null;
-  domain: string;
-  title: string;
-  description: string;
-  status: string;
-  dueAt: Date | null;
-  sourceType: string | null;
-  sourceId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type ReadinessItem = {
-  id: string;
-  userId: string | null;
-  domain: string;
-  area: string;
-  status: ReadinessStatus;
-  rationale: string | null;
-  lastEvidenceAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export type NoteLink = {

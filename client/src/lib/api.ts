@@ -6,14 +6,11 @@ import type {
   CompiledNote,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
-  Mistake,
   NoteCardPosition,
   NoteLink,
   Proposal,
   RawNote,
   RawNoteIndexingTrace,
-  ReadinessItem,
-  ReviewTask,
   WorkspaceData,
 } from '../types/domain'
 
@@ -58,9 +55,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteCardPositions,
     agentRuns,
     reviewMaps,
-    mistakes,
-    reviewTasks,
-    readinessItems,
   ] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
@@ -72,9 +66,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
       ),
       requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
       requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
-      requestJson<{ mistakes: Mistake[] }>('/mistakes'),
-      requestJson<{ reviewTasks: ReviewTask[] }>('/review-tasks'),
-      requestJson<{ readinessItems: ReadinessItem[] }>('/readiness-map'),
     ])
 
   return {
@@ -85,9 +76,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteCardPositions: noteCardPositions.noteCardPositions,
     agentRuns: agentRuns.agentRuns,
     reviewMaps: reviewMaps.reviewMaps,
-    mistakes: mistakes.mistakes,
-    reviewTasks: reviewTasks.reviewTasks,
-    readinessItems: readinessItems.readinessItems,
   }
 }
 

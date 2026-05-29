@@ -9,7 +9,6 @@ export const boardOptions: Array<{ key: BoardKey; label: string }> = [
   { key: 'default', label: 'Default' },
   { key: 'algorithms', label: 'Algorithms' },
   { key: 'review-maps', label: 'Review maps' },
-  { key: 'mistakes', label: 'Mistakes' },
 ]
 
 export const relationOptions = [
@@ -28,7 +27,4 @@ export const emptyWorkspaceData: WorkspaceData = {
   noteCardPositions: [],
   agentRuns: [],
   reviewMaps: [],
-  mistakes: [],
-  reviewTasks: [],
-  readinessItems: [],
 }

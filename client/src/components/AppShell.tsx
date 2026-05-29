@@ -31,7 +31,6 @@ export function LeftNavigation({
   activeView,
   themeMode,
   pendingCount,
-  weakCount,
   reviewMapCount,
   onCaptureClick,
   onKnowledgeMapClick,
@@ -43,7 +42,6 @@ export function LeftNavigation({
   activeView: ActiveView
   themeMode: ThemeMode
   pendingCount: number
-  weakCount: number
   reviewMapCount: number
   onCaptureClick: () => void
   onKnowledgeMapClick: () => void
@@ -159,13 +157,6 @@ export function LeftNavigation({
         <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
         {isDark ? <Moon size={16} /> : <Sun size={16} />}
       </button>
-
-      <div className={`rounded-lg p-3.5 ${isDark ? 'bg-[#262626]' : 'bg-slate-100'}`}>
-        <p className="mb-2 text-[13px] font-bold">Readiness</p>
-        <p className={`text-xs leading-5 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-          {weakCount || 0} weak areas need review today
-        </p>
-      </div>
     </aside>
   )
 }
@@ -179,7 +170,6 @@ export function TopToolbar({
   onSearchQueryChange,
   onSearchSubmit,
   searchQuery,
-  taskCount,
 }: {
   agentRunStatus: string
   noteCount: number
@@ -189,7 +179,6 @@ export function TopToolbar({
   onSearchQueryChange: (value: string) => void
   onSearchSubmit: () => void
   searchQuery: string
-  taskCount: number
 }) {
   return (
     <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">

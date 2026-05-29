@@ -411,47 +411,6 @@ export class CodingCompilerService {
       });
     }
 
-    for (const mistake of extraction.mistakes.slice(0, 2)) {
-      items.push({
-        actionType: "create_mistake",
-        targetType: "mistake",
-        payload: {
-          domain: "coding",
-          category: extraction.patterns[0] ?? "Pattern Recognition",
-          title: mistake.length > 120 ? `${mistake.slice(0, 117)}...` : mistake,
-          description: mistake,
-        },
-        rationale: "Track the recurring error separately from the pattern note.",
-      });
-    }
-
-    for (const action of extraction.reviewActions.slice(0, 2)) {
-      items.push({
-        actionType: "create_review_task",
-        targetType: "review_task",
-        payload: {
-          domain: "coding",
-          title: action,
-          description: `Generated from raw note: ${title}`,
-        },
-        rationale: "Turn the reflection into a concrete next practice action.",
-      });
-    }
-
-    for (const area of unique([...extraction.patterns, ...extraction.algorithms]).slice(0, 3)) {
-      items.push({
-        actionType: "upsert_readiness",
-        targetType: "readiness_item",
-        payload: {
-          domain: "coding",
-          area,
-          status: extraction.mistakes.length > 0 ? "Weak" : "Needs Review",
-          rationale: extraction.mistakes[0] ?? "New evidence from a coding practice note.",
-        },
-        rationale: "Update the coding readiness map using evidence from the raw note.",
-      });
-    }
-
     return {
       detectedDomain: "coding",
       detectedKnowledgeType: extraction.knowledgeType,

@@ -1567,8 +1567,6 @@ Agents should be used for:
 - Structured extraction
 - Related-note reasoning
 - Update proposal generation
-- Review task generation
-- Readiness map recommendations
 - Cleanup suggestions
 
 Agents should not directly mutate compiled knowledge without an approval step.
@@ -1582,9 +1580,7 @@ get_compiled_note(note_id)
 lookup_concepts(concepts)
 create_update_proposal(proposal)
 save_proposal_item(item)
-create_review_task(task)
 append_evidence_link(link)
-suggest_readiness_change(change)
 ```
 
 High-impact tools such as merge, split, archive, or rewrite should require explicit user confirmation.
@@ -1610,13 +1606,14 @@ update_proposals
 proposal_items
 approval_decisions
 
-mistakes
-review_tasks
-readiness_items
-
 agent_runs
 agent_run_events
 ```
+
+Legacy interview-specific tables for mistake logs, review tasks, and readiness maps were removed
+from the active MVP. The product now centers on sources, approved knowledge, evidence, links, and
+search/RAG. Those interview review concepts can return later as derived views rather than primary
+tables.
 
 Compiled notes should store human-readable Markdown plus structured fields.
 
@@ -1805,10 +1802,6 @@ GET /update-proposals/:id
 POST /update-proposals/:id/approve
 POST /update-proposals/:id/reject
 
-GET /review-tasks
-POST /review-tasks/:id/complete
-
-GET /readiness-map
 GET /search
 ```
 
@@ -1825,8 +1818,8 @@ The API should expose proposal status and agent run events so the UI can show pr
 6. Update proposal generation
 7. User approval / rejection flow
 8. Apply approved updates
-9. Mistake log, review tasks, readiness map
-10. Agent run event log
+9. Agent run event log
+10. Search approved knowledge with evidence
 ```
 
 The first implementation should optimize for correctness, traceability, and clean data boundaries over automation.

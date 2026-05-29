@@ -4,7 +4,7 @@ import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repositor
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 
 describe("ProposalService", () => {
-  test("approves proposal items into compiled knowledge, mistakes, tasks, and readiness", async () => {
+  test("approves proposal items into compiled and canonical knowledge", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();
     const noteLinks = new InMemoryNoteLinkRepository();
@@ -30,38 +30,6 @@ describe("ProposalService", () => {
               structuredData: { concepts: [] },
             },
             rationale: "Create problem note.",
-          },
-          {
-            actionType: "create_mistake",
-            targetType: "mistake",
-            payload: {
-              domain: "coding",
-              category: "Shortest Path",
-              title: "Missed all-pairs shortest path",
-              description: "Missed all-pairs shortest path",
-            },
-            rationale: "Track mistake.",
-          },
-          {
-            actionType: "create_review_task",
-            targetType: "review_task",
-            payload: {
-              domain: "coding",
-              title: "Practice APSP",
-              description: "Practice two APSP problems.",
-            },
-            rationale: "Create review task.",
-          },
-          {
-            actionType: "upsert_readiness",
-            targetType: "readiness_item",
-            payload: {
-              domain: "coding",
-              area: "All-Pairs Shortest Path",
-              status: "Weak",
-              rationale: "Missed recognition signal.",
-            },
-            rationale: "Update readiness.",
           },
         ],
       },
@@ -93,9 +61,6 @@ describe("ProposalService", () => {
           link.targetId === "knowledge-version-1",
       ),
     ).toHaveLength(2);
-    expect(knowledge.mistakes).toHaveLength(1);
-    expect(knowledge.reviewTasks).toHaveLength(1);
-    expect(knowledge.readinessItems).toHaveLength(1);
   });
 
   test("creates pending note link suggestions for related compiled notes", async () => {

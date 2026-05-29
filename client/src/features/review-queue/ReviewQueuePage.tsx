@@ -5,7 +5,6 @@ import {
   ChevronDown,
   FileText,
   GitBranch,
-  ListChecks,
   RotateCw,
   Sparkles,
   X,
@@ -66,10 +65,12 @@ function proposalGroups(proposal: Proposal) {
       icon: GitBranch,
     },
     {
-      actionTypes: ['create_mistake', 'create_review_task', 'upsert_readiness'],
-      label: 'Other updates',
-      description: 'Additional compatibility updates from older proposals.',
-      icon: ListChecks,
+      actionTypes: proposal.items
+        .filter((item) => !['upsert_knowledge', 'upsert_compiled_note', 'create_link'].includes(item.actionType))
+        .map((item) => item.actionType),
+      label: 'Legacy items',
+      description: 'Older proposal items kept read-only for compatibility.',
+      icon: FileText,
     },
   ]
     .map((group) => ({
@@ -196,7 +197,7 @@ export function ReviewQueuePage({
         </div>
 
         <div className="mb-3 flex items-center gap-2 text-[12px] font-extrabold text-gray-500">
-          {activeTab === 'links' ? <GitBranch size={15} /> : <ListChecks size={15} />}
+          {activeTab === 'links' ? <GitBranch size={15} /> : <FileText size={15} />}
           {activeTab === 'links'
             ? 'Suggested note links'
             : activeTab === 'done'

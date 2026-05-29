@@ -21,40 +21,6 @@ export class DashboardController {
     }
   };
 
-  mistakes = async (_request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({ mistakes: await this.dashboardService.listMistakes() });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  reviewTasks = async (_request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({ reviewTasks: await this.dashboardService.listReviewTasks() });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  completeReviewTask = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({
-        reviewTask: await this.dashboardService.completeReviewTask(requireStringParam(request, "id")),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  readinessMap = async (_request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({ readinessItems: await this.dashboardService.listReadinessItems() });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   search = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const query = typeof request.query.q === "string" ? request.query.q : "";

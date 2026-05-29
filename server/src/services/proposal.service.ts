@@ -210,47 +210,8 @@ export class ProposalService {
       return;
     }
 
-    if (item.actionType === "create_mistake") {
-      const mistake = await this.knowledgeRepository.upsertMistake({
-        userId: proposal.userId,
-        domain: stringValue(payload, "domain", "coding"),
-        category: stringValue(payload, "category", "Pattern Recognition"),
-        title: stringValue(payload, "title", "Coding mistake"),
-        description: stringValue(payload, "description"),
-      });
-      await this.knowledgeRepository.createEvidenceLink({
-        userId: proposal.userId,
-        sourceType: "raw_note",
-        sourceId: proposal.rawNoteId ?? proposal.id,
-        targetType: "mistake",
-        targetId: mistake.id,
-        confidence: proposal.confidence,
-        impactLevel: proposal.impactLevel,
-        approvalStatus: "approved",
-      });
+    if (["create_mistake", "create_review_task", "upsert_readiness"].includes(item.actionType)) {
       return;
-    }
-
-    if (item.actionType === "create_review_task") {
-      await this.knowledgeRepository.createReviewTask({
-        userId: proposal.userId,
-        domain: stringValue(payload, "domain", "coding"),
-        title: stringValue(payload, "title", "Review coding note"),
-        description: stringValue(payload, "description"),
-        sourceType: "proposal",
-        sourceId: proposal.id,
-      });
-      return;
-    }
-
-    if (item.actionType === "upsert_readiness") {
-      await this.knowledgeRepository.upsertReadinessItem({
-        userId: proposal.userId,
-        domain: stringValue(payload, "domain", "coding"),
-        area: stringValue(payload, "area", "Coding"),
-        status: stringValue(payload, "status", "Needs Review") as never,
-        rationale: stringValue(payload, "rationale"),
-      });
     }
   }
 

@@ -1,7 +1,12 @@
-import { query } from "../db/postgres.js";
+import { query, transaction } from "../db/postgres.js";
 import type {
   CompiledNote,
   Concept,
+  CreateKnowledgeBlockInput,
+  KnowledgeBlock,
+  KnowledgeSource,
+  KnowledgeSourceSnapshot,
+  KnowledgeVersion,
   Mistake,
   ReadinessItem,
   ReviewTask,
@@ -27,6 +32,46 @@ type CompiledNoteRow = {
   structured_data: unknown;
   status: string;
   last_reviewed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type KnowledgeSourceRow = {
+  id: string;
+  user_id: string | null;
+  domain: string;
+  knowledge_type: string;
+  title: string;
+  status: string;
+  current_version_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type KnowledgeVersionRow = {
+  id: string;
+  knowledge_source_id: string;
+  compiled_note_id: string | null;
+  proposal_id: string | null;
+  version_number: number;
+  title: string;
+  body_markdown: string;
+  structured_data: unknown;
+  change_summary: string | null;
+  created_at: Date;
+};
+
+type KnowledgeBlockRow = {
+  id: string;
+  knowledge_source_id: string;
+  knowledge_version_id: string;
+  block_index: number;
+  heading: string | null;
+  body_markdown: string;
+  token_estimate: number;
+  status: string;
+  metadata: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
 };
@@ -107,6 +152,52 @@ function mapCompiledNote(row: CompiledNoteRow): CompiledNote {
     structuredData: row.structured_data,
     status: row.status,
     lastReviewedAt: row.last_reviewed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapKnowledgeSource(row: KnowledgeSourceRow): KnowledgeSource {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    domain: row.domain,
+    knowledgeType: row.knowledge_type,
+    title: row.title,
+    status: row.status,
+    currentVersionId: row.current_version_id,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapKnowledgeVersion(row: KnowledgeVersionRow): KnowledgeVersion {
+  return {
+    id: row.id,
+    knowledgeSourceId: row.knowledge_source_id,
+    compiledNoteId: row.compiled_note_id,
+    proposalId: row.proposal_id,
+    versionNumber: row.version_number,
+    title: row.title,
+    bodyMarkdown: row.body_markdown,
+    structuredData: row.structured_data,
+    changeSummary: row.change_summary,
+    createdAt: row.created_at,
+  };
+}
+
+function mapKnowledgeBlock(row: KnowledgeBlockRow): KnowledgeBlock {
+  return {
+    id: row.id,
+    knowledgeSourceId: row.knowledge_source_id,
+    knowledgeVersionId: row.knowledge_version_id,
+    blockIndex: row.block_index,
+    heading: row.heading,
+    bodyMarkdown: row.body_markdown,
+    tokenEstimate: row.token_estimate,
+    status: row.status,
+    metadata: row.metadata,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -200,6 +291,19 @@ export interface KnowledgeRepository {
   }): Promise<CompiledNote>;
   listCompiledNotes(limit: number): Promise<CompiledNote[]>;
   listReviewMaps(limit: number): Promise<CompiledNote[]>;
+  upsertKnowledgeSourceVersion(input: {
+    userId?: string | null;
+    domain: string;
+    knowledgeType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    compiledNoteId?: string | null;
+    proposalId?: string | null;
+    changeSummary?: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+  }): Promise<KnowledgeSourceSnapshot>;
+  listActiveKnowledgeBlocks(limit: number): Promise<KnowledgeBlock[]>;
   upsertMistake(input: {
     userId?: string | null;
     domain: string;
@@ -455,6 +559,203 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     return result.rows.map(mapCompiledNote);
+  }
+
+  async upsertKnowledgeSourceVersion(input: {
+    userId?: string | null;
+    domain: string;
+    knowledgeType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    compiledNoteId?: string | null;
+    proposalId?: string | null;
+    changeSummary?: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+  }): Promise<KnowledgeSourceSnapshot> {
+    return transaction(async (transactionQuery) => {
+      const existing = await transactionQuery<KnowledgeSourceRow>(
+        `
+          select *
+          from knowledge_sources
+          where user_id is not distinct from $1
+            and domain = $2
+            and knowledge_type = $3
+            and lower(title) = lower($4)
+            and status = 'active'
+          limit 1
+        `,
+        [input.userId ?? null, input.domain, input.knowledgeType, input.title],
+      );
+
+      const source = existing.rows[0]
+        ? mapKnowledgeSource(
+            (
+              await transactionQuery<KnowledgeSourceRow>(
+                `
+                  update knowledge_sources
+                  set title = $2,
+                      metadata = metadata || $3::jsonb,
+                      updated_at = now()
+                  where id = $1
+                  returning *
+                `,
+                [
+                  existing.rows[0].id,
+                  input.title,
+                  {
+                    lastProposalId: input.proposalId ?? null,
+                    lastCompiledNoteId: input.compiledNoteId ?? null,
+                  },
+                ],
+              )
+            ).rows[0],
+          )
+        : mapKnowledgeSource(
+            (
+              await transactionQuery<KnowledgeSourceRow>(
+                `
+                  insert into knowledge_sources (
+                    user_id,
+                    domain,
+                    knowledge_type,
+                    title,
+                    metadata
+                  )
+                  values ($1, $2, $3, $4, $5)
+                  returning *
+                `,
+                [
+                  input.userId ?? null,
+                  input.domain,
+                  input.knowledgeType,
+                  input.title,
+                  {
+                    createdByProposalId: input.proposalId ?? null,
+                    compiledNoteId: input.compiledNoteId ?? null,
+                  },
+                ],
+              )
+            ).rows[0],
+          );
+
+      const versionNumberResult = await transactionQuery<{ version_number: number }>(
+        `
+          select coalesce(max(version_number), 0) + 1 as version_number
+          from knowledge_versions
+          where knowledge_source_id = $1
+        `,
+        [source.id],
+      );
+      const versionNumber = Number(versionNumberResult.rows[0]?.version_number ?? 1);
+
+      const version = mapKnowledgeVersion(
+        (
+          await transactionQuery<KnowledgeVersionRow>(
+            `
+              insert into knowledge_versions (
+                knowledge_source_id,
+                compiled_note_id,
+                proposal_id,
+                version_number,
+                title,
+                body_markdown,
+                structured_data,
+                change_summary
+              )
+              values ($1, $2, $3, $4, $5, $6, $7, $8)
+              returning *
+            `,
+            [
+              source.id,
+              input.compiledNoteId ?? null,
+              input.proposalId ?? null,
+              versionNumber,
+              input.title,
+              input.bodyMarkdown,
+              input.structuredData,
+              input.changeSummary ?? null,
+            ],
+          )
+        ).rows[0],
+      );
+
+      await transactionQuery(
+        `
+          update knowledge_blocks
+          set status = 'archived',
+              updated_at = now()
+          where knowledge_source_id = $1
+            and status = 'active'
+        `,
+        [source.id],
+      );
+
+      const savedBlocks: KnowledgeBlock[] = [];
+      for (const block of input.blocks) {
+        const blockResult = await transactionQuery<KnowledgeBlockRow>(
+          `
+            insert into knowledge_blocks (
+              knowledge_source_id,
+              knowledge_version_id,
+              block_index,
+              heading,
+              body_markdown,
+              token_estimate,
+              metadata
+            )
+            values ($1, $2, $3, $4, $5, $6, $7)
+            returning *
+          `,
+          [
+            source.id,
+            version.id,
+            block.blockIndex,
+            block.heading ?? null,
+            block.bodyMarkdown,
+            block.tokenEstimate,
+            block.metadata ?? {},
+          ],
+        );
+        savedBlocks.push(mapKnowledgeBlock(blockResult.rows[0]));
+      }
+
+      const updatedSource = mapKnowledgeSource(
+        (
+          await transactionQuery<KnowledgeSourceRow>(
+            `
+              update knowledge_sources
+              set current_version_id = $2,
+                  updated_at = now()
+              where id = $1
+              returning *
+            `,
+            [source.id, version.id],
+          )
+        ).rows[0],
+      );
+
+      return {
+        source: updatedSource,
+        version,
+        blocks: savedBlocks,
+      };
+    });
+  }
+
+  async listActiveKnowledgeBlocks(limit: number) {
+    const result = await query<KnowledgeBlockRow>(
+      `
+        select *
+        from knowledge_blocks
+        where status = 'active'
+        order by updated_at desc
+        limit $1
+      `,
+      [limit],
+    );
+
+    return result.rows.map(mapKnowledgeBlock);
   }
 
   async upsertMistake(input: {

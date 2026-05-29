@@ -2,6 +2,7 @@ import type { ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
+import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -85,6 +86,30 @@ export class ProposalService {
         sourceId: proposal.rawNoteId ?? proposal.id,
         targetType: "compiled_note",
         targetId: compiledNote.id,
+        confidence: proposal.confidence,
+        impactLevel: proposal.impactLevel,
+        approvalStatus: "approved",
+      });
+
+      const knowledgeSnapshot = await this.knowledgeRepository.upsertKnowledgeSourceVersion({
+        userId: proposal.userId,
+        domain: compiledNote.domain,
+        knowledgeType: compiledNote.noteType,
+        title: compiledNote.title,
+        bodyMarkdown: compiledNote.bodyMarkdown,
+        structuredData: compiledNote.structuredData,
+        compiledNoteId: compiledNote.id,
+        proposalId: proposal.id,
+        changeSummary: item.rationale ?? proposal.rationale,
+        blocks: chunkKnowledgeMarkdown(compiledNote.bodyMarkdown),
+      });
+
+      await this.knowledgeRepository.createEvidenceLink({
+        userId: proposal.userId,
+        sourceType: "raw_note",
+        sourceId: proposal.rawNoteId ?? proposal.id,
+        targetType: "knowledge_version",
+        targetId: knowledgeSnapshot.version.id,
         confidence: proposal.confidence,
         impactLevel: proposal.impactLevel,
         approvalStatus: "approved",

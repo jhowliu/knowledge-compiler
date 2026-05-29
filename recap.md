@@ -54,6 +54,7 @@
 - Simplified Agent Review Inbox content review so proposal items are summarized into note/mistake/review/readiness groups by default, with full item payloads hidden behind an Advanced details disclosure.
 - Opened GitHub issue cards for the simplified Agentic Knowledge Workspace direction: generalized source ingestion (#19), knowledge sources/versions/blocks (#20), simplified LLM indexer outputs (#21), Updates/Links/Done review inbox (#22), knowledge-block retrieval (#23), and knowledge evolution timeline/evidence links (#24).
 - Started issue #19 implementation: added `raw_sources` and `raw_source_chunks` schema migration, raw source domain/repository/service/controller/routes/validators, Markdown chunk generation, raw-note-to-source compatibility bridging, and a Raw Notes UI source role switch for My Notes vs Paper.
+- Started issue #20 implementation on `codex/knowledge-sources`: added `knowledge_sources`, `knowledge_versions`, and `knowledge_blocks`; approval now creates a versioned canonical knowledge snapshot and active blocks while preserving `compiled_notes` compatibility.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -93,6 +94,7 @@
 - Raw chunks are ingestion evidence and indexing input. Approved `knowledge_blocks` are the primary retrieval/search corpus.
 - Knowledge evolution should be represented by dated versions and evidence links from raw source chunks to approved knowledge.
 - `/raw-notes` remains the compatibility endpoint for the current UI, but new writes now create a linked raw source and chunks when the raw source repository is configured.
+- `compiled_notes` remains the current UI compatibility model, while `knowledge_sources` / `knowledge_versions` / `knowledge_blocks` becomes the canonical approved knowledge model for upcoming retrieval and timeline work.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -128,10 +130,11 @@
 - LLM-required indexing validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass. Tests now cover a fake-LLM successful compile and a missing-key failure that creates no proposal.
 - Agent Review summary validation: `npm run typecheck`, `npm run build`, and browser smoke test of Update Proposals all pass with no console errors.
 - Source ingestion validation: `npm run migrate --workspace=server` applied `004_raw_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
+- Knowledge source validation: `npm run migrate --workspace=server` applied `005_knowledge_sources.sql`; `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` all pass afterward.
 
 ## Next Target
 - Add retry support for failed agent runs and expose proposal navigation from the Agent Run drawer.
-- Continue to #20 and #21 after PR #25 lands, so the simplified source -> indexing -> approval model can write approved knowledge sources, versions, and blocks.
+- Continue to #21 after PR #25/#20 work lands, so the LLM indexer emits the simplified `upsert_knowledge` and `create_link` proposal schema.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

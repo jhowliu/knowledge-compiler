@@ -8,10 +8,6 @@ export function createDashboardRoutes(dashboardService: DashboardService) {
 
   router.get("/compiled-notes", controller.compiledNotes);
   router.get("/review-maps", controller.reviewMaps);
-  router.get("/mistakes", controller.mistakes);
-  router.get("/review-tasks", controller.reviewTasks);
-  router.post("/review-tasks/:id/complete", controller.completeReviewTask);
-  router.get("/readiness-map", controller.readinessMap);
   router.get("/search", controller.search);
   router.get("/knowledge-sources/:id/timeline", controller.knowledgeSourceTimeline);
   router.get("/compiled-notes/:id/timeline", controller.compiledNoteTimeline);

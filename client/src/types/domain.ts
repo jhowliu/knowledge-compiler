@@ -2,7 +2,7 @@ export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps' | 'update_proposals'
 export type ThemeMode = 'light' | 'dark'
-export type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
+export type BoardKey = 'default' | 'algorithms' | 'review-maps'
 export type RawSourceRole = 'reference' | 'personal_note'
 
 export type DecisionRule = {
@@ -190,31 +190,6 @@ export type RawNoteIndexingTrace = {
   extractedData: unknown
 }
 
-export type Mistake = {
-  id: string
-  domain: string
-  category: string | null
-  title: string
-  description: string
-  evidenceCount: number
-}
-
-export type ReviewTask = {
-  id: string
-  domain: string
-  title: string
-  description: string
-  status: string
-}
-
-export type ReadinessItem = {
-  id: string
-  domain: string
-  area: string
-  status: string
-  rationale: string | null
-}
-
 export type WorkspaceData = {
   rawNotes: RawNote[]
   proposals: Proposal[]
@@ -223,9 +198,6 @@ export type WorkspaceData = {
   noteCardPositions: NoteCardPosition[]
   agentRuns: AgentRun[]
   reviewMaps: CompiledNote[]
-  mistakes: Mistake[]
-  reviewTasks: ReviewTask[]
-  readinessItems: ReadinessItem[]
 }
 
 export type RelatedNoteMatch = {

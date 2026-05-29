@@ -77,8 +77,6 @@ function App() {
   }, [selectedProposalId, workspaceData.proposals])
 
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
-  const weakCount = workspaceData.readinessItems.filter((item) => item.status === 'Weak').length
-  const openTaskCount = workspaceData.reviewTasks.filter((task) => task.status === 'open').length
   const latestAgentRun = workspaceData.agentRuns[0] ?? null
   const isAgentRunning = workspaceData.agentRuns.some((agentRun) =>
     ['queued', 'running'].includes(agentRun.status),
@@ -597,7 +595,6 @@ function App() {
         pendingCount={pendingCount}
         reviewMapCount={workspaceData.reviewMaps.length}
         themeMode={themeMode}
-        weakCount={weakCount}
       />
       <section className="flex min-w-0 flex-1 flex-col">
         {activeView === 'knowledge_map' ? (
@@ -611,7 +608,6 @@ function App() {
               onSearchQueryChange={setSearchQuery}
               onSearchSubmit={() => void runKnowledgeSearch()}
               searchQuery={searchQuery}
-              taskCount={openTaskCount}
             />
             {error ? (
               <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

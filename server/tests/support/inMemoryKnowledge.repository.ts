@@ -9,9 +9,6 @@ import type {
   KnowledgeSourceSnapshot,
   KnowledgeSourceTimeline,
   KnowledgeVersion,
-  Mistake,
-  ReadinessItem,
-  ReviewTask,
   SearchResult,
 } from "../../src/domain/knowledge.js";
 import type { KnowledgeRepository } from "../../src/repositories/knowledge.repository.js";
@@ -35,9 +32,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeSources: KnowledgeSource[] = [];
   readonly knowledgeVersions: KnowledgeVersion[] = [];
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
-  readonly mistakes: Mistake[] = [];
-  readonly reviewTasks: ReviewTask[] = [];
-  readonly readinessItems: ReadinessItem[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
@@ -257,96 +251,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       ? this.knowledgeSources.find((item) => item.id === version.knowledgeSourceId) ?? null
       : null;
     return source ? this.buildKnowledgeSourceTimeline(source) : null;
-  }
-
-  async upsertMistake(input: {
-    userId?: string | null;
-    domain: string;
-    category?: string | null;
-    title: string;
-    description: string;
-  }): Promise<Mistake> {
-    const mistake: Mistake = {
-      id: `mistake-${this.mistakes.length + 1}`,
-      userId: input.userId ?? null,
-      domain: input.domain,
-      category: input.category ?? null,
-      title: input.title,
-      description: input.description,
-      status: "active",
-      evidenceCount: 1,
-      createdAt: new Date("2026-05-24T00:00:00.000Z"),
-      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
-    };
-    this.mistakes.push(mistake);
-    return mistake;
-  }
-
-  async listMistakes(): Promise<Mistake[]> {
-    return this.mistakes;
-  }
-
-  async createReviewTask(input: {
-    userId?: string | null;
-    domain: string;
-    title: string;
-    description: string;
-    sourceType?: string | null;
-    sourceId?: string | null;
-  }): Promise<ReviewTask> {
-    const task: ReviewTask = {
-      id: `task-${this.reviewTasks.length + 1}`,
-      userId: input.userId ?? null,
-      domain: input.domain,
-      title: input.title,
-      description: input.description,
-      status: "open",
-      dueAt: null,
-      sourceType: input.sourceType ?? null,
-      sourceId: input.sourceId ?? null,
-      createdAt: new Date("2026-05-24T00:00:00.000Z"),
-      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
-    };
-    this.reviewTasks.push(task);
-    return task;
-  }
-
-  async listReviewTasks(): Promise<ReviewTask[]> {
-    return this.reviewTasks;
-  }
-
-  async completeReviewTask(id: string): Promise<ReviewTask | null> {
-    const task = this.reviewTasks.find((item) => item.id === id) ?? null;
-    if (task) {
-      task.status = "completed";
-    }
-    return task;
-  }
-
-  async upsertReadinessItem(input: {
-    userId?: string | null;
-    domain: string;
-    area: string;
-    status: "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
-    rationale: string;
-  }): Promise<ReadinessItem> {
-    const item: ReadinessItem = {
-      id: `readiness-${this.readinessItems.length + 1}`,
-      userId: input.userId ?? null,
-      domain: input.domain,
-      area: input.area,
-      status: input.status,
-      rationale: input.rationale,
-      lastEvidenceAt: new Date("2026-05-24T00:00:00.000Z"),
-      createdAt: new Date("2026-05-24T00:00:00.000Z"),
-      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
-    };
-    this.readinessItems.push(item);
-    return item;
-  }
-
-  async listReadinessItems(): Promise<ReadinessItem[]> {
-    return this.readinessItems;
   }
 
   async createEvidenceLink(input: {

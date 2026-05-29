@@ -15,26 +15,6 @@ export class DashboardService {
     return this.knowledgeRepository.listReviewMaps(25);
   }
 
-  async listMistakes() {
-    return this.knowledgeRepository.listMistakes(50);
-  }
-
-  async listReviewTasks() {
-    return this.knowledgeRepository.listReviewTasks(50);
-  }
-
-  async completeReviewTask(id: string) {
-    const task = await this.knowledgeRepository.completeReviewTask(id);
-    if (!task) {
-      throw new Error("Review task not found");
-    }
-    return task;
-  }
-
-  async listReadinessItems() {
-    return this.knowledgeRepository.listReadinessItems(50);
-  }
-
   async search(query: string, options: { includeArchived?: boolean; limit?: number } = {}) {
     return this.knowledgeRetrievalService.search({
       query,

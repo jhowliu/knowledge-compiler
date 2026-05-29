@@ -237,4 +237,15 @@ describe("dashboard routes", () => {
       isCurrent: true,
     });
   });
+
+  test("legacy review endpoints are no longer registered", async () => {
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      enablePhaseOneWorkflow: false,
+    });
+
+    await expect(request(app).get("/mistakes")).resolves.toMatchObject({ status: 404 });
+    await expect(request(app).get("/review-tasks")).resolves.toMatchObject({ status: 404 });
+    await expect(request(app).get("/readiness-map")).resolves.toMatchObject({ status: 404 });
+  });
 });

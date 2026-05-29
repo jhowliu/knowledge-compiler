@@ -27,7 +27,7 @@ describe("CodingCompilerService", () => {
     expect(extraction.mistakes[0]).toContain("missed");
   });
 
-  test("drafts proposal items for compiled knowledge, mistakes, tasks, and readiness", () => {
+  test("drafts proposal items for compiled knowledge only", () => {
     const service = new CodingCompilerService();
     const rawNote = {
       id: "raw-note-1",
@@ -47,14 +47,10 @@ describe("CodingCompilerService", () => {
     const proposal = service.draftProposal(rawNote, extraction, []);
 
     expect(proposal.detectedDomain).toBe("coding");
-    expect(proposal.items.map((item) => item.actionType)).toEqual(
-      expect.arrayContaining([
-        "upsert_compiled_note",
-        "create_mistake",
-        "create_review_task",
-        "upsert_readiness",
-      ]),
-    );
+    expect(proposal.items.map((item) => item.actionType)).toContain("upsert_compiled_note");
+    expect(proposal.items.some((item) => item.actionType === "create_mistake")).toBe(false);
+    expect(proposal.items.some((item) => item.actionType === "create_review_task")).toBe(false);
+    expect(proposal.items.some((item) => item.actionType === "upsert_readiness")).toBe(false);
   });
 
   test("keeps algorithm decision guides as review maps", () => {

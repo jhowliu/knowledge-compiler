@@ -10,9 +10,6 @@ import type {
   KnowledgeSourceSnapshot,
   KnowledgeSourceTimeline,
   KnowledgeVersion,
-  Mistake,
-  ReadinessItem,
-  ReviewTask,
   SearchResult,
 } from "../domain/knowledge.js";
 
@@ -75,45 +72,6 @@ type KnowledgeBlockRow = {
   token_estimate: number;
   status: string;
   metadata: Record<string, unknown>;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type MistakeRow = {
-  id: string;
-  user_id: string | null;
-  domain: string;
-  category: string | null;
-  title: string;
-  description: string;
-  status: string;
-  evidence_count: number;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type ReviewTaskRow = {
-  id: string;
-  user_id: string | null;
-  domain: string;
-  title: string;
-  description: string;
-  status: string;
-  due_at: Date | null;
-  source_type: string | null;
-  source_id: string | null;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type ReadinessItemRow = {
-  id: string;
-  user_id: string | null;
-  domain: string;
-  area: string;
-  status: "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
-  rationale: string | null;
-  last_evidence_at: Date | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -235,51 +193,6 @@ function mapKnowledgeBlock(row: KnowledgeBlockRow): KnowledgeBlock {
     tokenEstimate: row.token_estimate,
     status: row.status,
     metadata: row.metadata,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapMistake(row: MistakeRow): Mistake {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    domain: row.domain,
-    category: row.category,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    evidenceCount: row.evidence_count,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapReviewTask(row: ReviewTaskRow): ReviewTask {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    domain: row.domain,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    dueAt: row.due_at,
-    sourceType: row.source_type,
-    sourceId: row.source_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapReadinessItem(row: ReadinessItemRow): ReadinessItem {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    domain: row.domain,
-    area: row.area,
-    status: row.status,
-    rationale: row.rationale,
-    lastEvidenceAt: row.last_evidence_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -517,32 +430,6 @@ export interface KnowledgeRepository {
     blocks: CreateKnowledgeBlockInput[];
   }): Promise<KnowledgeSourceSnapshot>;
   listActiveKnowledgeBlocks(limit: number): Promise<KnowledgeBlock[]>;
-  upsertMistake(input: {
-    userId?: string | null;
-    domain: string;
-    category?: string | null;
-    title: string;
-    description: string;
-  }): Promise<Mistake>;
-  listMistakes(limit: number): Promise<Mistake[]>;
-  createReviewTask(input: {
-    userId?: string | null;
-    domain: string;
-    title: string;
-    description: string;
-    sourceType?: string | null;
-    sourceId?: string | null;
-  }): Promise<ReviewTask>;
-  listReviewTasks(limit: number): Promise<ReviewTask[]>;
-  completeReviewTask(id: string): Promise<ReviewTask | null>;
-  upsertReadinessItem(input: {
-    userId?: string | null;
-    domain: string;
-    area: string;
-    status: "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
-    rationale: string;
-  }): Promise<ReadinessItem>;
-  listReadinessItems(limit: number): Promise<ReadinessItem[]>;
   createEvidenceLink(input: {
     userId?: string | null;
     sourceType: string;
@@ -1066,202 +953,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
     const source = sourceResult.rows[0] ? mapKnowledgeSource(sourceResult.rows[0]) : null;
     return source ? buildKnowledgeSourceTimeline(source) : null;
-  }
-
-  async upsertMistake(input: {
-    userId?: string | null;
-    domain: string;
-    category?: string | null;
-    title: string;
-    description: string;
-  }) {
-    const existing = await query<MistakeRow>(
-      `
-        select *
-        from mistakes
-        where user_id is not distinct from $1
-          and domain = $2
-          and lower(title) = lower($3)
-        limit 1
-      `,
-      [input.userId ?? null, input.domain, input.title],
-    );
-
-    const result = existing.rows[0]
-      ? await query<MistakeRow>(
-          `
-            update mistakes
-            set evidence_count = evidence_count + 1,
-                description = case
-                  when length($2) > length(description) then $2
-                  else description
-                end,
-                updated_at = now()
-            where id = $1
-            returning *
-          `,
-          [existing.rows[0].id, input.description],
-        )
-      : await query<MistakeRow>(
-          `
-            insert into mistakes (
-              user_id,
-              domain,
-              category,
-              title,
-              description,
-              evidence_count
-            )
-            values ($1, $2, $3, $4, $5, 1)
-            returning *
-          `,
-          [input.userId ?? null, input.domain, input.category ?? null, input.title, input.description],
-        );
-
-    return mapMistake(result.rows[0]);
-  }
-
-  async listMistakes(limit: number) {
-    const result = await query<MistakeRow>(
-      `
-        select *
-        from mistakes
-        order by evidence_count desc, updated_at desc
-        limit $1
-      `,
-      [limit],
-    );
-
-    return result.rows.map(mapMistake);
-  }
-
-  async createReviewTask(input: {
-    userId?: string | null;
-    domain: string;
-    title: string;
-    description: string;
-    sourceType?: string | null;
-    sourceId?: string | null;
-  }) {
-    const result = await query<ReviewTaskRow>(
-      `
-        insert into review_tasks (
-          user_id,
-          domain,
-          title,
-          description,
-          source_type,
-          source_id
-        )
-        values ($1, $2, $3, $4, $5, $6)
-        returning *
-      `,
-      [
-        input.userId ?? null,
-        input.domain,
-        input.title,
-        input.description,
-        input.sourceType ?? null,
-        input.sourceId ?? null,
-      ],
-    );
-
-    return mapReviewTask(result.rows[0]);
-  }
-
-  async listReviewTasks(limit: number) {
-    const result = await query<ReviewTaskRow>(
-      `
-        select *
-        from review_tasks
-        order by case status when 'open' then 0 else 1 end,
-                 created_at desc
-        limit $1
-      `,
-      [limit],
-    );
-
-    return result.rows.map(mapReviewTask);
-  }
-
-  async completeReviewTask(id: string) {
-    const result = await query<ReviewTaskRow>(
-      `
-        update review_tasks
-        set status = 'completed',
-            updated_at = now()
-        where id = $1
-        returning *
-      `,
-      [id],
-    );
-
-    return result.rows[0] ? mapReviewTask(result.rows[0]) : null;
-  }
-
-  async upsertReadinessItem(input: {
-    userId?: string | null;
-    domain: string;
-    area: string;
-    status: "Missing" | "Weak" | "Needs Review" | "Okay" | "Strong";
-    rationale: string;
-  }) {
-    const existing = await query<ReadinessItemRow>(
-      `
-        select *
-        from readiness_items
-        where user_id is not distinct from $1
-          and domain = $2
-          and lower(area) = lower($3)
-        limit 1
-      `,
-      [input.userId ?? null, input.domain, input.area],
-    );
-
-    const result = existing.rows[0]
-      ? await query<ReadinessItemRow>(
-          `
-            update readiness_items
-            set status = $2,
-                rationale = $3,
-                last_evidence_at = now(),
-                updated_at = now()
-            where id = $1
-            returning *
-          `,
-          [existing.rows[0].id, input.status, input.rationale],
-        )
-      : await query<ReadinessItemRow>(
-          `
-            insert into readiness_items (
-              user_id,
-              domain,
-              area,
-              status,
-              rationale,
-              last_evidence_at
-            )
-            values ($1, $2, $3, $4, $5, now())
-            returning *
-          `,
-          [input.userId ?? null, input.domain, input.area, input.status, input.rationale],
-        );
-
-    return mapReadinessItem(result.rows[0]);
-  }
-
-  async listReadinessItems(limit: number) {
-    const result = await query<ReadinessItemRow>(
-      `
-        select *
-        from readiness_items
-        order by updated_at desc
-        limit $1
-      `,
-      [limit],
-    );
-
-    return result.rows.map(mapReadinessItem);
   }
 
   async createEvidenceLink(input: {

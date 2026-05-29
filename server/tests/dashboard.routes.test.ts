@@ -120,4 +120,121 @@ describe("dashboard routes", () => {
       status: "archived",
     });
   });
+
+  test("GET /knowledge-sources/:id/timeline returns versions and source evidence", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const first = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Agent Memory",
+      bodyMarkdown: "Initial memory note.",
+      structuredData: {},
+      proposalId: "proposal-1",
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Initial",
+          bodyMarkdown: "Memory starts with indexed observations.",
+          tokenEstimate: 6,
+        },
+      ],
+    });
+    const second = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Agent Memory",
+      bodyMarkdown: "Updated memory note.",
+      structuredData: {},
+      proposalId: "proposal-2",
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Updated",
+          bodyMarkdown: "Memory evolves from approved source evidence.",
+          tokenEstimate: 7,
+        },
+      ],
+    });
+    await knowledgeRepository.createEvidenceLink({
+      sourceType: "raw_source_chunk",
+      sourceId: "raw-source-chunk-1",
+      targetType: "knowledge_version",
+      targetId: first.version.id,
+      confidence: "high",
+      impactLevel: 1,
+      approvalStatus: "approved",
+    });
+    await knowledgeRepository.createEvidenceLink({
+      sourceType: "raw_source_chunk",
+      sourceId: "raw-source-chunk-2",
+      targetType: "knowledge_version",
+      targetId: second.version.id,
+      confidence: "high",
+      impactLevel: 2,
+      approvalStatus: "approved",
+    });
+
+    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const response = await request(app).get(`/knowledge-sources/${first.source.id}/timeline`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.timeline.source).toMatchObject({
+      id: first.source.id,
+      title: "Agent Memory",
+    });
+    expect(response.body.timeline.versions).toHaveLength(2);
+    expect(response.body.timeline.versions[0]).toMatchObject({
+      id: second.version.id,
+      versionNumber: 2,
+      state: "current",
+      isCurrent: true,
+      proposalId: "proposal-2",
+      evidenceReferences: [expect.objectContaining({ sourceId: "raw-source-chunk-2" })],
+    });
+    expect(response.body.timeline.versions[1]).toMatchObject({
+      id: first.version.id,
+      versionNumber: 1,
+      state: "historical",
+      isCurrent: false,
+      proposalId: "proposal-1",
+      evidenceReferences: [expect.objectContaining({ sourceId: "raw-source-chunk-1" })],
+    });
+  });
+
+  test("GET /compiled-notes/:id/timeline resolves the backing knowledge source", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const compiledNote = await knowledgeRepository.upsertCompiledNote({
+      domain: "research",
+      noteType: "paper_note",
+      title: "Compiled Memory",
+      bodyMarkdown: "Compiled note.",
+      structuredData: {},
+    });
+    await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Compiled Memory",
+      bodyMarkdown: "Compiled note.",
+      structuredData: {},
+      compiledNoteId: compiledNote.id,
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Compiled",
+          bodyMarkdown: "Compiled note.",
+          tokenEstimate: 3,
+        },
+      ],
+    });
+
+    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const response = await request(app).get(`/compiled-notes/${compiledNote.id}/timeline`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.timeline.source.title).toBe("Compiled Memory");
+    expect(response.body.timeline.versions[0]).toMatchObject({
+      compiledNoteId: compiledNote.id,
+      isCurrent: true,
+    });
+  });
 });

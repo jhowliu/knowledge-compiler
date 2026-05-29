@@ -135,6 +135,18 @@ export class ProposalService {
         approvalStatus: "approved",
       });
 
+      if (proposal.rawNoteId) {
+        await this.knowledgeRepository.createEvidenceLinksFromRawNoteChunks({
+          userId: proposal.userId,
+          rawNoteId: proposal.rawNoteId,
+          targetType: "knowledge_version",
+          targetId: knowledgeSnapshot.version.id,
+          confidence: proposal.confidence,
+          impactLevel: proposal.impactLevel,
+          approvalStatus: "approved",
+        });
+      }
+
       const structuredData = asRecord(payload.structuredData);
       const concepts = Array.isArray(structuredData.concepts) ? structuredData.concepts : [];
       const conceptNames: string[] = [];

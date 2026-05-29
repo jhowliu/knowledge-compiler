@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   GitBranch,
+  History,
   Link2,
   Maximize2,
   Plus,
@@ -12,10 +13,18 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
+import { loadKnowledgeTimelineForCompiledNote } from '../../lib/api'
 import { boardOptions, maxCanvasZoom, minCanvasZoom, relationOptions } from '../../lib/constants'
 import { reviewMapDetails } from '../../lib/knowledge'
-import type { BoardKey, CompiledNote, NoteLink, RelatedNoteMatch, WorkspaceData } from '../../types/domain'
-import { agentRunLabel, relationLabel, relationOptionLabel } from '../agent-runs/agentRunView'
+import type {
+  BoardKey,
+  CompiledNote,
+  KnowledgeSourceTimeline,
+  NoteLink,
+  RelatedNoteMatch,
+  WorkspaceData,
+} from '../../types/domain'
+import { agentRunLabel, relationLabel, relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
 
 function noteTypeLabel(noteType: string) {
   return noteType.replaceAll('_', ' ')
@@ -123,6 +132,8 @@ export function KnowledgeCanvas({
   const [canvasZoom, setCanvasZoom] = useState(1)
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 })
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [knowledgeTimeline, setKnowledgeTimeline] = useState<KnowledgeSourceTimeline | null>(null)
+  const [timelineStatus, setTimelineStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing'>('idle')
   const [panState, setPanState] = useState<{
     startClientX: number
     startClientY: number
@@ -157,6 +168,35 @@ export function KnowledgeCanvas({
     data.reviewMaps[0] ??
     notes[0] ??
     null
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedNote?.id) {
+      setKnowledgeTimeline(null)
+      setTimelineStatus('idle')
+      return
+    }
+
+    setTimelineStatus('loading')
+    loadKnowledgeTimelineForCompiledNote(selectedNote.id)
+      .then((timeline) => {
+        if (!cancelled) {
+          setKnowledgeTimeline(timeline)
+          setTimelineStatus('loaded')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setKnowledgeTimeline(null)
+          setTimelineStatus('missing')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedNote?.id])
+
   const selectedDetails = reviewMapDetails(selectedNote ?? undefined)
   const selectedKeywords = noteKeywords(selectedNote ?? undefined)
   const selectedNoteLinks = selectedNote
@@ -654,6 +694,78 @@ export function KnowledgeCanvas({
                 <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
                   <MarkdownPreview markdown={selectedNote.bodyMarkdown} />
                 </div>
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
+                  <History size={15} className="text-violet" />
+                  Evolution
+                </h3>
+                {timelineStatus === 'loading' ? (
+                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                    Loading knowledge history...
+                  </p>
+                ) : knowledgeTimeline ? (
+                  <div className="space-y-2">
+                    {knowledgeTimeline.versions.slice(0, 4).map((version) => (
+                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={version.id}>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[13px] font-extrabold text-white">
+                              Version {version.versionNumber}
+                            </p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                              {shortTimestamp(version.createdAt)}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                              version.isCurrent
+                                ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+                                : 'border-[#3A3A3A] text-gray-400'
+                            }`}
+                          >
+                            {version.state}
+                          </span>
+                        </div>
+                        <p className="line-clamp-2 text-xs leading-5 text-gray-400">
+                          {version.changeSummary ?? `Proposal ${version.proposalId ?? 'unknown'} updated this note.`}
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Blocks</p>
+                            <p className="mt-0.5 text-sm font-extrabold text-white">{version.blocks.length}</p>
+                          </div>
+                          <div className="rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Evidence</p>
+                            <p className="mt-0.5 text-sm font-extrabold text-white">
+                              {version.evidenceReferences.length}
+                            </p>
+                          </div>
+                        </div>
+                        {version.evidenceReferences.length ? (
+                          <div className="mt-3 space-y-1.5">
+                            {version.evidenceReferences.slice(0, 2).map((evidence) => (
+                              <p
+                                className="line-clamp-2 rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5 text-[11px] leading-4 text-gray-400"
+                                key={evidence.id}
+                              >
+                                {evidence.chunkHeading ??
+                                  evidence.sourceTitle ??
+                                  evidence.rawSourceTitle ??
+                                  evidence.sourceType.replaceAll('_', ' ')}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                    No version history has been linked to this card yet.
+                  </p>
+                )}
               </section>
 
               <section className="mb-6">

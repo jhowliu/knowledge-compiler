@@ -9,6 +9,7 @@ describe("ProposalService", () => {
     const knowledge = new InMemoryKnowledgeRepository();
     const noteLinks = new InMemoryNoteLinkRepository();
     const service = new ProposalService(proposals, knowledge, noteLinks);
+    knowledge.rawNoteChunkIdsByRawNoteId.set("raw-note-1", ["raw-source-chunk-1", "raw-source-chunk-2"]);
     const proposal = await proposals.create({
       rawNoteId: "raw-note-1",
       draft: {
@@ -84,6 +85,14 @@ describe("ProposalService", () => {
       proposalId: proposal.id,
       versionNumber: 1,
     });
+    expect(
+      knowledge.evidenceLinks.filter(
+        (link) =>
+          link.sourceType === "raw_source_chunk" &&
+          link.targetType === "knowledge_version" &&
+          link.targetId === "knowledge-version-1",
+      ),
+    ).toHaveLength(2);
     expect(knowledge.mistakes).toHaveLength(1);
     expect(knowledge.reviewTasks).toHaveLength(1);
     expect(knowledge.readinessItems).toHaveLength(1);

@@ -104,6 +104,19 @@ export type KnowledgeSourceSnapshot = {
   blocks: KnowledgeBlock[];
 };
 
+export type KnowledgeTimelineVersion = KnowledgeVersion & {
+  isCurrent: boolean;
+  state: "current" | "historical";
+  blocks: KnowledgeBlock[];
+  evidenceReferences: KnowledgeEvidenceReference[];
+};
+
+export type KnowledgeSourceTimeline = {
+  source: KnowledgeSource;
+  sourceEvidenceReferences: KnowledgeEvidenceReference[];
+  versions: KnowledgeTimelineVersion[];
+};
+
 export type ProposalStatus = "pending" | "approved" | "rejected";
 export type NoteLinkStatus = "pending" | "approved" | "rejected";
 

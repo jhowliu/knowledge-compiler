@@ -54,6 +54,67 @@ export type CompiledNote = {
   updatedAt: string
 }
 
+export type KnowledgeBlock = {
+  id: string
+  knowledgeSourceId: string
+  knowledgeVersionId: string
+  blockIndex: number
+  heading: string | null
+  bodyMarkdown: string
+  tokenEstimate: number
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type KnowledgeEvidenceReference = {
+  id: string
+  sourceType: string
+  sourceId: string
+  sourceTitle: string | null
+  rawSourceId: string | null
+  rawSourceTitle: string | null
+  rawSourceChunkId: string | null
+  chunkIndex: number | null
+  chunkHeading: string | null
+  chunkBodyMarkdown: string | null
+  confidence: string
+  impactLevel: number
+  createdAt: string
+}
+
+export type KnowledgeTimelineVersion = {
+  id: string
+  knowledgeSourceId: string
+  compiledNoteId: string | null
+  proposalId: string | null
+  versionNumber: number
+  title: string
+  bodyMarkdown: string
+  structuredData: unknown
+  changeSummary: string | null
+  createdAt: string
+  isCurrent: boolean
+  state: 'current' | 'historical'
+  blocks: KnowledgeBlock[]
+  evidenceReferences: KnowledgeEvidenceReference[]
+}
+
+export type KnowledgeSourceTimeline = {
+  source: {
+    id: string
+    domain: string
+    knowledgeType: string
+    title: string
+    status: string
+    currentVersionId: string | null
+    createdAt: string
+    updatedAt: string
+  }
+  sourceEvidenceReferences: KnowledgeEvidenceReference[]
+  versions: KnowledgeTimelineVersion[]
+}
+
 export type NoteLink = {
   id: string
   sourceNoteType: string

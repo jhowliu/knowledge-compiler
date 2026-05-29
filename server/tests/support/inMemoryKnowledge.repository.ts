@@ -7,6 +7,7 @@ import type {
   KnowledgeEvidenceReference,
   KnowledgeSource,
   KnowledgeSourceSnapshot,
+  KnowledgeSourceTimeline,
   KnowledgeVersion,
   Mistake,
   ReadinessItem,
@@ -38,6 +39,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly reviewTasks: ReviewTask[] = [];
   readonly readinessItems: ReadinessItem[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
+  readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
 
   async upsertConcept(input: {
@@ -244,6 +246,19 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.knowledgeBlocks.filter((block) => block.status === "active");
   }
 
+  async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {
+    const source = this.knowledgeSources.find((item) => item.id === id) ?? null;
+    return source ? this.buildKnowledgeSourceTimeline(source) : null;
+  }
+
+  async getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null> {
+    const version = [...this.knowledgeVersions].reverse().find((item) => item.compiledNoteId === id) ?? null;
+    const source = version
+      ? this.knowledgeSources.find((item) => item.id === version.knowledgeSourceId) ?? null
+      : null;
+    return source ? this.buildKnowledgeSourceTimeline(source) : null;
+  }
+
   async upsertMistake(input: {
     userId?: string | null;
     domain: string;
@@ -356,5 +371,82 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       approvalStatus: input.approvalStatus,
       createdAt: new Date("2026-05-24T00:00:00.000Z"),
     });
+  }
+
+  async createEvidenceLinksFromRawNoteChunks(input: {
+    userId?: string | null;
+    rawNoteId: string;
+    targetType: string;
+    targetId: string;
+    confidence: string;
+    impactLevel: number;
+    approvalStatus: string;
+  }): Promise<number> {
+    const chunkIds = this.rawNoteChunkIdsByRawNoteId.get(input.rawNoteId) ?? [];
+    for (const chunkId of chunkIds) {
+      await this.createEvidenceLink({
+        userId: input.userId,
+        sourceType: "raw_source_chunk",
+        sourceId: chunkId,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        confidence: input.confidence,
+        impactLevel: input.impactLevel,
+        approvalStatus: input.approvalStatus,
+      });
+    }
+    return chunkIds.length;
+  }
+
+  private buildKnowledgeSourceTimeline(source: KnowledgeSource): KnowledgeSourceTimeline {
+    const versions = this.knowledgeVersions
+      .filter((version) => version.knowledgeSourceId === source.id)
+      .sort((a, b) => b.versionNumber - a.versionNumber);
+
+    return {
+      source,
+      sourceEvidenceReferences: this.evidenceReferencesForTarget("knowledge_source", source.id),
+      versions: versions.map((version) => {
+        const blocks = this.knowledgeBlocks
+          .filter((block) => block.knowledgeVersionId === version.id)
+          .sort((a, b) => a.blockIndex - b.blockIndex);
+        const isCurrent = version.id === source.currentVersionId;
+        return {
+          ...version,
+          isCurrent,
+          state: isCurrent ? "current" : "historical",
+          blocks,
+          evidenceReferences: [
+            ...this.evidenceReferencesForTarget("knowledge_version", version.id),
+            ...blocks.flatMap((block) => this.evidenceReferencesForTarget("knowledge_block", block.id)),
+          ],
+        };
+      }),
+    };
+  }
+
+  private evidenceReferencesForTarget(targetType: string, targetId: string): KnowledgeEvidenceReference[] {
+    return this.evidenceLinks
+      .filter(
+        (link) =>
+          link.approvalStatus === "approved" &&
+          link.targetType === targetType &&
+          link.targetId === targetId,
+      )
+      .map((link): KnowledgeEvidenceReference => ({
+        id: link.id,
+        sourceType: link.sourceType,
+        sourceId: link.sourceId,
+        sourceTitle: null,
+        rawSourceId: link.sourceType === "raw_source" ? link.sourceId : null,
+        rawSourceTitle: null,
+        rawSourceChunkId: link.sourceType === "raw_source_chunk" ? link.sourceId : null,
+        chunkIndex: null,
+        chunkHeading: null,
+        chunkBodyMarkdown: null,
+        confidence: link.confidence,
+        impactLevel: link.impactLevel,
+        createdAt: link.createdAt,
+      }));
   }
 }

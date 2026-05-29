@@ -1,8 +1,7 @@
 import { env } from "../config/env.js";
-import type { CodingExtraction } from "../domain/compiler.js";
+import type { CodingExtraction, DraftUpdateProposal } from "../domain/compiler.js";
 import type { SearchResult } from "../domain/knowledge.js";
 import type { RawNote } from "../domain/rawNote.js";
-import { CodingCompilerService } from "./codingCompiler.service.js";
 
 export type WikiIndexingResult = {
   extraction: CodingExtraction;
@@ -15,7 +14,7 @@ export type WikiIndexer = {
     rawNote: RawNote,
     extraction: CodingExtraction,
     relatedNotes: SearchResult[],
-  ): ReturnType<CodingCompilerService["draftProposal"]>;
+  ): DraftUpdateProposal;
 };
 
 const extractionSchema = {
@@ -112,8 +111,6 @@ function outputText(response: unknown) {
 }
 
 export class WikiIndexerService {
-  constructor(private readonly deterministicCompiler = new CodingCompilerService()) {}
-
   async extract(rawNote: RawNote): Promise<WikiIndexingResult> {
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
@@ -123,7 +120,67 @@ export class WikiIndexerService {
   }
 
   draftProposal(rawNote: RawNote, extraction: CodingExtraction, relatedNotes: SearchResult[]) {
-    return this.deterministicCompiler.draftProposal(rawNote, extraction, relatedNotes);
+    const title = knowledgeTitle(rawNote, extraction);
+    const knowledgeType = knowledgeTypeFor(extraction);
+    const bodyMarkdown = knowledgeBodyMarkdown(rawNote, extraction);
+    const relatedCompiledNotes = relatedNotes
+      .filter((note) => note.targetType === "compiled_note")
+      .slice(0, 3);
+
+    return {
+      detectedDomain: extraction.domain,
+      detectedKnowledgeType: knowledgeType,
+      impactLevel: relatedCompiledNotes.length ? 3 : 2,
+      confidence: extraction.confidence,
+      rationale: `LLM wiki indexing proposed one approved knowledge update${
+        relatedCompiledNotes.length ? ` and ${relatedCompiledNotes.length} related-note link suggestions` : ""
+      }.`,
+      items: [
+        {
+          actionType: "upsert_knowledge",
+          targetType: "knowledge_source",
+          payload: {
+            domain: extraction.domain,
+            knowledgeType,
+            title,
+            bodyMarkdown,
+            structuredData: {
+              sourceRole: rawNote.sourceRole,
+              sourceType: rawNote.sourceType,
+              originalKnowledgeType: extraction.knowledgeType,
+              problemNumber: extraction.problemNumber,
+              problemTitle: extraction.problemTitle,
+              reviewMapName: extraction.reviewMapName,
+              decisionRules: extraction.decisionRules,
+              commonTraps: extraction.commonTraps,
+              patterns: extraction.patterns,
+              algorithms: extraction.algorithms,
+              recognitionSignals: extraction.recognitionSignals,
+              keyInsights: extraction.keyInsights,
+              implementationDetails: extraction.implementationDetails,
+              concepts: extraction.concepts,
+            },
+          },
+          rationale: "Create or update approved knowledge from this source.",
+        },
+        ...relatedCompiledNotes.map((note) => ({
+          actionType: "create_link",
+          targetType: "note_link",
+          payload: {
+            sourceTitle: title,
+            sourceKnowledgeType: knowledgeType,
+            targetNoteType: note.targetType,
+            targetNoteId: note.id,
+            targetTitle: note.title,
+            relationType: "related_concept",
+            confidence: extraction.confidence,
+          },
+          rationale: note.title
+            ? `LLM wiki indexing found overlap with "${note.title}".`
+            : "LLM wiki indexing found related approved knowledge.",
+        })),
+      ],
+    };
   }
 
   private async extractWithOpenAI(rawNote: RawNote): Promise<CodingExtraction> {
@@ -139,7 +196,7 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "Extract the source into LLM-wiki indexing JSON. Source roles can be personal_note or reference; use the role only as context, and do not force an interview-specific classification when the text does not support it. Use multi-axis indexing: algorithms, patterns, constraint models, implementation schemas, mistakes, and review actions. Do not invent problem numbers.",
+              "Extract the source into LLM-wiki indexing JSON. Source roles can be personal_note or reference; use the role only as context, and do not force an interview-specific classification when the text does not support it. Prefer general knowledge signals: concepts, claims, patterns, algorithms, constraints, recognition signals, and implementation details. Do not invent problem numbers. Mistake and review-action fields are legacy extraction fields only; leave them empty unless the source explicitly states them.",
           },
           {
             role: "user",
@@ -168,4 +225,61 @@ export class WikiIndexerService {
 
     return JSON.parse(text) as CodingExtraction;
   }
+}
+
+function knowledgeTypeFor(extraction: CodingExtraction) {
+  if (extraction.knowledgeType === "review_map") {
+    return "review_map";
+  }
+  if (extraction.knowledgeType === "problem_reflection") {
+    return "problem_note";
+  }
+  if (extraction.algorithms.length > 0) {
+    return "algorithm";
+  }
+  if (extraction.patterns.length > 0) {
+    return "pattern";
+  }
+  return "knowledge_note";
+}
+
+function knowledgeTitle(rawNote: RawNote, extraction: CodingExtraction) {
+  if (extraction.reviewMapName) {
+    return extraction.reviewMapName;
+  }
+  if (extraction.problemNumber && extraction.problemTitle) {
+    return `${extraction.problemNumber}. ${extraction.problemTitle}`;
+  }
+  if (extraction.problemTitle) {
+    return extraction.problemTitle;
+  }
+  if (extraction.algorithms[0]) {
+    return extraction.algorithms[0];
+  }
+  if (extraction.patterns[0]) {
+    return extraction.patterns[0];
+  }
+  return rawNote.title ?? "Untitled knowledge";
+}
+
+function section(title: string, lines: string[]) {
+  const cleanLines = lines.map((line) => line.trim()).filter(Boolean);
+  return cleanLines.length ? [`## ${title}`, ...cleanLines.map((line) => `- ${line}`)].join("\n") : "";
+}
+
+function knowledgeBodyMarkdown(rawNote: RawNote, extraction: CodingExtraction) {
+  const sections = [
+    section("Key insights", extraction.keyInsights),
+    section("Recognition signals", extraction.recognitionSignals),
+    section("Implementation details", extraction.implementationDetails),
+    section("Patterns", extraction.patterns),
+    section("Algorithms", extraction.algorithms),
+    section("Common traps", extraction.commonTraps),
+  ].filter(Boolean);
+
+  if (sections.length) {
+    return sections.join("\n\n");
+  }
+
+  return rawNote.bodyMarkdown;
 }

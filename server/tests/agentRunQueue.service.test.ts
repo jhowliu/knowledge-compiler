@@ -1,4 +1,5 @@
 import { AgentRunQueueService } from "../src/services/agentRunQueue.service.js";
+import { WikiIndexerService } from "../src/services/wikiIndexer.service.js";
 import type { CodingExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
 import type { RawNote } from "../src/domain/rawNote.js";
@@ -60,11 +61,11 @@ const llmWikiIndexer = {
       rationale: `LLM indexed ${relatedNotes.length} related notes for ${rawNote.title ?? "raw note"}.`,
       items: [
         {
-          actionType: "upsert_compiled_note",
-          targetType: "compiled_note",
+          actionType: "upsert_knowledge",
+          targetType: "knowledge_source",
           payload: {
             domain: extraction.domain,
-            noteType: "algorithm",
+            knowledgeType: "algorithm",
             title: "Dijkstra With State",
             bodyMarkdown: extraction.keyInsights.join("\n"),
             structuredData: { concepts: extraction.concepts },
@@ -77,6 +78,65 @@ const llmWikiIndexer = {
 };
 
 describe("agent run queue service", () => {
+  test("drafts generalized LLM wiki proposal items only", async () => {
+    const wikiIndexer = new WikiIndexerService();
+    const rawNote = {
+      id: "raw-note-1",
+      userId: null,
+      rawSourceId: "raw-source-1",
+      domain: null,
+      sourceType: "manual",
+      sourceRole: "personal_note" as const,
+      title: "Binary search note",
+      bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
+      extractedData: {},
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+    };
+    const extraction: CodingExtraction = {
+      domain: "coding",
+      knowledgeType: "general_coding_note",
+      problemNumber: null,
+      problemTitle: null,
+      reviewMapName: null,
+      decisionRules: [],
+      commonTraps: [],
+      patterns: ["Binary Search on Answer"],
+      algorithms: ["Binary Search"],
+      recognitionSignals: ["monotonic feasibility"],
+      keyInsights: ["Search the answer space when feasibility is monotonic."],
+      mistakes: ["Do not label this as shortest path."],
+      implementationDetails: ["Write a feasible(x) predicate."],
+      reviewActions: ["Practice monotonic predicate problems."],
+      concepts: [{ name: "Binary Search on Answer", conceptType: "pattern", confidence: "high" }],
+      confidence: "high",
+    };
+
+    const draft = wikiIndexer.draftProposal(rawNote, extraction, [
+      {
+        id: "compiled-existing-1",
+        targetType: "compiled_note",
+        title: "Monotonic predicate",
+        bodyMarkdown: "Feasibility predicates split the answer range.",
+        domain: "coding",
+        noteType: "pattern",
+        rank: 2,
+        createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      },
+    ]);
+
+    expect(draft.items.map((item) => item.actionType)).toEqual([
+      "upsert_knowledge",
+      "create_link",
+    ]);
+    expect(draft.items.some((item) => item.actionType === "create_mistake")).toBe(false);
+    expect(draft.items.some((item) => item.actionType === "create_review_task")).toBe(false);
+    expect(draft.items.some((item) => item.actionType === "upsert_readiness")).toBe(false);
+    expect(draft.items[0].payload).toMatchObject({
+      knowledgeType: "algorithm",
+      title: "Binary Search",
+    });
+  });
+
   test("runs deterministic reindex links and creates pending link suggestions", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
@@ -175,6 +235,9 @@ describe("agent run queue service", () => {
       detectedKnowledgeType: "general_coding_note",
     });
     expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items.map((item) => item.actionType)).toEqual([
+      "upsert_knowledge",
+    ]);
     expect(rawNoteRepository.notes[0].extractedData).toMatchObject({
       patterns: expect.arrayContaining([
         "Shortest Path With State",

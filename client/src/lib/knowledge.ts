@@ -67,7 +67,7 @@ export function payloadText(payload: Record<string, unknown>, key: string, fallb
 }
 
 export function payloadLabel(payload: Record<string, unknown>) {
-  for (const key of ['title', 'area', 'status', 'domain', 'noteType']) {
+  for (const key of ['title', 'targetTitle', 'area', 'status', 'domain', 'knowledgeType', 'noteType']) {
     const value = payload[key]
     if (typeof value === 'string' && value) {
       return value
@@ -85,5 +85,7 @@ export function statusTone(status: string) {
 }
 
 export function actionLabel(actionType: string) {
+  if (actionType === 'upsert_knowledge') return 'Knowledge update'
+  if (actionType === 'create_link') return 'Link suggestion'
   return actionType.replaceAll('_', ' ')
 }

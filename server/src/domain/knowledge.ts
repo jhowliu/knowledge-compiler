@@ -65,6 +65,39 @@ export type KnowledgeBlock = {
   updatedAt: Date;
 };
 
+export type KnowledgeEvidenceReference = {
+  id: string;
+  sourceType: string;
+  sourceId: string;
+  sourceTitle: string | null;
+  rawSourceId: string | null;
+  rawSourceTitle: string | null;
+  rawSourceChunkId: string | null;
+  chunkIndex: number | null;
+  chunkHeading: string | null;
+  chunkBodyMarkdown: string | null;
+  confidence: string;
+  impactLevel: number;
+  createdAt: Date;
+};
+
+export type KnowledgeBlockSearchResult = {
+  blockId: string;
+  knowledgeSourceId: string;
+  knowledgeVersionId: string;
+  title: string;
+  domain: string;
+  knowledgeType: string;
+  versionNumber: number;
+  blockIndex: number;
+  heading: string | null;
+  bodyMarkdown: string;
+  rank: number;
+  status: string;
+  updatedAt: Date;
+  evidenceReferences: KnowledgeEvidenceReference[];
+};
+
 export type KnowledgeSourceSnapshot = {
   source: KnowledgeSource;
   version: KnowledgeVersion;

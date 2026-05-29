@@ -4,6 +4,8 @@ import type {
   Concept,
   CreateKnowledgeBlockInput,
   KnowledgeBlock,
+  KnowledgeBlockSearchResult,
+  KnowledgeEvidenceReference,
   KnowledgeSource,
   KnowledgeSourceSnapshot,
   KnowledgeVersion,
@@ -124,6 +126,40 @@ type SearchResultRow = {
   note_type: string | null;
   rank: number;
   created_at: Date;
+};
+
+type KnowledgeBlockSearchRow = {
+  block_id: string;
+  knowledge_source_id: string;
+  knowledge_version_id: string;
+  title: string;
+  domain: string;
+  knowledge_type: string;
+  version_number: number;
+  block_index: number;
+  heading: string | null;
+  body_markdown: string;
+  rank: number;
+  status: string;
+  updated_at: Date;
+};
+
+type EvidenceReferenceRow = {
+  id: string;
+  source_type: string;
+  source_id: string;
+  source_title: string | null;
+  raw_source_id: string | null;
+  raw_source_title: string | null;
+  raw_source_chunk_id: string | null;
+  chunk_index: number | null;
+  chunk_heading: string | null;
+  chunk_body_markdown: string | null;
+  confidence: string;
+  impact_level: number;
+  created_at: Date;
+  target_type: string;
+  target_id: string;
 };
 
 function normalizeConcept(name: string) {
@@ -261,6 +297,50 @@ function mapSearchResult(row: SearchResultRow): SearchResult {
   };
 }
 
+function mapEvidenceReference(row: EvidenceReferenceRow): KnowledgeEvidenceReference {
+  return {
+    id: row.id,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    sourceTitle: row.source_title,
+    rawSourceId: row.raw_source_id,
+    rawSourceTitle: row.raw_source_title,
+    rawSourceChunkId: row.raw_source_chunk_id,
+    chunkIndex: row.chunk_index,
+    chunkHeading: row.chunk_heading,
+    chunkBodyMarkdown: row.chunk_body_markdown,
+    confidence: row.confidence,
+    impactLevel: row.impact_level,
+    createdAt: row.created_at,
+  };
+}
+
+function mapKnowledgeBlockSearchResult(
+  row: KnowledgeBlockSearchRow,
+  evidenceReferences: KnowledgeEvidenceReference[],
+): KnowledgeBlockSearchResult {
+  return {
+    blockId: row.block_id,
+    knowledgeSourceId: row.knowledge_source_id,
+    knowledgeVersionId: row.knowledge_version_id,
+    title: row.title,
+    domain: row.domain,
+    knowledgeType: row.knowledge_type,
+    versionNumber: row.version_number,
+    blockIndex: row.block_index,
+    heading: row.heading,
+    bodyMarkdown: row.body_markdown,
+    rank: Number(row.rank),
+    status: row.status,
+    updatedAt: row.updated_at,
+    evidenceReferences,
+  };
+}
+
+function evidenceKey(targetType: string, targetId: string) {
+  return `${targetType}:${targetId}`;
+}
+
 export interface KnowledgeRepository {
   upsertConcept(input: {
     userId?: string | null;
@@ -281,6 +361,11 @@ export interface KnowledgeRepository {
     conceptNames: string[];
     limit: number;
   }): Promise<SearchResult[]>;
+  searchKnowledgeBlocks(input: {
+    query: string;
+    limit: number;
+    includeArchived?: boolean;
+  }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
     domain: string;
@@ -469,6 +554,121 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     return result.rows.map(mapSearchResult).sort((a, b) => b.rank - a.rank);
+  }
+
+  async searchKnowledgeBlocks(input: {
+    query: string;
+    limit: number;
+    includeArchived?: boolean;
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    const blockResult = await query<KnowledgeBlockSearchRow>(
+      `
+        with query as (
+          select plainto_tsquery('english', $1) as ts_query
+        )
+        select
+          knowledge_blocks.id as block_id,
+          knowledge_blocks.knowledge_source_id,
+          knowledge_blocks.knowledge_version_id,
+          knowledge_sources.title,
+          knowledge_sources.domain,
+          knowledge_sources.knowledge_type,
+          knowledge_versions.version_number,
+          knowledge_blocks.block_index,
+          knowledge_blocks.heading,
+          knowledge_blocks.body_markdown,
+          ts_rank(knowledge_blocks.search_vector, query.ts_query) as rank,
+          knowledge_blocks.status,
+          knowledge_blocks.updated_at
+        from knowledge_blocks
+        join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
+        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+        cross join query
+        where knowledge_sources.status = 'active'
+          and ($2::boolean or knowledge_blocks.status = 'active')
+          and knowledge_blocks.search_vector @@ query.ts_query
+        order by rank desc, knowledge_blocks.updated_at desc
+        limit $3
+      `,
+      [input.query, input.includeArchived ?? false, input.limit],
+    );
+
+    if (blockResult.rows.length === 0) {
+      return [];
+    }
+
+    const blockIds = blockResult.rows.map((row) => row.block_id);
+    const versionIds = [...new Set(blockResult.rows.map((row) => row.knowledge_version_id))];
+    const sourceIds = [...new Set(blockResult.rows.map((row) => row.knowledge_source_id))];
+    const evidenceResult = await query<EvidenceReferenceRow>(
+      `
+        select
+          evidence_links.id,
+          evidence_links.source_type,
+          evidence_links.source_id,
+          coalesce(raw_notes.title, direct_sources.title, chunk_sources.title, note_sources.title, chunks.heading) as source_title,
+          coalesce(direct_chunks.raw_source_id, direct_sources.id, note_sources.id) as raw_source_id,
+          coalesce(chunk_sources.title, direct_sources.title, note_sources.title) as raw_source_title,
+          chunks.id as raw_source_chunk_id,
+          chunks.chunk_index,
+          chunks.heading as chunk_heading,
+          chunks.body_markdown as chunk_body_markdown,
+          evidence_links.confidence,
+          evidence_links.impact_level,
+          evidence_links.created_at,
+          evidence_links.target_type,
+          evidence_links.target_id
+        from evidence_links
+        left join raw_source_chunks direct_chunks
+          on evidence_links.source_type = 'raw_source_chunk'
+          and direct_chunks.id = evidence_links.source_id
+        left join raw_sources chunk_sources
+          on chunk_sources.id = direct_chunks.raw_source_id
+        left join raw_sources direct_sources
+          on evidence_links.source_type = 'raw_source'
+          and direct_sources.id = evidence_links.source_id
+        left join raw_notes
+          on evidence_links.source_type = 'raw_note'
+          and raw_notes.id = evidence_links.source_id
+        left join raw_sources note_sources
+          on note_sources.id = raw_notes.raw_source_id
+        left join lateral (
+          select raw_source_chunks.*
+          from raw_source_chunks
+          where raw_source_chunks.raw_source_id = coalesce(
+            direct_chunks.raw_source_id,
+            direct_sources.id,
+            note_sources.id
+          )
+            and (direct_chunks.id is null or raw_source_chunks.id = direct_chunks.id)
+          order by raw_source_chunks.chunk_index asc
+          limit 3
+        ) chunks on true
+        where evidence_links.approval_status = 'approved'
+          and (
+            (evidence_links.target_type = 'knowledge_block' and evidence_links.target_id = any($1::uuid[]))
+            or (evidence_links.target_type = 'knowledge_version' and evidence_links.target_id = any($2::uuid[]))
+            or (evidence_links.target_type = 'knowledge_source' and evidence_links.target_id = any($3::uuid[]))
+          )
+        order by evidence_links.created_at desc, chunks.chunk_index asc
+      `,
+      [blockIds, versionIds, sourceIds],
+    );
+
+    const evidenceByTarget = new Map<string, KnowledgeEvidenceReference[]>();
+    for (const row of evidenceResult.rows) {
+      const key = evidenceKey(row.target_type, row.target_id);
+      evidenceByTarget.set(key, [...(evidenceByTarget.get(key) ?? []), mapEvidenceReference(row)]);
+    }
+
+    return blockResult.rows.map((row) => {
+      const evidenceReferences = [
+        ...(evidenceByTarget.get(evidenceKey("knowledge_block", row.block_id)) ?? []),
+        ...(evidenceByTarget.get(evidenceKey("knowledge_version", row.knowledge_version_id)) ?? []),
+        ...(evidenceByTarget.get(evidenceKey("knowledge_source", row.knowledge_source_id)) ?? []),
+      ];
+      return mapKnowledgeBlockSearchResult(row, evidenceReferences);
+    });
   }
 
   async upsertCompiledNote(input: {

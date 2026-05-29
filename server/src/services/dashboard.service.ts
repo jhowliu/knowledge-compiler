@@ -1,7 +1,11 @@
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
+import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 
 export class DashboardService {
-  constructor(private readonly knowledgeRepository: KnowledgeRepository) {}
+  constructor(
+    private readonly knowledgeRepository: KnowledgeRepository,
+    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(knowledgeRepository),
+  ) {}
 
   async listCompiledNotes() {
     return this.knowledgeRepository.listCompiledNotes(50);
@@ -31,11 +35,11 @@ export class DashboardService {
     return this.knowledgeRepository.listReadinessItems(50);
   }
 
-  async search(query: string) {
-    return this.knowledgeRepository.searchRelated({
+  async search(query: string, options: { includeArchived?: boolean; limit?: number } = {}) {
+    return this.knowledgeRetrievalService.search({
       query,
-      conceptNames: [query],
-      limit: 20,
+      includeArchived: options.includeArchived,
+      limit: options.limit ?? 20,
     });
   }
 }

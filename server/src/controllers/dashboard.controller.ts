@@ -58,7 +58,16 @@ export class DashboardController {
   search = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const query = typeof request.query.q === "string" ? request.query.q : "";
-      response.json({ results: query ? await this.dashboardService.search(query) : [] });
+      const includeArchived = request.query.includeArchived === "true";
+      const limit = typeof request.query.limit === "string" ? Number(request.query.limit) : undefined;
+      response.json({
+        results: query
+          ? await this.dashboardService.search(query, {
+              includeArchived,
+              limit: Number.isFinite(limit) ? limit : undefined,
+            })
+          : [],
+      });
     } catch (error) {
       next(error);
     }

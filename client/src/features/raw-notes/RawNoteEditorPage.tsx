@@ -1,7 +1,7 @@
 import React from 'react'
-import { Eye, PencilLine, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
+import { BookOpen, Eye, FileText, PencilLine, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
-import type { RawNote, RawNoteIndexingTrace } from '../../types/domain'
+import type { RawNote, RawNoteIndexingTrace, RawSourceRole } from '../../types/domain'
 
 export function RawNoteEditorPage({
   indexingTrace,
@@ -9,6 +9,7 @@ export function RawNoteEditorPage({
   selectedRawNoteId,
   isDirty,
   title,
+  sourceRole,
   bodyMarkdown,
   isSubmitting,
   notice,
@@ -16,6 +17,7 @@ export function RawNoteEditorPage({
   titleInputRef,
   onTitleChange,
   onBodyChange,
+  onSourceRoleChange,
   onNewNote,
   onSelectRawNote,
   onSave,
@@ -27,6 +29,7 @@ export function RawNoteEditorPage({
   selectedRawNoteId: string | null
   isDirty: boolean
   title: string
+  sourceRole: RawSourceRole
   bodyMarkdown: string
   isSubmitting: boolean
   notice: string | null
@@ -34,6 +37,7 @@ export function RawNoteEditorPage({
   titleInputRef: React.RefObject<HTMLInputElement | null>
   onTitleChange: (value: string) => void
   onBodyChange: (value: string) => void
+  onSourceRoleChange: (value: RawSourceRole) => void
   onNewNote: () => void
   onSelectRawNote: (note: RawNote) => void
   onSave: () => void
@@ -77,6 +81,9 @@ export function RawNoteEditorPage({
                 <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
                   {note.title ?? 'Untitled raw note'}
                 </p>
+                <p className="mt-1 text-[10px] font-bold uppercase text-gray-500">
+                  {note.sourceRole === 'reference' ? 'Paper / Reference' : 'My notes'}
+                </p>
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
                   {note.bodyMarkdown}
                 </p>
@@ -94,7 +101,11 @@ export function RawNoteEditorPage({
         <header className="flex h-[78px] items-center justify-between gap-4 border-b border-[#303030] px-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              {selectedRawNote ? (isDirty ? 'Editing saved raw note' : 'Saved raw note') : 'New raw note'}
+              {selectedRawNote
+                ? isDirty
+                  ? 'Editing saved source'
+                  : 'Saved source'
+                : 'New source'}
             </p>
             <div className="mt-1 flex items-center gap-3">
               <h2 className="text-[15px] font-bold text-gray-100">
@@ -109,6 +120,29 @@ export function RawNoteEditorPage({
           </div>
 
           <div className="flex items-center gap-2.5">
+            <div className="flex h-10 rounded-lg border border-[#3A3A3A] bg-[#191919] p-1">
+              {[
+                { value: 'personal_note' as const, label: 'My notes', icon: PencilLine },
+                { value: 'reference' as const, label: 'Paper', icon: BookOpen },
+              ].map((option) => {
+                const Icon = option.icon
+                return (
+                  <button
+                    className={`flex items-center gap-1.5 rounded-md px-3 text-[12px] font-extrabold transition ${
+                      sourceRole === option.value
+                        ? 'bg-[#303030] text-white'
+                        : 'text-gray-500 hover:text-gray-200'
+                    }`}
+                    key={option.value}
+                    onClick={() => onSourceRoleChange(option.value)}
+                    type="button"
+                  >
+                    <Icon size={14} />
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
             <button
               className="flex h-10 items-center gap-2 rounded-lg border border-[#3A3A3A] px-3.5 text-[13px] font-bold text-gray-200 hover:bg-[#2A2A2A]"
               onClick={onNewNote}
@@ -176,14 +210,22 @@ export function RawNoteEditorPage({
               aria-label="Raw practice note"
               className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
               onChange={(event) => onBodyChange(event.target.value)}
-              placeholder="Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile."
+              placeholder={
+                sourceRole === 'reference'
+                  ? 'Paste paper highlights, reference excerpts, or source notes. The indexer will draft knowledge updates after you compile.'
+                  : 'Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile.'
+              }
               value={bodyMarkdown}
             />
           </div>
 
           <aside className="min-h-0 overflow-y-auto border-l border-[#303030] bg-[#1B1B1B] px-7 py-7">
             <div className="mb-5 flex items-center gap-2 text-[13px] font-bold text-gray-300">
-              <Eye size={16} className="text-gray-500" />
+              {sourceRole === 'reference' ? (
+                <FileText size={16} className="text-gray-500" />
+              ) : (
+                <Eye size={16} className="text-gray-500" />
+              )}
               Preview
             </div>
             {selectedRawNote && indexingTrace ? (

@@ -1,8 +1,12 @@
+import type { RawSourceRole } from "./rawSource.js";
+
 export type RawNote = {
   id: string;
   userId: string | null;
+  rawSourceId: string | null;
   domain: string | null;
   sourceType: string;
+  sourceRole: RawSourceRole;
   title: string | null;
   bodyMarkdown: string;
   extractedData: unknown;
@@ -17,14 +21,18 @@ export type RawNoteWithProposal = {
 
 export type CreateRawNoteInput = {
   userId?: string | null;
+  rawSourceId?: string | null;
   domain?: string | null;
   sourceType?: string;
+  sourceRole?: RawSourceRole;
   title?: string | null;
   bodyMarkdown: string;
 };
 
 export type UpdateRawNoteInput = {
   domain?: string | null;
+  sourceType?: string;
+  sourceRole?: RawSourceRole;
   title?: string | null;
   bodyMarkdown: string;
 };

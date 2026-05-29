@@ -13,12 +13,15 @@ import type { ProposalRepository } from "./repositories/proposal.repository.js";
 import { PostgresProposalRepository } from "./repositories/proposal.repository.js";
 import type { RawNoteRepository } from "./repositories/rawNote.repository.js";
 import { PostgresRawNoteRepository } from "./repositories/rawNote.repository.js";
+import type { RawSourceRepository } from "./repositories/rawSource.repository.js";
+import { PostgresRawSourceRepository } from "./repositories/rawSource.repository.js";
 import { createAgentRunRoutes } from "./routes/agentRun.routes.js";
 import { createDashboardRoutes } from "./routes/dashboard.routes.js";
 import { createNoteLinkRoutes } from "./routes/noteLink.routes.js";
 import { createNoteCardPositionRoutes } from "./routes/noteCardPosition.routes.js";
 import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawNoteRoutes } from "./routes/rawNote.routes.js";
+import { createRawSourceRoutes } from "./routes/rawSource.routes.js";
 import { AgentRunQueueService } from "./services/agentRunQueue.service.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import { NoteLinkService } from "./services/noteLink.service.js";
@@ -26,10 +29,12 @@ import { NoteCardPositionService } from "./services/noteCardPosition.service.js"
 import { PhaseOneWorkflowService } from "./services/phaseOneWorkflow.service.js";
 import { ProposalService } from "./services/proposal.service.js";
 import { RawNoteService } from "./services/rawNote.service.js";
+import { RawSourceService } from "./services/rawSource.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 export type AppDependencies = {
   rawNoteRepository?: RawNoteRepository;
+  rawSourceRepository?: RawSourceRepository | null;
   knowledgeRepository?: KnowledgeRepository;
   noteLinkRepository?: NoteLinkRepository;
   noteCardPositionRepository?: NoteCardPositionRepository;
@@ -41,6 +46,12 @@ export type AppDependencies = {
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const rawNoteRepository = dependencies.rawNoteRepository ?? new PostgresRawNoteRepository();
+  const rawSourceRepository =
+    dependencies.rawSourceRepository === undefined
+      ? dependencies.rawNoteRepository
+        ? null
+        : new PostgresRawSourceRepository()
+      : dependencies.rawSourceRepository;
   const knowledgeRepository = dependencies.knowledgeRepository ?? new PostgresKnowledgeRepository();
   const noteLinkRepository = dependencies.noteLinkRepository ?? new PostgresNoteLinkRepository();
   const noteCardPositionRepository =
@@ -64,6 +75,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const dashboardService = new DashboardService(knowledgeRepository);
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
+  const rawSourceService = rawSourceRepository ? new RawSourceService(rawSourceRepository) : null;
   const agentRunQueueService = new AgentRunQueueService(
     agentRunRepository,
     knowledgeRepository,
@@ -77,6 +89,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     enablePhaseOneWorkflow ? agentRunQueueService : null,
     proposalRepository,
     agentRunRepository,
+    rawSourceRepository,
   );
 
   app.use(cors(corsOptions));
@@ -87,6 +100,9 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.use("/raw-notes", createRawNoteRoutes(rawNoteService));
+  if (rawSourceService) {
+    app.use("/sources", createRawSourceRoutes(rawSourceService));
+  }
   if (phaseOneWorkflowService) {
     app.use(
       "/agent-runs",

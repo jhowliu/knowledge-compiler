@@ -3,8 +3,10 @@ import type { CreateRawNoteInput, UpdateRawNoteInput } from "../domain/rawNote.j
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
+import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { AgentRunQueueService } from "./agentRunQueue.service.js";
 import type { PhaseOneWorkflowService } from "./phaseOneWorkflow.service.js";
+import { chunkSourceMarkdown } from "./sourceChunker.service.js";
 
 export class RawNoteService {
   constructor(
@@ -13,10 +15,30 @@ export class RawNoteService {
     private readonly agentRunQueueService?: AgentRunQueueService | null,
     private readonly proposalRepository?: ProposalRepository | null,
     private readonly agentRunRepository?: AgentRunRepository | null,
+    private readonly rawSourceRepository?: RawSourceRepository | null,
   ) {}
 
   async createRawNote(input: CreateRawNoteInput) {
-    const rawNote = await this.rawNoteRepository.create(input);
+    const sourceRole = input.sourceRole ?? "personal_note";
+    const rawSource = this.rawSourceRepository
+      ? await this.rawSourceRepository.create(
+          {
+            userId: input.userId,
+            domain: input.domain,
+            sourceType: input.sourceType ?? "markdown",
+            sourceRole,
+            title: input.title,
+            bodyMarkdown: input.bodyMarkdown,
+            metadata: { createdVia: "raw_notes" },
+          },
+          chunkSourceMarkdown(input.bodyMarkdown),
+        )
+      : null;
+    const rawNote = await this.rawNoteRepository.create({
+      ...input,
+      rawSourceId: rawSource?.id ?? input.rawSourceId ?? null,
+      sourceRole,
+    });
     if (this.agentRunQueueService) {
       const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId);
       return { rawNote, proposal: null, agentRunId: agentRun.id };
@@ -39,7 +61,28 @@ export class RawNoteService {
   }
 
   async updateRawNote(id: string, input: UpdateRawNoteInput) {
-    const rawNote = await this.rawNoteRepository.update(id, input);
+    const existingRawNote = await this.rawNoteRepository.getById(id);
+    if (!existingRawNote) {
+      throw new AppError("Raw note not found", 404);
+    }
+
+    const sourceRole = input.sourceRole ?? existingRawNote.sourceRole ?? "personal_note";
+    if (this.rawSourceRepository && existingRawNote.rawSourceId) {
+      await this.rawSourceRepository.update(
+        existingRawNote.rawSourceId,
+        {
+          domain: input.domain,
+          sourceType: input.sourceType ?? existingRawNote.sourceType,
+          sourceRole,
+          title: input.title,
+          bodyMarkdown: input.bodyMarkdown,
+          metadata: { updatedVia: "raw_notes" },
+        },
+        chunkSourceMarkdown(input.bodyMarkdown),
+      );
+    }
+
+    const rawNote = await this.rawNoteRepository.update(id, { ...input, sourceRole });
     if (!rawNote) {
       throw new AppError("Raw note not found", 404);
     }
@@ -48,9 +91,13 @@ export class RawNoteService {
   }
 
   async deleteRawNote(id: string) {
+    const rawNote = await this.rawNoteRepository.getById(id);
     const deleted = await this.rawNoteRepository.delete(id);
     if (!deleted) {
       throw new AppError("Raw note not found", 404);
+    }
+    if (rawNote?.rawSourceId && this.rawSourceRepository) {
+      await this.rawSourceRepository.delete(rawNote.rawSourceId);
     }
   }
 

@@ -3,6 +3,7 @@ export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps' | 'update_proposals'
 export type ThemeMode = 'light' | 'dark'
 export type BoardKey = 'default' | 'algorithms' | 'review-maps' | 'mistakes'
+export type RawSourceRole = 'reference' | 'personal_note'
 
 export type DecisionRule = {
   signal: string
@@ -12,8 +13,11 @@ export type DecisionRule = {
 
 export type RawNote = {
   id: string
+  rawSourceId: string | null
   title: string | null
   domain: string | null
+  sourceType: string
+  sourceRole: RawSourceRole
   bodyMarkdown: string
   createdAt: string
 }

@@ -202,7 +202,12 @@ export class AgentRunQueueService {
     await this.agentRunRepository.addEvent({
       agentRunId,
       eventType: "raw_note_loaded",
-      payload: { rawNoteId },
+      payload: {
+        rawNoteId,
+        rawSourceId: rawNote.rawSourceId,
+        sourceRole: rawNote.sourceRole,
+        sourceType: rawNote.sourceType,
+      },
     });
 
     const { extraction, provider } = await this.wikiIndexerService.extract(rawNote);
@@ -270,6 +275,8 @@ export class AgentRunQueueService {
 
     return {
       rawNoteId: rawNote.id,
+      rawSourceId: rawNote.rawSourceId,
+      sourceRole: rawNote.sourceRole,
       proposalId: proposal.id,
       provider,
       detectedKnowledgeType: extraction.knowledgeType,

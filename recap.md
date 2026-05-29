@@ -60,6 +60,7 @@
 - Started issue #23 implementation on `codex/knowledge-block-retrieval`: `/search` now retrieves approved active `knowledge_blocks`, supports explicit archived-block inclusion, and returns evidence references that can point back to raw source chunks.
 - Started issue #24 implementation on `codex/knowledge-evolution-timeline`: approval now creates raw-source-chunk evidence links for knowledge versions, backend exposes knowledge-source and compiled-note timeline endpoints, and the graph inspector shows a lightweight Evolution panel.
 - Started issue #31 implementation on `codex/agent-run-retry-navigation`: failed agent runs can be retried from a new retry endpoint and drawer action, and generated proposals can be opened directly in the Review Inbox.
+- Started issue #33 implementation on `codex/knowledge-search-ui`: the Notes Graph toolbar search now opens a Knowledge Search panel backed by `/search`, with approved knowledge-block results, metadata, evidence snippets, archived-block toggle, and loading/empty/error states.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -105,6 +106,7 @@
 - Search retrieval should use approved `knowledge_blocks` as the answer corpus; raw source chunks stay attached as evidence references rather than being searched as the primary corpus.
 - Knowledge evolution should be inspectable from the note card surface: current and historical versions, proposal IDs, dates, blocks, and source chunk evidence should live together in one timeline payload.
 - Agent runs should stay actionable after failure: retry creates a new run with the original type/input plus retry lineage, while proposal navigation should move the user to the approval surface instead of making them hunt for the generated proposal.
+- The first search UI should be an overlay from the Notes Graph toolbar rather than a new workspace page, so retrieval can be tested without adding another navigation surface.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -146,9 +148,10 @@
 - Knowledge block retrieval validation: `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass. Route tests cover active block search, evidence references, and opt-in archived block retrieval.
 - Knowledge evolution timeline validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover chunk evidence link creation during approval and timeline retrieval by knowledge source and compiled note.
 - Agent run retry/navigation validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and browser smoke load with no console errors pass. Tests cover retrying failed runs and rejecting retry on completed runs.
+- Knowledge Search UI validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and browser smoke test all pass. The smoke test opened the panel from the toolbar, verified `/search` returned successfully, and confirmed no console errors; the local database returned zero matches for the tested query.
 
 ## Next Target
-- Close issue #31 through the PR merge, then revisit the remaining stale #12 spec issue and decide whether to close it as superseded by the LLM-only flow.
+- Close issue #33 through the PR merge.
 - Add review-map editing affordances such as manual rule cleanup, related-note pinning, and review-action tracking.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

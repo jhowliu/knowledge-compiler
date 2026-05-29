@@ -83,6 +83,23 @@ export type KnowledgeEvidenceReference = {
   createdAt: string
 }
 
+export type KnowledgeSearchResult = {
+  blockId: string
+  knowledgeSourceId: string
+  knowledgeVersionId: string
+  title: string
+  domain: string
+  knowledgeType: string
+  versionNumber: number
+  blockIndex: number
+  heading: string | null
+  bodyMarkdown: string
+  rank: number
+  status: string
+  updatedAt: string
+  evidenceReferences: KnowledgeEvidenceReference[]
+}
+
 export type KnowledgeTimelineVersion = {
   id: string
   knowledgeSourceId: string

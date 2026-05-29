@@ -176,6 +176,9 @@ export function TopToolbar({
   isAgentRunning,
   noteCount,
   onReindexLinks,
+  onSearchQueryChange,
+  onSearchSubmit,
+  searchQuery,
   taskCount,
 }: {
   agentRunStatus: string
@@ -183,14 +186,30 @@ export function TopToolbar({
   compiledCount: number
   isAgentRunning: boolean
   onReindexLinks: () => void
+  onSearchQueryChange: (value: string) => void
+  onSearchSubmit: () => void
+  searchQuery: string
   taskCount: number
 }) {
   return (
     <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">
-      <div className="flex h-10 w-[420px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500">
+      <form
+        className="flex h-10 w-[420px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSearchSubmit()
+        }}
+      >
         <Search size={16} />
-        Search notes, links, evidence...
-      </div>
+        <input
+          aria-label="Search knowledge"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+          placeholder="Search knowledge and evidence..."
+          type="search"
+          value={searchQuery}
+        />
+      </form>
 
       <div className="min-w-0 flex-1">
         <h1 className="text-[15px] font-bold text-ink">Notes Graph</h1>

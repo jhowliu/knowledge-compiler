@@ -22,6 +22,32 @@ export type RawNote = {
   createdAt: string
 }
 
+export type RawSourceChunk = {
+  id: string
+  rawSourceId: string
+  chunkIndex: number
+  heading: string | null
+  bodyMarkdown: string
+  tokenEstimate: number
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export type RawSource = {
+  id: string
+  userId: string | null
+  domain: string | null
+  sourceType: string
+  sourceRole: RawSourceRole
+  title: string | null
+  bodyMarkdown: string
+  metadata: Record<string, unknown>
+  extractedData: unknown
+  createdAt: string
+  updatedAt: string
+  chunks: RawSourceChunk[]
+}
+
 export type ProposalItem = {
   id: string
   actionType: string
@@ -192,6 +218,7 @@ export type RawNoteIndexingTrace = {
 
 export type WorkspaceData = {
   rawNotes: RawNote[]
+  rawSources: RawSource[]
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]

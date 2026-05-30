@@ -81,7 +81,7 @@ export function LeftNavigation({
         type="button"
       >
         <Plus size={18} />
-        Capture raw note
+        Capture source
       </button>
 
       <nav className="space-y-1.5">
@@ -109,7 +109,7 @@ export function LeftNavigation({
           type="button"
         >
           <PencilLine size={16} className="text-gray-400" />
-          Raw notes
+          Sources
         </button>
         <button
           className={navItemClass(activeView === 'update_proposals')}
@@ -203,7 +203,7 @@ export function TopToolbar({
       <div className="min-w-0 flex-1">
         <h1 className="text-[15px] font-bold text-ink">Notes Graph</h1>
         <p className="text-xs text-gray-500">
-          {noteCount} raw notes {'->'} {compiledCount} compiled notes. Open a card to inspect links.
+          {noteCount} sources {'->'} {compiledCount} compiled notes. Open a card to inspect links.
         </p>
       </div>
 

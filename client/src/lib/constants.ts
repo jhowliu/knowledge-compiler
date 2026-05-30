@@ -21,6 +21,7 @@ export const relationOptions = [
 
 export const emptyWorkspaceData: WorkspaceData = {
   rawNotes: [],
+  rawSources: [],
   proposals: [],
   compiledNotes: [],
   noteLinks: [],

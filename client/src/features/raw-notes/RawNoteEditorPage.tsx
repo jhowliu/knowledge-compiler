@@ -1,11 +1,75 @@
 import React from 'react'
-import { BookOpen, Eye, FileText, PencilLine, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
+import { BookOpen, CheckCircle2, Eye, FileText, PencilLine, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
-import type { RawNote, RawNoteIndexingTrace, RawSourceRole } from '../../types/domain'
+import type {
+  AgentRun,
+  Proposal,
+  RawNote,
+  RawNoteIndexingTrace,
+  RawSource,
+  RawSourceRole,
+} from '../../types/domain'
+
+type SourceLifecycle = {
+  label: string
+  tone: 'idle' | 'active' | 'pending' | 'done' | 'failed'
+}
+
+function getRunRawNoteId(agentRun: AgentRun) {
+  if (!agentRun.input || typeof agentRun.input !== 'object') {
+    return null
+  }
+
+  const input = agentRun.input as { rawNoteId?: unknown }
+  return typeof input.rawNoteId === 'string' ? input.rawNoteId : null
+}
+
+function getLifecycle(note: RawNote, proposals: Proposal[], agentRuns: AgentRun[]): SourceLifecycle {
+  const noteProposals = proposals.filter((proposal) => proposal.rawNoteId === note.id)
+  const noteRuns = agentRuns.filter((agentRun) => getRunRawNoteId(agentRun) === note.id)
+  const hasActiveRun = noteRuns.some((agentRun) => ['queued', 'running'].includes(agentRun.status))
+  const latestProposal = noteProposals[0] ?? null
+  const latestFailedRun = noteRuns.find((agentRun) => agentRun.status === 'failed')
+
+  if (hasActiveRun) {
+    return { label: 'Indexing', tone: 'active' }
+  }
+
+  if (latestFailedRun && !latestProposal) {
+    return { label: 'Failed', tone: 'failed' }
+  }
+
+  if (latestProposal?.status === 'approved') {
+    return { label: 'Applied', tone: 'done' }
+  }
+
+  if (latestProposal?.status === 'rejected') {
+    return { label: 'Rejected', tone: 'failed' }
+  }
+
+  if (latestProposal?.status === 'pending') {
+    return { label: 'Needs approval', tone: 'pending' }
+  }
+
+  return { label: 'Captured', tone: 'idle' }
+}
+
+function lifecycleClass(tone: SourceLifecycle['tone']) {
+  return {
+    idle: 'border-[#3A3A3A] bg-[#252525] text-gray-300',
+    active: 'border-violet/60 bg-violet/15 text-violet-100',
+    pending: 'border-amber-700/70 bg-amber-950/30 text-amber-100',
+    done: 'border-emerald-800/70 bg-emerald-950/30 text-emerald-100',
+    failed: 'border-red-900/70 bg-red-950/40 text-red-100',
+  }[tone]
+}
 
 export function RawNoteEditorPage({
   indexingTrace,
   rawNotes,
+  rawSources,
+  proposals,
+  agentRuns,
   selectedRawNoteId,
   isDirty,
   title,
@@ -26,6 +90,9 @@ export function RawNoteEditorPage({
 }: {
   indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
+  rawSources: RawSource[]
+  proposals: Proposal[]
+  agentRuns: AgentRun[]
   selectedRawNoteId: string | null
   isDirty: boolean
   title: string
@@ -45,6 +112,15 @@ export function RawNoteEditorPage({
   onSubmit: (event: React.FormEvent) => void
 }) {
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
+  const sourceById = new Map(rawSources.map((source) => [source.id, source]))
+  const selectedRawSource = selectedRawNote?.rawSourceId
+    ? sourceById.get(selectedRawNote.rawSourceId) ?? null
+    : null
+  const selectedChunks = selectedRawSource?.chunks ?? []
+  const selectedLifecycle = selectedRawNote
+    ? getLifecycle(selectedRawNote, proposals, agentRuns)
+    : { label: 'Draft', tone: 'idle' as const }
+  const visibleRawNotes = rawNotes.slice(0, 12)
 
   return (
     <section className="flex min-h-0 flex-1 bg-[#181818] text-white">
@@ -52,13 +128,13 @@ export function RawNoteEditorPage({
         <div className="mb-7 flex items-center gap-4">
           <PencilLine size={34} strokeWidth={1.9} className="text-gray-400" />
           <h1 className="text-[26px] font-semibold leading-none tracking-normal text-gray-100">
-            Raw notes
+            Sources
           </h1>
         </div>
 
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-            Recent notes
+            Source inbox
           </p>
           <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-bold text-gray-300">
             {rawNotes.length}
@@ -67,31 +143,48 @@ export function RawNoteEditorPage({
 
         <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
           {rawNotes.length ? (
-            rawNotes.slice(0, 12).map((note) => (
-              <button
-                className={`w-full rounded-md border p-3 text-left transition ${
-                  note.id === selectedRawNoteId
-                    ? 'border-violet bg-[#252039]'
-                    : 'border-[#2B2B2B] bg-[#202020] hover:border-[#3A3A3A]'
-                }`}
-                key={note.id}
-                onClick={() => onSelectRawNote(note)}
-                type="button"
-              >
-                <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
-                  {note.title ?? 'Untitled raw note'}
-                </p>
-                <p className="mt-1 text-[10px] font-bold uppercase text-gray-500">
-                  {note.sourceRole === 'reference' ? 'Paper / Reference' : 'My notes'}
-                </p>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
-                  {note.bodyMarkdown}
-                </p>
-              </button>
-            ))
+            visibleRawNotes.map((note) => {
+              const source = note.rawSourceId ? sourceById.get(note.rawSourceId) ?? null : null
+              const lifecycle = getLifecycle(note, proposals, agentRuns)
+
+              return (
+                <button
+                  className={`w-full rounded-md border p-3 text-left transition ${
+                    note.id === selectedRawNoteId
+                      ? 'border-violet bg-[#252039]'
+                      : 'border-[#2B2B2B] bg-[#202020] hover:border-[#3A3A3A]'
+                  }`}
+                  key={note.id}
+                  onClick={() => onSelectRawNote(note)}
+                  type="button"
+                >
+                  <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
+                    {note.title ?? 'Untitled source'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
+                      {note.sourceRole === 'reference' ? 'Reference' : 'Personal note'}
+                    </span>
+                    <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
+                      {source?.chunks.length ?? 0} chunks
+                    </span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(
+                        lifecycle.tone,
+                      )}`}
+                    >
+                      {lifecycle.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
+                    {note.bodyMarkdown}
+                  </p>
+                </button>
+              )
+            })
           ) : (
             <p className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3 text-xs leading-5 text-gray-400">
-              No raw notes yet.
+              No sources yet.
             </p>
           )}
         </div>
@@ -103,17 +196,21 @@ export function RawNoteEditorPage({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
               {selectedRawNote
                 ? isDirty
-                  ? 'Editing saved source'
+                  ? 'Editing source'
                   : 'Saved source'
                 : 'New source'}
             </p>
             <div className="mt-1 flex items-center gap-3">
               <h2 className="text-[15px] font-bold text-gray-100">
-                {selectedRawNote?.title ?? 'Capture interview evidence'}
+                {selectedRawNote?.title ?? 'Capture source evidence'}
               </h2>
-              {selectedRawNote && indexingTrace ? (
-                <span className="rounded-full border border-[#3A3A3A] px-2.5 py-1 text-[11px] font-bold text-gray-300">
-                  {indexingTrace.status}
+              {selectedRawNote ? (
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${lifecycleClass(
+                    selectedLifecycle.tone,
+                  )}`}
+                >
+                  {indexingTrace?.status ?? selectedLifecycle.label}
                 </span>
               ) : null}
             </div>
@@ -122,8 +219,8 @@ export function RawNoteEditorPage({
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 rounded-lg border border-[#3A3A3A] bg-[#191919] p-1">
               {[
-                { value: 'personal_note' as const, label: 'My notes', icon: PencilLine },
-                { value: 'reference' as const, label: 'Paper', icon: BookOpen },
+                { value: 'personal_note' as const, label: 'Personal', icon: PencilLine },
+                { value: 'reference' as const, label: 'Reference', icon: BookOpen },
               ].map((option) => {
                 const Icon = option.icon
                 return (
@@ -149,7 +246,7 @@ export function RawNoteEditorPage({
               type="button"
             >
               <Plus size={16} />
-              New note
+              New source
             </button>
             {selectedRawNote ? (
               <>
@@ -163,11 +260,11 @@ export function RawNoteEditorPage({
                   Save
                 </button>
                 <button
-                  aria-label="Delete raw note"
+                  aria-label="Delete source"
                   className="grid h-10 w-10 place-items-center rounded-lg border border-red-900/70 text-red-200 hover:bg-red-950/40 disabled:opacity-50"
                   disabled={isSubmitting}
                   onClick={onDelete}
-                  title="Delete raw note"
+                  title="Delete source"
                   type="button"
                 >
                   <Trash2 size={16} />
@@ -180,7 +277,7 @@ export function RawNoteEditorPage({
               type="submit"
             >
               <Sparkles size={16} />
-              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile saved' : 'Compile note'}
+              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile saved' : 'Compile source'}
             </button>
           </div>
         </header>
@@ -199,15 +296,15 @@ export function RawNoteEditorPage({
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(360px,1fr)_minmax(320px,0.9fr)] gap-0">
           <div className="flex min-h-0 flex-col px-8 py-7">
             <input
-              aria-label="Raw note title"
+              aria-label="Source title"
               className="mb-5 h-14 w-full border-0 bg-transparent text-3xl font-semibold tracking-normal text-white outline-none placeholder:text-gray-600"
               onChange={(event) => onTitleChange(event.target.value)}
-              placeholder="Untitled raw note"
+              placeholder="Untitled source"
               ref={titleInputRef}
               value={title}
             />
             <textarea
-              aria-label="Raw practice note"
+              aria-label="Source body"
               className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
               onChange={(event) => onBodyChange(event.target.value)}
               placeholder={
@@ -250,7 +347,7 @@ export function RawNoteEditorPage({
                 </div>
                 {indexingTrace.proposals[0] ? (
                   <p className="mt-3 text-xs leading-5 text-gray-400">
-                    {indexingTrace.proposals[0].rationale ?? 'Proposal generated from this raw note.'}
+                    {indexingTrace.proposals[0].rationale ?? 'Proposal generated from this source.'}
                   </p>
                 ) : indexingTrace.status === 'Failed' ? (
                   <p className="mt-3 rounded-md border border-red-900/60 bg-red-950/40 p-3 text-xs leading-5 text-red-100">
@@ -259,7 +356,60 @@ export function RawNoteEditorPage({
                   </p>
                 ) : (
                   <p className="mt-3 text-xs leading-5 text-gray-500">
-                    Compile this raw note with LLM wiki indexing to create a proposal.
+                    Compile this source with LLM wiki indexing to create a proposal.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {selectedRawNote ? (
+              <div className="mb-5 rounded-lg border border-[#303030] bg-[#202020] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[12px] font-extrabold text-gray-100">Source lifecycle</p>
+                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
+                    {selectedChunks.length} chunks
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 text-[10px] font-bold uppercase">
+                  {([
+                    ['Captured', true],
+                    ['Chunked', selectedChunks.length > 0],
+                    ['Indexed', indexingTrace ? indexingTrace.agentRuns.length > 0 : false],
+                    ['Approval', indexingTrace ? indexingTrace.proposals.length > 0 : false],
+                  ] as Array<[string, boolean]>).map(([label, isReady]) => (
+                    <div
+                      className={`rounded-md border px-2 py-2 text-center ${
+                        isReady
+                          ? 'border-emerald-900/70 bg-emerald-950/30 text-emerald-100'
+                          : 'border-[#303030] bg-[#171717] text-gray-500'
+                      }`}
+                      key={label}
+                    >
+                      {isReady ? <CheckCircle2 className="mx-auto mb-1" size={13} /> : null}
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                {selectedChunks.length ? (
+                  <div className="mt-4 space-y-2">
+                    {selectedChunks.slice(0, 3).map((chunk) => (
+                      <div className="rounded-md border border-[#303030] bg-[#171717] p-3" key={chunk.id}>
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <p className="line-clamp-1 text-[11px] font-bold text-gray-300">
+                            {chunk.heading ?? `Chunk ${chunk.chunkIndex + 1}`}
+                          </p>
+                          <span className="text-[10px] font-bold uppercase text-gray-600">
+                            ~{chunk.tokenEstimate} tokens
+                          </span>
+                        </div>
+                        <p className="line-clamp-2 text-xs leading-5 text-gray-500">
+                          {chunk.bodyMarkdown}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs leading-5 text-gray-500">
+                    Saving this source will create chunks for indexing and retrieval.
                   </p>
                 )}
               </div>

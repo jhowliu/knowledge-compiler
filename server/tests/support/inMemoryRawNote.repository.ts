@@ -25,6 +25,10 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
     return this.notes.find((note) => note.id === id) ?? null;
   }
 
+  async getByRawSourceId(rawSourceId: string): Promise<RawNote | null> {
+    return this.notes.find((note) => note.rawSourceId === rawSourceId) ?? null;
+  }
+
   async listRecent(limit: number): Promise<RawNote[]> {
     return this.notes.slice(0, limit);
   }

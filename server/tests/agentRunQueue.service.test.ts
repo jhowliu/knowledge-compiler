@@ -1,13 +1,13 @@
 import { AgentRunQueueService } from "../src/services/agentRunQueue.service.js";
-import { WikiIndexerService } from "../src/services/wikiIndexer.service.js";
+import { WikiIndexerService, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import type { CodingExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
-import type { RawNote } from "../src/domain/rawNote.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
+import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 
 const llmWikiIndexer = {
   async extract() {
@@ -49,7 +49,7 @@ const llmWikiIndexer = {
     };
   },
   draftProposal(
-    rawNote: RawNote,
+    source: WikiIndexingSource,
     extraction: CodingExtraction,
     relatedNotes: SearchResult[],
   ) {
@@ -58,7 +58,7 @@ const llmWikiIndexer = {
       detectedKnowledgeType: extraction.knowledgeType,
       impactLevel: 3,
       confidence: extraction.confidence,
-      rationale: `LLM indexed ${relatedNotes.length} related notes for ${rawNote.title ?? "raw note"}.`,
+      rationale: `LLM indexed ${relatedNotes.length} related notes for ${source.title ?? "source"}.`,
       items: [
         {
           actionType: "upsert_knowledge",
@@ -89,8 +89,8 @@ describe("agent run queue service", () => {
       sourceRole: "personal_note" as const,
       title: "Binary search note",
       bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
-      extractedData: {},
-      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      rawNoteId: "raw-note-1",
+      chunks: [],
     };
     const extraction: CodingExtraction = {
       domain: "coding",
@@ -255,6 +255,92 @@ describe("agent run queue service", () => {
         "proposal_created",
         "run_completed",
       ]),
+    );
+  });
+
+  test("runs compile_raw_note from a raw source and indexes source chunks", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const seenSources: Array<{ rawSourceId: string | null; chunkCount: number; bodyMarkdown: string }> = [];
+    const sourceAwareIndexer = {
+      async extract(source: WikiIndexingSource) {
+        seenSources.push({
+          rawSourceId: source.rawSourceId,
+          chunkCount: source.chunks.length,
+          bodyMarkdown: source.bodyMarkdown,
+        });
+        return llmWikiIndexer.extract();
+      },
+      draftProposal: llmWikiIndexer.draftProposal,
+    };
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      sourceAwareIndexer,
+      rawSourceRepository,
+    );
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "K stops source",
+        sourceRole: "personal_note",
+        sourceType: "markdown",
+        bodyMarkdown: "# K stops\n\nDijkstra needs dist[node][stops].\n\n## Heap\n\nUse cost,node,time.",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: "K stops",
+          bodyMarkdown: "Dijkstra needs dist[node][stops].",
+          tokenEstimate: 8,
+        },
+        {
+          chunkIndex: 1,
+          heading: "Heap",
+          bodyMarkdown: "Use cost,node,time.",
+          tokenEstimate: 4,
+        },
+      ],
+    );
+
+    const agentRun = await service.enqueue({
+      runType: "compile_raw_note",
+      input: { rawSourceId: rawSource.id },
+    });
+    await service.process(agentRun.id);
+
+    const completedRun = await agentRunRepository.getById(agentRun.id);
+
+    expect(completedRun?.status).toBe("completed");
+    expect(completedRun?.input).toMatchObject({ rawSourceId: rawSource.id });
+    expect(completedRun?.output).toMatchObject({
+      rawSourceId: rawSource.id,
+      rawNoteId: "raw-note-1",
+      chunkCount: 2,
+    });
+    expect(seenSources).toEqual([
+      {
+        rawSourceId: rawSource.id,
+        chunkCount: 2,
+        bodyMarkdown: rawSource.bodyMarkdown,
+      },
+    ]);
+    expect(rawNoteRepository.notes[0]).toMatchObject({
+      rawSourceId: rawSource.id,
+      title: "K stops source",
+    });
+    expect(rawSourceRepository.sources[0].extractedData).toMatchObject({
+      patterns: expect.arrayContaining(["Constrained Shortest Path"]),
+    });
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(
+      expect.arrayContaining(["raw_source_loaded", "proposal_created", "run_completed"]),
     );
   });
 

@@ -40,7 +40,7 @@ export class RawNoteService {
       sourceRole,
     });
     if (this.agentRunQueueService) {
-      const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId);
+      const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId, rawNote.rawSourceId);
       return { rawNote, proposal: null, agentRunId: agentRun.id };
     }
 
@@ -109,14 +109,14 @@ export class RawNoteService {
 
     if (!this.phaseOneWorkflowService) {
       if (this.agentRunQueueService) {
-        const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId);
+        const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId, rawNote.rawSourceId);
         return { proposal: null, agentRunId: agentRun.id };
       }
       return { proposal: null, agentRunId: null };
     }
 
     if (this.agentRunQueueService) {
-      const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId);
+      const agentRun = await this.enqueueCompileRun(rawNote.id, rawNote.userId, rawNote.rawSourceId);
       return { proposal: null, agentRunId: agentRun.id };
     }
 
@@ -165,7 +165,7 @@ export class RawNoteService {
     };
   }
 
-  private async enqueueCompileRun(rawNoteId: string, userId?: string | null) {
+  private async enqueueCompileRun(rawNoteId: string, userId?: string | null, rawSourceId?: string | null) {
     if (!this.agentRunQueueService) {
       throw new AppError("Agent run queue is not configured", 500);
     }
@@ -173,7 +173,7 @@ export class RawNoteService {
     const agentRun = await this.agentRunQueueService.enqueue({
       userId,
       runType: "compile_raw_note",
-      input: { rawNoteId },
+      input: rawSourceId ? { rawSourceId, rawNoteId } : { rawNoteId },
     });
     setTimeout(() => {
       this.agentRunQueueService?.process(agentRun.id).catch((error) => {

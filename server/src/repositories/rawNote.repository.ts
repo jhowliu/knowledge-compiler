@@ -17,6 +17,7 @@ type RawNoteRow = {
 export interface RawNoteRepository {
   create(input: CreateRawNoteInput): Promise<RawNote>;
   getById(id: string): Promise<RawNote | null>;
+  getByRawSourceId(rawSourceId: string): Promise<RawNote | null>;
   listRecent(limit: number): Promise<RawNote[]>;
   update(id: string, input: UpdateRawNoteInput): Promise<RawNote | null>;
   delete(id: string): Promise<boolean>;
@@ -76,6 +77,21 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
         where id = $1
       `,
       [id],
+    );
+
+    return result.rows[0] ? mapRawNote(result.rows[0]) : null;
+  }
+
+  async getByRawSourceId(rawSourceId: string) {
+    const result = await query<RawNoteRow>(
+      `
+        select *
+        from raw_notes
+        where raw_source_id = $1
+        order by created_at desc
+        limit 1
+      `,
+      [rawSourceId],
     );
 
     return result.rows[0] ? mapRawNote(result.rows[0]) : null;

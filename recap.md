@@ -156,9 +156,10 @@
 - Search inspector / cleanup validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` all pass. Browser smoke test opened search, confirmed empty-state rendering and no console errors; the local database still has no active search hits to exercise a real selected-result detail.
 - Legacy review surface removal validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` all pass. Browser smoke test confirmed the app reloads without console errors and the removed `/mistakes`, `/review-tasks`, and `/readiness-map` endpoints return 404.
 - Source Inbox validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test on `http://localhost:5174/` confirmed the nav/page language says Sources, source cards show role/chunk/lifecycle badges, selected source shows indexing trace plus chunk previews, and no console errors appeared.
+- Source-first compile validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test on `http://localhost:5173/` confirmed Sources loads without console errors. Source compile now supports `/sources/:id/compile`, queues agent runs with `rawSourceId`, creates/fetches a compatibility raw note, and feeds source chunks into LLM wiki indexing.
 
 ## Next Target
-- Open the Source Inbox PR for issue #40, then continue #38 with source-first compile/proposal ergonomics or the next canonical knowledge-flow sub-issue.
+- After #42 merges, continue #38 with #43 Review Queue source/chunk evidence, then #44 Codex-style Sources workspace UI and #45 project/folder organization.
 - Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

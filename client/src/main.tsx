@@ -272,14 +272,21 @@ function App() {
       let result: { rawNote?: RawNote; proposal: Proposal | null; agentRunId?: string | null }
       const isCompilingSavedNote = Boolean(selectedRawNoteId)
       if (selectedRawNoteId) {
+        const selectedRawNote = workspaceData.rawNotes.find((note) => note.id === selectedRawNoteId)
         if (isRawNoteDirty) {
           await requestJson<{ rawNote: RawNote }>(`/raw-notes/${selectedRawNoteId}`, {
             method: 'PATCH',
             body: JSON.stringify(rawNotePayload()),
           })
         }
-        result = await requestJson<{ proposal: Proposal | null; agentRunId?: string | null }>(
-          `/raw-notes/${selectedRawNoteId}/compile`,
+        result = await requestJson<{
+          rawNote?: RawNote
+          proposal: Proposal | null
+          agentRunId?: string | null
+        }>(
+          selectedRawNote?.rawSourceId
+            ? `/sources/${selectedRawNote.rawSourceId}/compile`
+            : `/raw-notes/${selectedRawNoteId}/compile`,
           {
             method: 'POST',
             body: JSON.stringify({}),

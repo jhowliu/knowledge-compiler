@@ -603,7 +603,7 @@ function App() {
               agentRunStatus={latestAgentRun?.status ?? 'idle'}
               compiledCount={workspaceData.compiledNotes.length}
               isAgentRunning={isAgentRunning}
-              noteCount={workspaceData.rawNotes.length}
+              noteCount={workspaceData.rawSources.length || workspaceData.rawNotes.length}
               onReindexLinks={() => void startReindexLinksRun()}
               onSearchQueryChange={setSearchQuery}
               onSearchSubmit={() => void runKnowledgeSearch()}
@@ -660,6 +660,7 @@ function App() {
           />
         ) : (
           <RawNoteEditorPage
+            agentRuns={workspaceData.agentRuns}
             bodyMarkdown={bodyMarkdown}
             error={error}
             indexingTrace={selectedRawNoteTrace}
@@ -674,7 +675,9 @@ function App() {
             onSourceRoleChange={updateSourceRole}
             onSubmit={submitRawNote}
             onTitleChange={updateDraftTitle}
+            proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
+            rawSources={workspaceData.rawSources}
             selectedRawNoteId={selectedRawNoteId}
             sourceRole={sourceRole}
             title={title}

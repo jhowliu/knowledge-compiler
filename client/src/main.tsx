@@ -663,6 +663,7 @@ function App() {
             onSelectProposal={setSelectedProposalId}
             proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
+            rawSources={workspaceData.rawSources}
             selectedProposalId={selectedProposal?.id ?? null}
           />
         ) : (

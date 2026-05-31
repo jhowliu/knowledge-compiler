@@ -4,6 +4,8 @@ import type {
   CreateSourceFolderInput,
   CreateSourceProjectInput,
   MoveRawSourceInput,
+  RenameSourceFolderInput,
+  RenameSourceProjectInput,
   UpdateRawSourceInput,
 } from "../domain/rawSource.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
@@ -30,6 +32,22 @@ export class RawSourceService {
     const folder = await this.rawSourceRepository.createFolder(projectId, input);
     if (!folder) {
       throw new AppError("Source project not found", 404);
+    }
+    return folder;
+  }
+
+  async renameSourceProject(projectId: string, input: RenameSourceProjectInput) {
+    const project = await this.rawSourceRepository.renameProject(projectId, input);
+    if (!project) {
+      throw new AppError("Source project not found", 404);
+    }
+    return project;
+  }
+
+  async renameSourceFolder(projectId: string, folderId: string, input: RenameSourceFolderInput) {
+    const folder = await this.rawSourceRepository.renameFolder(projectId, folderId, input);
+    if (!folder) {
+      throw new AppError("Source folder not found", 404);
     }
     return folder;
   }

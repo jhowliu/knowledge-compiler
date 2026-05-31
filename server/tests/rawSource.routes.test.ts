@@ -160,6 +160,78 @@ describe("raw source routes", () => {
     });
   });
 
+  test("PATCH /sources/projects/:projectId and folders/:folderId renames organization nodes", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Research",
+    });
+    const folderResponse = await request(app)
+      .post(`/sources/projects/${projectResponse.body.sourceProject.id}/folders`)
+      .send({
+        name: "Papers",
+      });
+    const sourceResponse = await request(app).post("/sources").send({
+      projectId: projectResponse.body.sourceProject.id,
+      folderId: folderResponse.body.sourceFolder.id,
+      title: "Renamed source",
+      bodyMarkdown: "Keep this source in the same folder.",
+    });
+
+    const renameProjectResponse = await request(app)
+      .patch(`/sources/projects/${projectResponse.body.sourceProject.id}`)
+      .send({
+        name: "LLM Research",
+      });
+    const renameFolderResponse = await request(app)
+      .patch(
+        `/sources/projects/${projectResponse.body.sourceProject.id}/folders/${folderResponse.body.sourceFolder.id}`,
+      )
+      .send({
+        name: "Transformer Papers",
+      });
+    const organizationResponse = await request(app).get("/sources/organization");
+
+    expect(renameProjectResponse.status).toBe(200);
+    expect(renameProjectResponse.body.sourceProject).toMatchObject({
+      id: projectResponse.body.sourceProject.id,
+      name: "LLM Research",
+      sourceCount: 1,
+      uncategorizedSourceCount: 0,
+    });
+    expect(renameFolderResponse.status).toBe(200);
+    expect(renameFolderResponse.body.sourceFolder).toMatchObject({
+      id: folderResponse.body.sourceFolder.id,
+      projectId: projectResponse.body.sourceProject.id,
+      name: "Transformer Papers",
+      sourceCount: 1,
+    });
+    expect(organizationResponse.body.sourceOrganization.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: projectResponse.body.sourceProject.id,
+          name: "LLM Research",
+          sourceCount: 1,
+          folders: [
+            expect.objectContaining({
+              id: folderResponse.body.sourceFolder.id,
+              name: "Transformer Papers",
+              sourceCount: 1,
+            }),
+          ],
+        }),
+      ]),
+    );
+    expect(rawSourceRepository.sources[0]).toMatchObject({
+      id: sourceResponse.body.rawSource.id,
+      projectId: projectResponse.body.sourceProject.id,
+      folderId: folderResponse.body.sourceFolder.id,
+    });
+  });
+
   test("PATCH /sources/:id/organization moves a source without re-chunking", async () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({

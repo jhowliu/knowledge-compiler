@@ -52,6 +52,33 @@ export class RawSourceController {
     }
   };
 
+  renameProject = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        sourceProject: await this.rawSourceService.renameSourceProject(
+          requireStringParam(request, "projectId"),
+          request.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  renameFolder = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        sourceFolder: await this.rawSourceService.renameSourceFolder(
+          requireStringParam(request, "projectId"),
+          requireStringParam(request, "folderId"),
+          request.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   get = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ rawSource: await this.rawSourceService.getRawSource(requireStringParam(request, "id")) });

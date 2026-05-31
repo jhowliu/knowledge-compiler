@@ -7,6 +7,8 @@ import {
   createSourceFolderSchema,
   createSourceProjectSchema,
   moveRawSourceSchema,
+  renameSourceFolderSchema,
+  renameSourceProjectSchema,
   updateRawSourceSchema,
 } from "../validators/rawSource.schemas.js";
 
@@ -17,10 +19,16 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
   router.get("/", controller.list);
   router.get("/organization", controller.organization);
   router.post("/projects", validateBody(createSourceProjectSchema), controller.createProject);
+  router.patch("/projects/:projectId", validateBody(renameSourceProjectSchema), controller.renameProject);
   router.post(
     "/projects/:projectId/folders",
     validateBody(createSourceFolderSchema),
     controller.createFolder,
+  );
+  router.patch(
+    "/projects/:projectId/folders/:folderId",
+    validateBody(renameSourceFolderSchema),
+    controller.renameFolder,
   );
   router.post("/", validateBody(createRawSourceSchema), controller.create);
   router.get("/:id", controller.get);

@@ -8,6 +8,8 @@ import type {
   RawSource,
   RawSourceChunk,
   RawSourceRole,
+  RenameSourceFolderInput,
+  RenameSourceProjectInput,
   SourceFolder,
   SourceOrganization,
   SourceProject,
@@ -67,6 +69,12 @@ export interface RawSourceRepository {
   create(input: CreateRawSourceInput, chunks: CreateRawSourceChunkInput[]): Promise<RawSourceWithChunks>;
   createProject(input: CreateSourceProjectInput): Promise<SourceProject>;
   createFolder(projectId: string, input: CreateSourceFolderInput): Promise<SourceFolder | null>;
+  renameProject(projectId: string, input: RenameSourceProjectInput): Promise<SourceProject | null>;
+  renameFolder(
+    projectId: string,
+    folderId: string,
+    input: RenameSourceFolderInput,
+  ): Promise<SourceFolder | null>;
   getById(id: string): Promise<RawSourceWithChunks | null>;
   listRecent(limit: number): Promise<RawSourceWithChunks[]>;
   listOrganization(): Promise<SourceOrganization>;
@@ -218,6 +226,48 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
       [projectId, input.userId ?? null, input.name, input.metadata ?? {}],
     );
     return result.rows[0] ? mapSourceFolder(result.rows[0]) : null;
+  }
+
+  async renameProject(projectId: string, input: RenameSourceProjectInput) {
+    const result = await query<{ id: string }>(
+      `
+        update source_projects
+        set name = $2,
+            updated_at = now()
+        where id = $1
+        returning id
+      `,
+      [projectId, input.name],
+    );
+
+    if (!result.rows[0]) {
+      return null;
+    }
+
+    const organization = await this.listOrganization();
+    return organization.projects.find((project) => project.id === projectId) ?? null;
+  }
+
+  async renameFolder(projectId: string, folderId: string, input: RenameSourceFolderInput) {
+    const result = await query<{ id: string }>(
+      `
+        update source_folders
+        set name = $3,
+            updated_at = now()
+        where id = $2
+          and project_id = $1
+        returning id
+      `,
+      [projectId, folderId, input.name],
+    );
+
+    if (!result.rows[0]) {
+      return null;
+    }
+
+    const organization = await this.listOrganization();
+    const project = organization.projects.find((item) => item.id === projectId);
+    return project?.folders.find((folder) => folder.id === folderId) ?? null;
   }
 
   async getById(id: string) {

@@ -5,6 +5,8 @@ import type {
   CreateSourceProjectInput,
   MoveRawSourceInput,
   RawSourceWithChunks,
+  RenameSourceFolderInput,
+  RenameSourceProjectInput,
   SourceFolder,
   SourceProject,
   UpdateRawSourceInput,
@@ -92,6 +94,35 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     };
     project.folders.push(folder);
     return folder;
+  }
+
+  async renameProject(projectId: string, input: RenameSourceProjectInput) {
+    const project = this.projects.find((item) => item.id === projectId);
+    if (!project) {
+      return null;
+    }
+
+    project.name = input.name;
+    project.updatedAt = new Date("2026-05-24T01:00:00.000Z");
+    const organization = await this.listOrganization();
+    return organization.projects.find((item) => item.id === projectId) ?? null;
+  }
+
+  async renameFolder(projectId: string, folderId: string, input: RenameSourceFolderInput) {
+    const project = this.projects.find((item) => item.id === projectId);
+    const folder = project?.folders.find((item) => item.id === folderId);
+    if (!project || !folder) {
+      return null;
+    }
+
+    folder.name = input.name;
+    folder.updatedAt = new Date("2026-05-24T01:00:00.000Z");
+    const organization = await this.listOrganization();
+    return (
+      organization.projects
+        .find((item) => item.id === projectId)
+        ?.folders.find((item) => item.id === folderId) ?? null
+    );
   }
 
   async getById(id: string) {

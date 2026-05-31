@@ -446,6 +446,36 @@ function App() {
     }
   }
 
+  async function renameSourceProject(projectId: string, name: string) {
+    try {
+      await requestJson(`/sources/projects/${projectId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      })
+      setNotice(`Project renamed to "${name}".`)
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to rename project')
+      setNotice(null)
+    }
+  }
+
+  async function renameSourceFolder(projectId: string, folderId: string, name: string) {
+    try {
+      await requestJson(`/sources/projects/${projectId}/folders/${folderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      })
+      setNotice(`Folder renamed to "${name}".`)
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to rename folder')
+      setNotice(null)
+    }
+  }
+
   async function moveRawSource(rawSourceId: string, input: { projectId: string; folderId: string | null }) {
     try {
       await requestJson(`/sources/${rawSourceId}/organization`, {
@@ -737,6 +767,8 @@ function App() {
             onNewNote={openNewRawNoteEditor}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
+            onRenameFolder={(projectId, folderId, name) => void renameSourceFolder(projectId, folderId, name)}
+            onRenameProject={(projectId, name) => void renameSourceProject(projectId, name)}
             onSave={() => void saveSelectedRawNote()}
             onSelectRawNote={selectRawNote}
             onSourceRoleChange={updateSourceRole}

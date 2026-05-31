@@ -173,6 +173,8 @@ export function RawNoteEditorPage({
   onCreateFolder,
   onRenameProject,
   onRenameFolder,
+  onDeleteProject,
+  onDeleteFolder,
   onMoveSource,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
@@ -204,6 +206,8 @@ export function RawNoteEditorPage({
   onCreateFolder: (projectId: string, name: string) => void
   onRenameProject: (projectId: string, name: string) => void
   onRenameFolder: (projectId: string, folderId: string, name: string) => void
+  onDeleteProject: (projectId: string) => void
+  onDeleteFolder: (projectId: string, folderId: string) => void
   onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
@@ -234,6 +238,12 @@ export function RawNoteEditorPage({
     selectedFolderFilter === 'all' || selectedFolderFilter === 'uncategorized'
       ? null
       : selectedProject?.folders.find((folder) => folder.id === selectedFolderFilter) ?? null
+  const canDeleteSelectedProject =
+    selectedProject !== undefined &&
+    selectedProject.metadata.system !== 'default' &&
+    selectedProject.sourceCount === 0 &&
+    selectedProject.folders.length === 0
+  const canDeleteSelectedFolder = Boolean(selectedFolder) && selectedFolder?.sourceCount === 0
   const moveProject = sourceProjects.find((project) => project.id === moveProjectId)
 
   useEffect(() => {
@@ -381,6 +391,23 @@ export function RawNoteEditorPage({
               >
                 <Save size={13} />
               </button>
+              <button
+                aria-label="Delete project"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
+                disabled={isSubmitting || !canDeleteSelectedProject}
+                onClick={() => {
+                  if (!selectedProject || !canDeleteSelectedProject) return
+                  onDeleteProject(selectedProject.id)
+                }}
+                title={
+                  canDeleteSelectedProject
+                    ? 'Delete empty project'
+                    : 'Only empty custom projects can be deleted'
+                }
+                type="button"
+              >
+                <Trash2 size={13} />
+              </button>
             </form>
             <NavButton
               active={selectedFolderFilter === 'uncategorized'}
@@ -425,6 +452,19 @@ export function RawNoteEditorPage({
                   type="submit"
                 >
                   <Save size={13} />
+                </button>
+                <button
+                  aria-label="Delete folder"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
+                  disabled={isSubmitting || !canDeleteSelectedFolder}
+                  onClick={() => {
+                    if (!selectedProject || !selectedFolder || !canDeleteSelectedFolder) return
+                    onDeleteFolder(selectedProject.id, selectedFolder.id)
+                  }}
+                  title={canDeleteSelectedFolder ? 'Delete empty folder' : 'Only empty folders can be deleted'}
+                  type="button"
+                >
+                  <Trash2 size={13} />
                 </button>
               </form>
             ) : null}

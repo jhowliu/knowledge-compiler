@@ -75,6 +75,8 @@ export interface RawSourceRepository {
     folderId: string,
     input: RenameSourceFolderInput,
   ): Promise<SourceFolder | null>;
+  deleteProject(projectId: string): Promise<boolean>;
+  deleteFolder(projectId: string, folderId: string): Promise<boolean>;
   getById(id: string): Promise<RawSourceWithChunks | null>;
   listRecent(limit: number): Promise<RawSourceWithChunks[]>;
   listOrganization(): Promise<SourceOrganization>;
@@ -268,6 +270,19 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
     const organization = await this.listOrganization();
     const project = organization.projects.find((item) => item.id === projectId);
     return project?.folders.find((folder) => folder.id === folderId) ?? null;
+  }
+
+  async deleteProject(projectId: string) {
+    const result = await query("delete from source_projects where id = $1", [projectId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteFolder(projectId: string, folderId: string) {
+    const result = await query("delete from source_folders where id = $1 and project_id = $2", [
+      folderId,
+      projectId,
+    ]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getById(id: string) {

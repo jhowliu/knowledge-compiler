@@ -52,6 +52,47 @@ export class RawSourceService {
     return folder;
   }
 
+  async deleteSourceProject(projectId: string) {
+    const organization = await this.rawSourceRepository.listOrganization();
+    const project = organization.projects.find((item) => item.id === projectId);
+
+    if (!project) {
+      throw new AppError("Source project not found", 404);
+    }
+
+    if (project.metadata.system === "default") {
+      throw new AppError("Default source project cannot be deleted", 409);
+    }
+
+    if (project.sourceCount > 0 || project.folders.length > 0) {
+      throw new AppError("Move sources and delete folders before deleting this project", 409);
+    }
+
+    const deleted = await this.rawSourceRepository.deleteProject(projectId);
+    if (!deleted) {
+      throw new AppError("Source project not found", 404);
+    }
+  }
+
+  async deleteSourceFolder(projectId: string, folderId: string) {
+    const organization = await this.rawSourceRepository.listOrganization();
+    const project = organization.projects.find((item) => item.id === projectId);
+    const folder = project?.folders.find((item) => item.id === folderId);
+
+    if (!project || !folder) {
+      throw new AppError("Source folder not found", 404);
+    }
+
+    if (folder.sourceCount > 0) {
+      throw new AppError("Move sources before deleting this folder", 409);
+    }
+
+    const deleted = await this.rawSourceRepository.deleteFolder(projectId, folderId);
+    if (!deleted) {
+      throw new AppError("Source folder not found", 404);
+    }
+  }
+
   async listRecentRawSources() {
     return this.rawSourceRepository.listRecent(50);
   }

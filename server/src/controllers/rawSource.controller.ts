@@ -79,6 +79,27 @@ export class RawSourceController {
     }
   };
 
+  deleteProject = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      await this.rawSourceService.deleteSourceProject(requireStringParam(request, "projectId"));
+      response.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteFolder = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      await this.rawSourceService.deleteSourceFolder(
+        requireStringParam(request, "projectId"),
+        requireStringParam(request, "folderId"),
+      );
+      response.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  };
+
   get = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ rawSource: await this.rawSourceService.getRawSource(requireStringParam(request, "id")) });

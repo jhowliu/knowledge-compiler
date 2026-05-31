@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   ArrowRight,
+  BookOpen,
   Check,
   ChevronDown,
   FileText,
   GitBranch,
+  Layers3,
   RotateCw,
   Sparkles,
   X,
 } from 'lucide-react'
 import { actionLabel, payloadLabel, payloadText } from '../../lib/knowledge'
-import type { NoteLink, Proposal, RawNote } from '../../types/domain'
+import type { NoteLink, Proposal, ProposalItem, RawNote, RawSource } from '../../types/domain'
 
 type ReviewTab = 'updates' | 'links' | 'done'
 
@@ -26,8 +29,45 @@ function statusClass(status: string) {
   return 'border-violet/30 bg-violet/10 text-violet'
 }
 
-function rawNoteTitle(rawNote: RawNote | undefined) {
-  return rawNote?.title ?? 'Untitled raw note'
+function sourceTitle(rawNote: RawNote | undefined, rawSource: RawSource | undefined) {
+  return rawSource?.title ?? rawNote?.title ?? 'Untitled source'
+}
+
+function sourceRoleLabel(role: string | undefined) {
+  return role === 'reference' ? 'Reference' : 'Personal note'
+}
+
+function sourceTypeLabel(type: string | undefined) {
+  if (!type) return 'markdown'
+  return type.replaceAll('_', ' ')
+}
+
+function proposalRawNote(proposal: Proposal | null, rawNotes: RawNote[]) {
+  return proposal?.rawNoteId ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId) : undefined
+}
+
+function proposalRawSource(proposal: Proposal | null, rawNote: RawNote | undefined, rawSources: RawSource[]) {
+  const rawSourceId =
+    rawNote?.rawSourceId ??
+    proposal?.items
+      .map((item) => item.payload.structuredData)
+      .find((structuredData): structuredData is { rawSourceId: string } =>
+        Boolean(
+          structuredData &&
+            typeof structuredData === 'object' &&
+            !Array.isArray(structuredData) &&
+            typeof (structuredData as { rawSourceId?: unknown }).rawSourceId === 'string',
+        ),
+      )?.rawSourceId
+
+  return rawSourceId ? rawSources.find((rawSource) => rawSource.id === rawSourceId) : undefined
+}
+
+function proposalLifecycle(proposal: Proposal | null) {
+  if (!proposal) return 'No proposal'
+  if (proposal.status === 'pending') return 'Needs approval'
+  if (proposal.status === 'approved') return 'Applied'
+  return 'Rejected'
 }
 
 function itemVerb(actionType: string) {
@@ -80,6 +120,64 @@ function proposalGroups(proposal: Proposal) {
     .filter((group) => group.items.length > 0)
 }
 
+function knowledgeItems(proposal: Proposal) {
+  return proposal.items.filter((item) =>
+    ['upsert_knowledge', 'upsert_compiled_note'].includes(item.actionType),
+  )
+}
+
+function linkItems(proposal: Proposal) {
+  return proposal.items.filter((item) => item.actionType === 'create_link')
+}
+
+function MetadataPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
+      {children}
+    </span>
+  )
+}
+
+function KnowledgeUpdateCard({ item }: { item: ProposalItem }) {
+  const body = payloadText(item.payload, 'bodyMarkdown')
+  const knowledgeType = payloadText(item.payload, 'knowledgeType', 'knowledge')
+  const domain = payloadText(item.payload, 'domain')
+
+  return (
+    <article className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+            {actionLabel(item.actionType)}
+          </p>
+          <h4 className="mt-1 line-clamp-2 text-base font-extrabold text-ink">
+            {payloadLabel(item.payload)}
+          </h4>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(item.status)}`}>
+          {item.status}
+        </span>
+      </div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <MetadataPill>{knowledgeType}</MetadataPill>
+        {domain ? <MetadataPill>{domain}</MetadataPill> : null}
+      </div>
+      {item.rationale ? (
+        <p className="mb-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
+      ) : null}
+      {body ? (
+        <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
+          {body}
+        </pre>
+      ) : (
+        <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
+          This knowledge note will be created or updated after approval.
+        </p>
+      )}
+    </article>
+  )
+}
+
 function EmptyState({ activeTab }: { activeTab: ReviewTab }) {
   const copy =
     activeTab === 'links'
@@ -102,6 +200,7 @@ function EmptyState({ activeTab }: { activeTab: ReviewTab }) {
 export function ReviewQueuePage({
   proposals,
   rawNotes,
+  rawSources,
   noteLinks,
   selectedProposalId,
   isSubmitting,
@@ -116,6 +215,7 @@ export function ReviewQueuePage({
 }: {
   proposals: Proposal[]
   rawNotes: RawNote[]
+  rawSources: RawSource[]
   noteLinks: NoteLink[]
   selectedProposalId: string | null
   isSubmitting: boolean
@@ -142,15 +242,16 @@ export function ReviewQueuePage({
     () => noteLinks.filter((link) => link.status === 'pending'),
     [noteLinks],
   )
-  const selectedProposal =
-    proposals.find((proposal) => proposal.id === selectedProposalId) ??
-    pendingProposals[0] ??
-    reviewedProposals[0] ??
-    null
-  const sourceRawNote = selectedProposal?.rawNoteId
-    ? rawNotes.find((rawNote) => rawNote.id === selectedProposal.rawNoteId)
-    : undefined
   const activeList = activeTab === 'done' ? reviewedProposals : pendingProposals
+  const selectedProposal =
+    activeList.find((proposal) => proposal.id === selectedProposalId) ??
+    activeList[0] ??
+    null
+  const sourceRawNote = proposalRawNote(selectedProposal, rawNotes)
+  const sourceRawSource = proposalRawSource(selectedProposal, sourceRawNote, rawSources)
+  const sourceChunks = sourceRawSource?.chunks ?? []
+  const selectedKnowledgeItems = selectedProposal ? knowledgeItems(selectedProposal) : []
+  const selectedLinkItems = selectedProposal ? linkItems(selectedProposal) : []
 
   return (
     <section className="flex min-h-0 flex-1 bg-canvas text-ink">
@@ -248,6 +349,7 @@ export function ReviewQueuePage({
               const source = proposal.rawNoteId
                 ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId)
                 : undefined
+              const rawSource = proposalRawSource(proposal, source, rawSources)
               return (
                 <button
                   className={`w-full rounded-lg border p-3 text-left transition ${
@@ -261,7 +363,7 @@ export function ReviewQueuePage({
                 >
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="line-clamp-1 text-[13px] font-extrabold text-ink">
-                      {rawNoteTitle(source)}
+                      {sourceTitle(source, rawSource)}
                     </p>
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(proposal.status)}`}>
                       {proposal.status}
@@ -270,6 +372,14 @@ export function ReviewQueuePage({
                   <p className="line-clamp-1 text-xs font-bold text-gray-500">
                     {summarizeProposal(proposal) || `${proposal.items.length} updates`}
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
+                      {sourceRoleLabel(rawSource?.sourceRole ?? source?.sourceRole)}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
+                      {rawSource?.chunks.length ?? 0} chunks
+                    </span>
+                  </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
                     {proposal.rationale ?? 'Agent found incremental knowledge updates.'}
                   </p>
@@ -295,13 +405,13 @@ export function ReviewQueuePage({
                 {activeTab === 'links'
                   ? 'Approve note-to-note links'
                   : selectedProposal
-                    ? rawNoteTitle(sourceRawNote)
+                    ? sourceTitle(sourceRawNote, sourceRawSource)
                     : 'No update selected'}
               </h2>
               <p className="mt-2 max-w-[760px] text-sm leading-6 text-gray-500">
                 {activeTab === 'links'
                   ? 'Links are optional relationship suggestions after content has been applied.'
-                  : 'Review the agent proposal, then apply approved changes to knowledge.'}
+                  : 'Confirm source evidence, inspect the proposed knowledge update, then apply it.'}
               </p>
             </div>
             {activeTab !== 'links' && selectedProposal ? (
@@ -407,38 +517,63 @@ export function ReviewQueuePage({
                 </p>
               </section>
 
-              <section className="mb-4 grid gap-3 xl:grid-cols-2">
-                {proposalGroups(selectedProposal).map((group) => {
-                  const Icon = group.icon
-                  return (
-                    <article className="rounded-lg border border-gray-200 bg-white p-4" key={group.label}>
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                            {group.label}
-                          </p>
-                          <h4 className="mt-1 text-base font-extrabold text-ink">
-                            {group.items.length} change{group.items.length > 1 ? 's' : ''}
-                          </h4>
-                        </div>
-                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
-                          <Icon size={17} />
-                        </span>
-                      </div>
-                      <p className="mb-3 text-sm leading-6 text-gray-600">{group.description}</p>
-                      <div className="space-y-2">
-                        {group.items.slice(0, 3).map((item) => (
-                          <p
-                            className="line-clamp-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-gray-700"
-                            key={item.id}
-                          >
-                            {payloadLabel(item.payload)}
-                          </p>
-                        ))}
-                      </div>
-                    </article>
-                  )
-                })}
+              <section className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                      Suggested knowledge update
+                    </p>
+                    <h3 className="mt-1 text-lg font-extrabold text-ink">
+                      {selectedKnowledgeItems.length} note{selectedKnowledgeItems.length === 1 ? '' : 's'} to apply
+                    </h3>
+                  </div>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet/10 text-violet">
+                    <FileText size={17} />
+                  </span>
+                </div>
+                {selectedKnowledgeItems.length ? (
+                  <div className="space-y-3">
+                    {selectedKnowledgeItems.map((item) => (
+                      <KnowledgeUpdateCard item={item} key={item.id} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-4 text-sm leading-6 text-gray-500">
+                    This proposal does not contain a knowledge note update.
+                  </p>
+                )}
+              </section>
+
+              <section className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                      Relationship suggestions
+                    </p>
+                    <h3 className="mt-1 text-lg font-extrabold text-ink">
+                      {selectedLinkItems.length} link{selectedLinkItems.length === 1 ? '' : 's'}
+                    </h3>
+                  </div>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-gray-600">
+                    <GitBranch size={17} />
+                  </span>
+                </div>
+                {selectedLinkItems.length ? (
+                  <div className="space-y-2">
+                    {selectedLinkItems.map((item) => (
+                      <p
+                        className="line-clamp-2 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-gray-700"
+                        key={item.id}
+                      >
+                        {payloadLabel(item.payload)} · {item.rationale ?? 'Related knowledge suggested by the agent.'}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm leading-6 text-gray-500">
+                    No relationship links are bundled with this update. Links can still appear later in the Links tab.
+                  </p>
+                )}
               </section>
 
               <section className="rounded-lg border border-gray-200 bg-white">
@@ -500,13 +635,62 @@ export function ReviewQueuePage({
 
             <aside className="min-h-0 overflow-y-auto border-l border-gray-200 bg-white px-5 py-6">
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-ink">Source</h3>
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Source evidence</h3>
                 <article className="rounded-lg border border-gray-200 bg-slate-50 p-4">
-                  <p className="text-[13px] font-extrabold text-ink">{rawNoteTitle(sourceRawNote)}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-600">
-                    {sourceRawNote?.bodyMarkdown ?? 'The source raw note is no longer available.'}
+                  <div className="mb-3 flex items-start gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-violet">
+                      {sourceRawSource?.sourceRole === 'reference' ? <BookOpen size={17} /> : <FileText size={17} />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[13px] font-extrabold text-ink">
+                        {sourceTitle(sourceRawNote, sourceRawSource)}
+                      </p>
+                      <p className="mt-1 text-[11px] font-bold uppercase text-gray-500">
+                        {proposalLifecycle(selectedProposal)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <MetadataPill>{sourceRoleLabel(sourceRawSource?.sourceRole ?? sourceRawNote?.sourceRole)}</MetadataPill>
+                    <MetadataPill>{sourceTypeLabel(sourceRawSource?.sourceType ?? sourceRawNote?.sourceType)}</MetadataPill>
+                    <MetadataPill>{sourceChunks.length} chunks</MetadataPill>
+                  </div>
+                  <p className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
+                    {sourceRawSource?.bodyMarkdown ??
+                      sourceRawNote?.bodyMarkdown ??
+                      'The source text is no longer available.'}
                   </p>
                 </article>
+              </section>
+
+              <section className="mb-6">
+                <div className="mb-3 flex items-center gap-2">
+                  <Layers3 size={15} className="text-gray-500" />
+                  <h3 className="text-sm font-extrabold text-ink">Evidence chunks</h3>
+                </div>
+                {sourceChunks.length ? (
+                  <div className="space-y-2">
+                    {sourceChunks.map((chunk) => (
+                      <article className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={chunk.id}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="line-clamp-1 text-xs font-extrabold text-ink">
+                            {chunk.heading ?? `Chunk ${chunk.chunkIndex + 1}`}
+                          </p>
+                          <span className="shrink-0 text-[10px] font-bold uppercase text-gray-500">
+                            #{chunk.chunkIndex + 1} · ~{chunk.tokenEstimate}
+                          </span>
+                        </div>
+                        <p className="line-clamp-4 text-xs leading-5 text-gray-600">
+                          {chunk.bodyMarkdown}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-4 text-xs leading-5 text-gray-500">
+                    No source chunks are linked to this proposal yet.
+                  </p>
+                )}
               </section>
 
               <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">

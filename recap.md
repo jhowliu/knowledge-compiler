@@ -63,6 +63,7 @@
 - Started issue #33 implementation on `codex/knowledge-search-ui`: the Notes Graph toolbar search now opens a Knowledge Search panel backed by `/search`, with approved knowledge-block results, metadata, evidence snippets, archived-block toggle, and loading/empty/error states.
 - Started issue #35 implementation on `codex/search-result-inspector-cleanup`: search results can be selected to inspect the full block, evidence list, and knowledge-source evolution timeline; duplicate `db:migrate` scripts were removed; migration `006_drop_unused_agent_session_tables.sql` drops unused early agent session/tool-call tables.
 - Started issue #37 implementation on `codex/remove-legacy-review-surfaces`: removed legacy readiness/mistake/review-task UI/API surfaces, stopped generating/writing legacy proposal actions, removed frontend workspace dependencies on the old endpoints, and added migration `007_drop_legacy_review_surfaces.sql`.
+- Started issue #44 implementation on `codex/sources-codex-workspace`: redesigned Sources into a Codex-style workspace with an internal project rail, source inbox filters, central editor/preview flow, and right-side indexing/chunk context.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -158,9 +159,10 @@
 - Source Inbox validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test on `http://localhost:5174/` confirmed the nav/page language says Sources, source cards show role/chunk/lifecycle badges, selected source shows indexing trace plus chunk previews, and no console errors appeared.
 - Source-first compile validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test on `http://localhost:5173/` confirmed Sources loads without console errors. Source compile now supports `/sources/:id/compile`, queues agent runs with `rawSourceId`, creates/fetches a compatibility raw note, and feeds source chunks into LLM wiki indexing.
 - Review Queue source evidence validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test opened Review Queue, switched to Done, confirmed source evidence, evidence chunks, and suggested knowledge update sections render with no console errors.
+- Sources workspace redesign validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test at default and 1180px-wide viewports confirmed the Codex-style project/source/editor/context layout has no console errors, no document horizontal overflow, and no clipped editor toolbar controls.
 
 ## Next Target
-- After #43 merges, continue #38 with #44 Codex-style Sources workspace UI, then #45 project/folder organization.
+- After #44 merges, continue #38 with #45 project/folder organization.
 - Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

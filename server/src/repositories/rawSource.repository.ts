@@ -5,6 +5,9 @@ import type {
   RawSource,
   RawSourceChunk,
   RawSourceRole,
+  SourceFolder,
+  SourceOrganization,
+  SourceProject,
   RawSourceWithChunks,
   UpdateRawSourceInput,
 } from "../domain/rawSource.js";
@@ -12,6 +15,8 @@ import type {
 type RawSourceRow = {
   id: string;
   user_id: string | null;
+  project_id: string | null;
+  folder_id: string | null;
   domain: string | null;
   source_type: string;
   source_role: RawSourceRole;
@@ -34,10 +39,32 @@ type RawSourceChunkRow = {
   created_at: Date;
 };
 
+type SourceProjectRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  metadata: Record<string, unknown>;
+  source_count: number | string;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type SourceFolderRow = {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  name: string;
+  metadata: Record<string, unknown>;
+  source_count: number | string;
+  created_at: Date;
+  updated_at: Date;
+};
+
 export interface RawSourceRepository {
   create(input: CreateRawSourceInput, chunks: CreateRawSourceChunkInput[]): Promise<RawSourceWithChunks>;
   getById(id: string): Promise<RawSourceWithChunks | null>;
   listRecent(limit: number): Promise<RawSourceWithChunks[]>;
+  listOrganization(): Promise<SourceOrganization>;
   update(
     id: string,
     input: UpdateRawSourceInput,
@@ -51,6 +78,8 @@ function mapRawSource(row: RawSourceRow): RawSource {
   return {
     id: row.id,
     userId: row.user_id,
+    projectId: row.project_id,
+    folderId: row.folder_id,
     domain: row.domain,
     sourceType: row.source_type,
     sourceRole: row.source_role,
@@ -76,13 +105,46 @@ function mapRawSourceChunk(row: RawSourceChunkRow): RawSourceChunk {
   };
 }
 
+function mapSourceProject(row: SourceProjectRow, folders: SourceFolder[]): SourceProject {
+  const sourceCount = Number(row.source_count);
+  const categorizedCount = folders.reduce((total, folder) => total + folder.sourceCount, 0);
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    sourceCount,
+    uncategorizedSourceCount: Math.max(0, sourceCount - categorizedCount),
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    folders,
+  };
+}
+
+function mapSourceFolder(row: SourceFolderRow): SourceFolder {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    userId: row.user_id,
+    name: row.name,
+    sourceCount: Number(row.source_count),
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export class PostgresRawSourceRepository implements RawSourceRepository {
   async create(input: CreateRawSourceInput, chunks: CreateRawSourceChunkInput[]) {
     return transaction(async (transactionQuery) => {
+      const projectId =
+        input.projectId ?? (await ensureDefaultProject(transactionQuery, input.userId ?? null));
       const sourceResult = await transactionQuery<RawSourceRow>(
         `
           insert into raw_sources (
             user_id,
+            project_id,
+            folder_id,
             domain,
             source_type,
             source_role,
@@ -90,11 +152,13 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
             body_markdown,
             metadata
           )
-          values ($1, $2, $3, $4, $5, $6, $7)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           returning *
         `,
         [
           input.userId ?? null,
+          projectId,
+          input.folderId ?? null,
           input.domain ?? null,
           input.sourceType ?? "markdown",
           input.sourceRole ?? "personal_note",
@@ -142,17 +206,81 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
     return sources;
   }
 
+  async listOrganization() {
+    const projectResult = await query<SourceProjectRow>(
+      `
+        select
+          source_projects.id,
+          source_projects.user_id,
+          source_projects.name,
+          source_projects.metadata,
+          source_projects.created_at,
+          source_projects.updated_at,
+          count(raw_sources.id)::integer as source_count
+        from source_projects
+        left join raw_sources on raw_sources.project_id = source_projects.id
+        group by source_projects.id
+        order by source_projects.sort_order asc, source_projects.created_at asc
+      `,
+    );
+    const folderResult = await query<SourceFolderRow>(
+      `
+        select
+          source_folders.id,
+          source_folders.project_id,
+          source_folders.user_id,
+          source_folders.name,
+          source_folders.metadata,
+          source_folders.created_at,
+          source_folders.updated_at,
+          count(raw_sources.id)::integer as source_count
+        from source_folders
+        left join raw_sources on raw_sources.folder_id = source_folders.id
+        group by source_folders.id
+        order by source_folders.sort_order asc, source_folders.created_at asc
+      `,
+    );
+    const foldersByProject = new Map<string, SourceFolder[]>();
+    for (const folderRow of folderResult.rows) {
+      const folder = mapSourceFolder(folderRow);
+      foldersByProject.set(folder.projectId, [...(foldersByProject.get(folder.projectId) ?? []), folder]);
+    }
+
+    return {
+      projects: projectResult.rows.map((row) =>
+        mapSourceProject(row, foldersByProject.get(row.id) ?? []),
+      ),
+    };
+  }
+
   async update(id: string, input: UpdateRawSourceInput, chunks: CreateRawSourceChunkInput[]) {
     return transaction(async (transactionQuery) => {
+      const currentResult = await transactionQuery<RawSourceRow>(
+        "select * from raw_sources where id = $1",
+        [id],
+      );
+
+      if (!currentResult.rows[0]) {
+        return null;
+      }
+
+      const current = mapRawSource(currentResult.rows[0]);
+      const projectId =
+        input.projectId ??
+        current.projectId ??
+        (await ensureDefaultProject(transactionQuery, current.userId));
+      const folderId = Object.hasOwn(input, "folderId") ? input.folderId ?? null : current.folderId;
       const sourceResult = await transactionQuery<RawSourceRow>(
         `
           update raw_sources
-          set domain = $2,
-              source_type = $3,
-              source_role = $4,
-              title = $5,
-              body_markdown = $6,
-              metadata = $7,
+          set project_id = $2,
+              folder_id = $3,
+              domain = $4,
+              source_type = $5,
+              source_role = $6,
+              title = $7,
+              body_markdown = $8,
+              metadata = $9,
               extracted_data = '{}'::jsonb,
               updated_at = now()
           where id = $1
@@ -160,6 +288,8 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
         `,
         [
           id,
+          projectId,
+          folderId,
           input.domain ?? null,
           input.sourceType ?? "markdown",
           input.sourceRole ?? "personal_note",
@@ -256,4 +386,35 @@ async function insertChunks(
     savedChunks.push(mapRawSourceChunk(chunkResult.rows[0]));
   }
   return savedChunks;
+}
+
+async function ensureDefaultProject(executor: typeof query, userId: string | null) {
+  const existingResult = await executor<{ id: string }>(
+    `
+      select id
+      from source_projects
+      where name = 'Default project'
+        and (
+          ($1::uuid is null and user_id is null)
+          or user_id = $1::uuid
+        )
+      order by created_at asc
+      limit 1
+    `,
+    [userId],
+  );
+
+  if (existingResult.rows[0]) {
+    return existingResult.rows[0].id;
+  }
+
+  const createdResult = await executor<{ id: string }>(
+    `
+      insert into source_projects (user_id, name, metadata)
+      values ($1, 'Default project', jsonb_build_object('system', 'default'))
+      returning id
+    `,
+    [userId],
+  );
+  return createdResult.rows[0].id;
 }

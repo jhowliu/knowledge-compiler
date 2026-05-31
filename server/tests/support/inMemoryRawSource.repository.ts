@@ -13,6 +13,8 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     const source: RawSourceWithChunks = {
       id: `raw-source-${this.sources.length + 1}`,
       userId: input.userId ?? null,
+      projectId: input.projectId ?? "default-project",
+      folderId: input.folderId ?? null,
       domain: input.domain ?? null,
       sourceType: input.sourceType ?? "markdown",
       sourceRole: input.sourceRole ?? "personal_note",
@@ -45,12 +47,35 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     return this.sources.slice(0, limit);
   }
 
+  async listOrganization() {
+    const sourceCount = this.sources.filter((source) => source.projectId === "default-project").length;
+    return {
+      projects: [
+        {
+          id: "default-project",
+          userId: null,
+          name: "Default project",
+          sourceCount,
+          uncategorizedSourceCount: this.sources.filter(
+            (source) => source.projectId === "default-project" && !source.folderId,
+          ).length,
+          metadata: { system: "default" },
+          createdAt: new Date("2026-05-24T00:00:00.000Z"),
+          updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+          folders: [],
+        },
+      ],
+    };
+  }
+
   async update(id: string, input: UpdateRawSourceInput, chunks: CreateRawSourceChunkInput[]) {
     const source = await this.getById(id);
     if (!source) {
       return null;
     }
 
+    source.projectId = input.projectId ?? source.projectId ?? "default-project";
+    source.folderId = Object.hasOwn(input, "folderId") ? input.folderId ?? null : source.folderId;
     source.domain = input.domain ?? null;
     source.sourceType = input.sourceType ?? "markdown";
     source.sourceRole = input.sourceRole ?? "personal_note";

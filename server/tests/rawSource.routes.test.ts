@@ -86,6 +86,8 @@ describe("raw source routes", () => {
 
     expect(response.status).toBe(201);
     expect(response.body.rawSource).toMatchObject({
+      projectId: "default-project",
+      folderId: null,
       sourceRole: "reference",
       sourceType: "paper",
       title: "Attention Is All You Need",
@@ -95,6 +97,36 @@ describe("raw source routes", () => {
       chunkIndex: 0,
       heading: "Transformer",
     });
+  });
+
+  test("GET /sources/organization lists projects with source counts", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    await request(app).post("/sources").send({
+      title: "Personal source",
+      bodyMarkdown: "A personal note.",
+    });
+    await request(app).post("/sources").send({
+      sourceRole: "reference",
+      title: "Reference source",
+      bodyMarkdown: "A reference note.",
+    });
+
+    const response = await request(app).get("/sources/organization");
+
+    expect(response.status).toBe(200);
+    expect(response.body.sourceOrganization.projects).toEqual([
+      expect.objectContaining({
+        id: "default-project",
+        name: "Default project",
+        sourceCount: 2,
+        uncategorizedSourceCount: 2,
+        folders: [],
+      }),
+    ]);
   });
 
   test("POST /sources rejects unsupported source roles", async () => {

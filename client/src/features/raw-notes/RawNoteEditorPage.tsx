@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   BookOpen,
   CheckCircle2,
@@ -25,6 +25,7 @@ import type {
   RawNoteIndexingTrace,
   RawSource,
   RawSourceRole,
+  SourceProject,
 } from '../../types/domain'
 
 type SourceLifecycle = {
@@ -34,6 +35,7 @@ type SourceLifecycle = {
 
 type RoleFilter = 'all' | RawSourceRole
 type LifecycleFilter = 'all' | SourceLifecycle['tone']
+type FolderFilter = 'all' | 'uncategorized' | string
 
 function getRunRawNoteId(agentRun: AgentRun) {
   if (!agentRun.input || typeof agentRun.input !== 'object') {
@@ -96,6 +98,10 @@ function sourceTitle(note: RawNote | null | undefined, source: RawSource | null 
   return source?.title ?? note?.title ?? 'Untitled source'
 }
 
+function projectSourceCount(project: SourceProject | undefined, fallbackCount: number) {
+  return project?.sourceCount ?? fallbackCount
+}
+
 function formatDate(value: string | undefined) {
   if (!value) return 'Draft'
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
@@ -143,6 +149,7 @@ export function RawNoteEditorPage({
   indexingTrace,
   rawNotes,
   rawSources,
+  sourceProjects,
   proposals,
   agentRuns,
   selectedRawNoteId,
@@ -168,6 +175,7 @@ export function RawNoteEditorPage({
   indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
   rawSources: RawSource[]
+  sourceProjects: SourceProject[]
   proposals: Proposal[]
   agentRuns: AgentRun[]
   selectedRawNoteId: string | null
@@ -192,6 +200,8 @@ export function RawNoteEditorPage({
 }) {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [selectedFolderFilter, setSelectedFolderFilter] = useState<FolderFilter>('all')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
   const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
@@ -203,6 +213,24 @@ export function RawNoteEditorPage({
     ? getLifecycle(selectedRawNote, proposals, agentRuns)
     : { label: 'Draft', tone: 'idle' as const }
   const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
+  const selectedProject = sourceProjects.find((project) => project.id === selectedProjectId)
+
+  useEffect(() => {
+    if (selectedProjectId !== 'all' && !sourceProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId('all')
+      setSelectedFolderFilter('all')
+    }
+  }, [selectedProjectId, sourceProjects])
+
+  useEffect(() => {
+    if (
+      selectedFolderFilter !== 'all' &&
+      selectedFolderFilter !== 'uncategorized' &&
+      !selectedProject?.folders.some((folder) => folder.id === selectedFolderFilter)
+    ) {
+      setSelectedFolderFilter('all')
+    }
+  }, [selectedFolderFilter, selectedProject])
 
   const sourceRows = useMemo(() => {
     return rawNotes.map((note) => {
@@ -212,10 +240,15 @@ export function RawNoteEditorPage({
     })
   }, [agentRuns, proposals, rawNotes, sourceById])
 
-  const filteredRows = sourceRows.filter(({ lifecycle, note }) => {
+  const filteredRows = sourceRows.filter(({ lifecycle, note, source }) => {
+    const matchesProject = selectedProjectId === 'all' || source?.projectId === selectedProjectId
+    const matchesFolder =
+      selectedFolderFilter === 'all' ||
+      (selectedFolderFilter === 'uncategorized' && !source?.folderId) ||
+      source?.folderId === selectedFolderFilter
     const matchesRole = roleFilter === 'all' || note.sourceRole === roleFilter
     const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
-    return matchesRole && matchesLifecycle
+    return matchesProject && matchesFolder && matchesRole && matchesLifecycle
   })
 
   const activeProposal = indexingTrace?.proposals[0] ?? null
@@ -229,10 +262,70 @@ export function RawNoteEditorPage({
         </div>
 
         <div className="space-y-1">
-          <NavButton active count={rawNotes.length} icon={Inbox} label="Sources" />
-          <NavButton count={rawSources.length} icon={Folder} label="Default project" />
-          <NavButton count={rawNotes.filter((note) => note.sourceRole === 'personal_note').length} icon={PencilLine} label="Personal notes" />
-          <NavButton count={rawNotes.filter((note) => note.sourceRole === 'reference').length} icon={BookOpen} label="References" />
+          <NavButton
+            active={selectedProjectId === 'all'}
+            count={rawNotes.length}
+            icon={Inbox}
+            label="All sources"
+            onClick={() => {
+              setSelectedProjectId('all')
+              setSelectedFolderFilter('all')
+            }}
+          />
+          {sourceProjects.map((project) => (
+            <NavButton
+              active={selectedProjectId === project.id && selectedFolderFilter === 'all'}
+              count={projectSourceCount(project, rawSources.filter((source) => source.projectId === project.id).length)}
+              icon={Folder}
+              key={project.id}
+              label={project.name}
+              onClick={() => {
+                setSelectedProjectId(project.id)
+                setSelectedFolderFilter('all')
+              }}
+            />
+          ))}
+        </div>
+
+        {selectedProject ? (
+          <div className="mt-5 space-y-1">
+            <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Folders</p>
+            <NavButton
+              active={selectedFolderFilter === 'uncategorized'}
+              count={selectedProject.uncategorizedSourceCount}
+              icon={Inbox}
+              label="Uncategorized"
+              onClick={() => setSelectedFolderFilter('uncategorized')}
+            />
+            {selectedProject.folders.map((folder) => (
+              <NavButton
+                active={selectedFolderFilter === folder.id}
+                count={folder.sourceCount}
+                icon={Folder}
+                key={folder.id}
+                label={folder.name}
+                onClick={() => setSelectedFolderFilter(folder.id)}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-5 space-y-1">
+          <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Types</p>
+          <NavButton
+            active={roleFilter === 'personal_note'}
+            count={rawNotes.filter((note) => note.sourceRole === 'personal_note').length}
+            icon={PencilLine}
+            label="Personal notes"
+            onClick={() => setRoleFilter(roleFilter === 'personal_note' ? 'all' : 'personal_note')}
+          />
+          <NavButton
+            active={roleFilter === 'reference'}
+            count={rawNotes.filter((note) => note.sourceRole === 'reference').length}
+            icon={BookOpen}
+            label="References"
+            onClick={() => setRoleFilter(roleFilter === 'reference' ? 'all' : 'reference')}
+          />
         </div>
 
         <div className="mt-5 space-y-1">

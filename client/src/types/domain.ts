@@ -36,6 +36,8 @@ export type RawSourceChunk = {
 export type RawSource = {
   id: string
   userId: string | null
+  projectId: string | null
+  folderId: string | null
   domain: string | null
   sourceType: string
   sourceRole: RawSourceRole
@@ -46,6 +48,33 @@ export type RawSource = {
   createdAt: string
   updatedAt: string
   chunks: RawSourceChunk[]
+}
+
+export type SourceFolder = {
+  id: string
+  projectId: string
+  userId: string | null
+  name: string
+  sourceCount: number
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export type SourceProject = {
+  id: string
+  userId: string | null
+  name: string
+  sourceCount: number
+  uncategorizedSourceCount: number
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+  folders: SourceFolder[]
+}
+
+export type SourceOrganization = {
+  projects: SourceProject[]
 }
 
 export type ProposalItem = {
@@ -219,6 +248,7 @@ export type RawNoteIndexingTrace = {
 export type WorkspaceData = {
   rawNotes: RawNote[]
   rawSources: RawSource[]
+  sourceOrganization: SourceOrganization
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]

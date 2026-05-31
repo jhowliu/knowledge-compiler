@@ -20,6 +20,10 @@ export class RawSourceService {
     return this.rawSourceRepository.listRecent(50);
   }
 
+  async getSourceOrganization() {
+    return this.rawSourceRepository.listOrganization();
+  }
+
   async getRawSource(id: string) {
     const rawSource = await this.rawSourceRepository.getById(id);
     if (!rawSource) {

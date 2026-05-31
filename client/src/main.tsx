@@ -688,6 +688,7 @@ function App() {
             proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
+            sourceProjects={workspaceData.sourceOrganization.projects}
             selectedRawNoteId={selectedRawNoteId}
             sourceRole={sourceRole}
             title={title}

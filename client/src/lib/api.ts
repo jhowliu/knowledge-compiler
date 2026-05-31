@@ -12,6 +12,7 @@ import type {
   RawNote,
   RawNoteIndexingTrace,
   RawSource,
+  SourceOrganization,
   WorkspaceData,
 } from '../types/domain'
 
@@ -51,6 +52,7 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
   const [
     rawNotes,
     rawSources,
+    sourceOrganization,
     proposals,
     compiledNotes,
     noteLinks,
@@ -61,6 +63,7 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ rawSources: RawSource[] }>('/sources'),
+      requestJson<{ sourceOrganization: SourceOrganization }>('/sources/organization'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
@@ -74,6 +77,7 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
   return {
     rawNotes: rawNotes.rawNotes,
     rawSources: rawSources.rawSources,
+    sourceOrganization: sourceOrganization.sourceOrganization,
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
     noteLinks: noteLinks.noteLinks,

@@ -9,6 +9,7 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
   const controller = new RawSourceController(rawSourceService);
 
   router.get("/", controller.list);
+  router.get("/organization", controller.organization);
   router.post("/", validateBody(createRawSourceSchema), controller.create);
   router.get("/:id", controller.get);
   router.patch("/:id", validateBody(updateRawSourceSchema), controller.update);

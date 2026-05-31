@@ -13,6 +13,14 @@ export class RawSourceController {
     }
   };
 
+  organization = async (_request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({ sourceOrganization: await this.rawSourceService.getSourceOrganization() });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.status(201).json({ rawSource: await this.rawSourceService.createRawSource(request.body) });

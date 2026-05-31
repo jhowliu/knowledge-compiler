@@ -11,12 +11,19 @@ export const enqueueAgentRunSchema = z.object({
 }).superRefine((value, context) => {
   if (
     value.runType === "compile_raw_note" &&
-    (typeof value.input?.rawNoteId !== "string" || !z.string().min(1).safeParse(value.input.rawNoteId).success)
+    !(
+      typeof value.input?.rawNoteId === "string" &&
+      z.string().min(1).safeParse(value.input.rawNoteId).success
+    ) &&
+    !(
+      typeof value.input?.rawSourceId === "string" &&
+      z.string().min(1).safeParse(value.input.rawSourceId).success
+    )
   ) {
     context.addIssue({
       code: "custom",
-      message: "compile_raw_note requires input.rawNoteId",
-      path: ["input", "rawNoteId"],
+      message: "compile_raw_note requires input.rawSourceId or input.rawNoteId",
+      path: ["input"],
     });
   }
 });

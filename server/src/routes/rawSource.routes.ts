@@ -12,6 +12,7 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
   router.post("/", validateBody(createRawSourceSchema), controller.create);
   router.get("/:id", controller.get);
   router.patch("/:id", validateBody(updateRawSourceSchema), controller.update);
+  router.post("/:id/compile", controller.compile);
   router.delete("/:id", controller.delete);
 
   return router;

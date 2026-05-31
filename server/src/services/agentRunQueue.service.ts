@@ -1,11 +1,14 @@
 import type { CompiledNote } from "../domain/knowledge.js";
 import { AppError } from "../domain/errors.js";
+import type { RawNote } from "../domain/rawNote.js";
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
-import { WikiIndexerService, type WikiIndexer } from "./wikiIndexer.service.js";
+import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
+import type { RawSourceWithChunks } from "../domain/rawSource.js";
+import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "./wikiIndexer.service.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -54,6 +57,7 @@ export class AgentRunQueueService {
     private readonly rawNoteRepository?: RawNoteRepository,
     private readonly proposalRepository?: ProposalRepository,
     private readonly wikiIndexerService: WikiIndexer = new WikiIndexerService(),
+    private readonly rawSourceRepository?: RawSourceRepository | null,
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
@@ -61,8 +65,12 @@ export class AgentRunQueueService {
       throw new Error("Unsupported agent run type");
     }
     const runInput = input.input && typeof input.input === "object" ? input.input : {};
-    if (input.runType === "compile_raw_note" && typeof (runInput as Record<string, unknown>).rawNoteId !== "string") {
-      throw new Error("compile_raw_note requires rawNoteId");
+    if (
+      input.runType === "compile_raw_note" &&
+      typeof (runInput as Record<string, unknown>).rawNoteId !== "string" &&
+      typeof (runInput as Record<string, unknown>).rawSourceId !== "string"
+    ) {
+      throw new Error("compile_raw_note requires rawSourceId or rawNoteId");
     }
 
     const agentRun = await this.agentRunRepository.enqueue({
@@ -133,7 +141,10 @@ export class AgentRunQueueService {
           agentRun.input && typeof agentRun.input === "object"
             ? (agentRun.input as Record<string, unknown>)
             : {};
-        const output = await this.compileRawNote(agentRun.id, String(input.rawNoteId));
+        const output = await this.compileRawNote(agentRun.id, {
+          rawNoteId: typeof input.rawNoteId === "string" ? input.rawNoteId : null,
+          rawSourceId: typeof input.rawSourceId === "string" ? input.rawSourceId : null,
+        });
         await this.agentRunRepository.complete(agentRun.id, output);
         await this.agentRunRepository.addEvent({
           agentRunId: agentRun.id,
@@ -225,29 +236,44 @@ export class AgentRunQueueService {
     };
   }
 
-  private async compileRawNote(agentRunId: string, rawNoteId: string) {
+  private async compileRawNote(
+    agentRunId: string,
+    input: { rawNoteId: string | null; rawSourceId: string | null },
+  ) {
     if (!this.rawNoteRepository || !this.proposalRepository) {
       throw new Error("compile_raw_note worker is not configured");
     }
 
-    const rawNote = await this.rawNoteRepository.getById(rawNoteId);
-    if (!rawNote) {
-      throw new Error("Raw note not found");
-    }
+    const { rawNote, rawSource, source } = await this.resolveIndexingSource(input);
 
     await this.agentRunRepository.addEvent({
       agentRunId,
       eventType: "raw_note_loaded",
       payload: {
-        rawNoteId,
-        rawSourceId: rawNote.rawSourceId,
+        rawNoteId: rawNote.id,
+        rawSourceId: source.rawSourceId,
         sourceRole: rawNote.sourceRole,
         sourceType: rawNote.sourceType,
       },
     });
+    if (rawSource) {
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        eventType: "raw_source_loaded",
+        payload: {
+          rawSourceId: rawSource.id,
+          chunkCount: rawSource.chunks.length,
+          sourceRole: rawSource.sourceRole,
+          sourceType: rawSource.sourceType,
+        },
+      });
+    }
 
-    const { extraction, provider } = await this.wikiIndexerService.extract(rawNote);
+    const { extraction, provider } = await this.wikiIndexerService.extract(source);
     await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
+    if (rawSource && this.rawSourceRepository) {
+      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction, extraction.domain);
+    }
     await this.agentRunRepository.addEvent({
       agentRunId,
       eventType: "detection_completed",
@@ -267,8 +293,8 @@ export class AgentRunQueueService {
       await this.knowledgeRepository.indexConcept({
         userId: rawNote.userId,
         conceptId: savedConcept.id,
-        targetType: "raw_note",
-        targetId: rawNote.id,
+        targetType: source.rawSourceId ? "raw_source" : "raw_note",
+        targetId: source.rawSourceId ?? rawNote.id,
         relationType: "mentions",
         confidence: concept.confidence,
         source: "openai_wiki_indexer",
@@ -287,7 +313,7 @@ export class AgentRunQueueService {
     });
 
     const relatedNotes = await this.knowledgeRepository.searchRelated({
-      query: rawNote.bodyMarkdown,
+      query: source.bodyMarkdown,
       conceptNames: extraction.concepts.map((concept) => concept.name),
       limit: 8,
     });
@@ -297,7 +323,7 @@ export class AgentRunQueueService {
       payload: { relatedNotes },
     });
 
-    const draft = this.wikiIndexerService.draftProposal(rawNote, extraction, relatedNotes);
+    const draft = this.wikiIndexerService.draftProposal(source, extraction, relatedNotes);
     const proposal = await this.proposalRepository.create({
       userId: rawNote.userId,
       rawNoteId: rawNote.id,
@@ -311,8 +337,9 @@ export class AgentRunQueueService {
 
     return {
       rawNoteId: rawNote.id,
-      rawSourceId: rawNote.rawSourceId,
+      rawSourceId: source.rawSourceId,
       sourceRole: rawNote.sourceRole,
+      chunkCount: source.chunks.length,
       proposalId: proposal.id,
       provider,
       detectedKnowledgeType: extraction.knowledgeType,
@@ -320,4 +347,54 @@ export class AgentRunQueueService {
       relatedNoteCount: relatedNotes.length,
     };
   }
+
+  private async resolveIndexingSource(input: { rawNoteId: string | null; rawSourceId: string | null }) {
+    let rawNote = input.rawNoteId ? await this.rawNoteRepository?.getById(input.rawNoteId) : null;
+    if (input.rawNoteId && !rawNote) {
+      throw new Error("Raw note not found");
+    }
+
+    const rawSourceId = input.rawSourceId ?? rawNote?.rawSourceId ?? null;
+    const rawSource = rawSourceId && this.rawSourceRepository
+      ? await this.rawSourceRepository.getById(rawSourceId)
+      : null;
+    if (rawSourceId && this.rawSourceRepository && !rawSource) {
+      throw new Error("Raw source not found");
+    }
+
+    rawNote = rawNote ?? (input.rawSourceId ? await this.rawNoteRepository?.getByRawSourceId(input.rawSourceId) : null);
+    if (!rawNote && !rawSource) {
+      throw new Error("Raw note not found");
+    }
+
+    rawNote = rawNote ?? await this.rawNoteRepository!.create({
+      userId: rawSource!.userId,
+      rawSourceId: rawSource!.id,
+      domain: rawSource!.domain,
+      sourceType: rawSource!.sourceType,
+      sourceRole: rawSource!.sourceRole,
+      title: rawSource!.title,
+      bodyMarkdown: rawSource!.bodyMarkdown,
+    });
+    const source = toWikiIndexingSource(rawNote, rawSource);
+
+    return { rawNote, rawSource, source };
+  }
+}
+
+function toWikiIndexingSource(
+  rawNote: RawNote,
+  rawSource: RawSourceWithChunks | null,
+): WikiIndexingSource {
+  return {
+    id: rawSource?.id ?? rawNote.id,
+    rawNoteId: rawNote.id,
+    rawSourceId: rawSource?.id ?? rawNote.rawSourceId,
+    userId: rawNote.userId,
+    sourceRole: rawSource?.sourceRole ?? rawNote.sourceRole,
+    sourceType: rawSource?.sourceType ?? rawNote.sourceType,
+    title: rawSource?.title ?? rawNote.title,
+    bodyMarkdown: rawSource?.bodyMarkdown ?? rawNote.bodyMarkdown,
+    chunks: rawSource?.chunks ?? [],
+  };
 }

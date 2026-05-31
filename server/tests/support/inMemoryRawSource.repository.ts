@@ -72,6 +72,18 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     return source;
   }
 
+  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+    const source = await this.getById(id);
+    if (!source) {
+      throw new Error("Raw source not found");
+    }
+
+    source.extractedData = extractedData;
+    source.domain = domain ?? source.domain;
+    source.updatedAt = new Date("2026-05-24T01:00:00.000Z");
+    return source;
+  }
+
   async delete(id: string) {
     const index = this.sources.findIndex((source) => source.id === id);
     if (index === -1) {

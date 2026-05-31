@@ -2,6 +2,19 @@ import { env } from "../config/env.js";
 import type { CodingExtraction, DraftUpdateProposal } from "../domain/compiler.js";
 import type { SearchResult } from "../domain/knowledge.js";
 import type { RawNote } from "../domain/rawNote.js";
+import type { RawSourceChunk, RawSourceRole } from "../domain/rawSource.js";
+
+export type WikiIndexingSource = {
+  id: string;
+  rawNoteId: string | null;
+  rawSourceId: string | null;
+  userId: string | null;
+  sourceRole: RawSourceRole;
+  sourceType: string;
+  title: string | null;
+  bodyMarkdown: string;
+  chunks: RawSourceChunk[];
+};
 
 export type WikiIndexingResult = {
   extraction: CodingExtraction;
@@ -9,9 +22,9 @@ export type WikiIndexingResult = {
 };
 
 export type WikiIndexer = {
-  extract(rawNote: RawNote): Promise<WikiIndexingResult>;
+  extract(source: WikiIndexingSource): Promise<WikiIndexingResult>;
   draftProposal(
-    rawNote: RawNote,
+    source: WikiIndexingSource,
     extraction: CodingExtraction,
     relatedNotes: SearchResult[],
   ): DraftUpdateProposal;
@@ -111,18 +124,18 @@ function outputText(response: unknown) {
 }
 
 export class WikiIndexerService {
-  async extract(rawNote: RawNote): Promise<WikiIndexingResult> {
+  async extract(source: WikiIndexingSource): Promise<WikiIndexingResult> {
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
-    return { extraction: await this.extractWithOpenAI(rawNote), provider: "openai" };
+    return { extraction: await this.extractWithOpenAI(source), provider: "openai" };
   }
 
-  draftProposal(rawNote: RawNote, extraction: CodingExtraction, relatedNotes: SearchResult[]) {
-    const title = knowledgeTitle(rawNote, extraction);
+  draftProposal(source: WikiIndexingSource, extraction: CodingExtraction, relatedNotes: SearchResult[]) {
+    const title = knowledgeTitle(source, extraction);
     const knowledgeType = knowledgeTypeFor(extraction);
-    const bodyMarkdown = knowledgeBodyMarkdown(rawNote, extraction);
+    const bodyMarkdown = knowledgeBodyMarkdown(source, extraction);
     const relatedCompiledNotes = relatedNotes
       .filter((note) => note.targetType === "compiled_note")
       .slice(0, 3);
@@ -145,8 +158,16 @@ export class WikiIndexerService {
             title,
             bodyMarkdown,
             structuredData: {
-              sourceRole: rawNote.sourceRole,
-              sourceType: rawNote.sourceType,
+              rawSourceId: source.rawSourceId,
+              rawNoteId: source.rawNoteId,
+              sourceRole: source.sourceRole,
+              sourceType: source.sourceType,
+              sourceChunks: source.chunks.map((chunk) => ({
+                id: chunk.id,
+                chunkIndex: chunk.chunkIndex,
+                heading: chunk.heading,
+                tokenEstimate: chunk.tokenEstimate,
+              })),
               originalKnowledgeType: extraction.knowledgeType,
               problemNumber: extraction.problemNumber,
               problemTitle: extraction.problemTitle,
@@ -183,7 +204,15 @@ export class WikiIndexerService {
     };
   }
 
-  private async extractWithOpenAI(rawNote: RawNote): Promise<CodingExtraction> {
+  private async extractWithOpenAI(source: WikiIndexingSource): Promise<CodingExtraction> {
+    const chunkContext = source.chunks.length
+      ? source.chunks
+          .map((chunk) => {
+            const heading = chunk.heading ? ` (${chunk.heading})` : "";
+            return `Chunk ${chunk.chunkIndex + 1}${heading}:\n${chunk.bodyMarkdown}`;
+          })
+          .join("\n\n---\n\n")
+      : source.bodyMarkdown;
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -200,7 +229,11 @@ export class WikiIndexerService {
           },
           {
             role: "user",
-            content: `Source role: ${rawNote.sourceRole}\nSource type: ${rawNote.sourceType}\nTitle: ${rawNote.title ?? "Untitled"}\n\n${rawNote.bodyMarkdown}`,
+            content: `Source role: ${source.sourceRole}\nSource type: ${source.sourceType}\nTitle: ${
+              source.title ?? "Untitled"
+            }\nRaw source id: ${source.rawSourceId ?? "none"}\nRaw note id: ${
+              source.rawNoteId ?? "none"
+            }\n\n${chunkContext}`,
           },
         ],
         text: {
@@ -243,7 +276,7 @@ function knowledgeTypeFor(extraction: CodingExtraction) {
   return "knowledge_note";
 }
 
-function knowledgeTitle(rawNote: RawNote, extraction: CodingExtraction) {
+function knowledgeTitle(source: Pick<RawNote, "title">, extraction: CodingExtraction) {
   if (extraction.reviewMapName) {
     return extraction.reviewMapName;
   }
@@ -259,7 +292,7 @@ function knowledgeTitle(rawNote: RawNote, extraction: CodingExtraction) {
   if (extraction.patterns[0]) {
     return extraction.patterns[0];
   }
-  return rawNote.title ?? "Untitled knowledge";
+  return source.title ?? "Untitled knowledge";
 }
 
 function section(title: string, lines: string[]) {
@@ -267,7 +300,7 @@ function section(title: string, lines: string[]) {
   return cleanLines.length ? [`## ${title}`, ...cleanLines.map((line) => `- ${line}`)].join("\n") : "";
 }
 
-function knowledgeBodyMarkdown(rawNote: RawNote, extraction: CodingExtraction) {
+function knowledgeBodyMarkdown(source: Pick<RawNote, "bodyMarkdown">, extraction: CodingExtraction) {
   const sections = [
     section("Key insights", extraction.keyInsights),
     section("Recognition signals", extraction.recognitionSignals),
@@ -281,5 +314,5 @@ function knowledgeBodyMarkdown(rawNote: RawNote, extraction: CodingExtraction) {
     return sections.join("\n\n");
   }
 
-  return rawNote.bodyMarkdown;
+  return source.bodyMarkdown;
 }

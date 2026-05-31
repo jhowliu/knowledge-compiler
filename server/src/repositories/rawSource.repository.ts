@@ -43,6 +43,7 @@ export interface RawSourceRepository {
     input: UpdateRawSourceInput,
     chunks: CreateRawSourceChunkInput[],
   ): Promise<RawSourceWithChunks | null>;
+  updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawSourceWithChunks>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -179,6 +180,29 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
         chunks: savedChunks,
       };
     });
+  }
+
+  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+    const sourceResult = await query<RawSourceRow>(
+      `
+        update raw_sources
+        set extracted_data = $2,
+            domain = coalesce($3, domain),
+            updated_at = now()
+        where id = $1
+        returning *
+      `,
+      [id, extractedData, domain],
+    );
+
+    if (!sourceResult.rows[0]) {
+      throw new Error("Raw source not found");
+    }
+
+    return {
+      ...mapRawSource(sourceResult.rows[0]),
+      chunks: await listChunks(id),
+    };
   }
 
   async delete(id: string) {

@@ -31,6 +31,7 @@ import { ProposalService } from "./services/proposal.service.js";
 import { RawNoteService } from "./services/rawNote.service.js";
 import { RawSourceService } from "./services/rawSource.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 
 export type AppDependencies = {
   rawNoteRepository?: RawNoteRepository;
@@ -40,6 +41,7 @@ export type AppDependencies = {
   noteCardPositionRepository?: NoteCardPositionRepository;
   proposalRepository?: ProposalRepository;
   agentRunRepository?: AgentRunRepository;
+  wikiIndexer?: WikiIndexer;
   enablePhaseOneWorkflow?: boolean;
 };
 
@@ -75,14 +77,22 @@ export function createApp(dependencies: AppDependencies = {}) {
   const dashboardService = new DashboardService(knowledgeRepository);
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
-  const rawSourceService = rawSourceRepository ? new RawSourceService(rawSourceRepository) : null;
   const agentRunQueueService = new AgentRunQueueService(
     agentRunRepository,
     knowledgeRepository,
     noteLinkRepository,
     rawNoteRepository,
     proposalRepository,
+    dependencies.wikiIndexer,
+    rawSourceRepository,
   );
+  const rawSourceService = rawSourceRepository
+    ? new RawSourceService(
+        rawSourceRepository,
+        rawNoteRepository,
+        enablePhaseOneWorkflow ? agentRunQueueService : null,
+      )
+    : null;
   const rawNoteService = new RawNoteService(
     rawNoteRepository,
     phaseOneWorkflowService,

@@ -42,6 +42,15 @@ export class RawSourceController {
     }
   };
 
+  compile = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const result = await this.rawSourceService.compileRawSource(requireStringParam(request, "id"));
+      response.status(result.agentRunId ? 202 : 200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   delete = async (request: Request, response: Response, next: NextFunction) => {
     try {
       await this.rawSourceService.deleteRawSource(requireStringParam(request, "id"));

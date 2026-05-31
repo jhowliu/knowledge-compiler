@@ -171,6 +171,8 @@ export function RawNoteEditorPage({
   onSubmit,
   onCreateProject,
   onCreateFolder,
+  onRenameProject,
+  onRenameFolder,
   onMoveSource,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
@@ -200,6 +202,8 @@ export function RawNoteEditorPage({
   onSubmit: (event: React.FormEvent) => void
   onCreateProject: (name: string) => void
   onCreateFolder: (projectId: string, name: string) => void
+  onRenameProject: (projectId: string, name: string) => void
+  onRenameFolder: (projectId: string, folderId: string, name: string) => void
   onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
@@ -210,6 +214,8 @@ export function RawNoteEditorPage({
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<FolderFilter>('all')
   const [newProjectName, setNewProjectName] = useState('')
   const [newFolderName, setNewFolderName] = useState('')
+  const [renameProjectName, setRenameProjectName] = useState('')
+  const [renameFolderName, setRenameFolderName] = useState('')
   const [moveProjectId, setMoveProjectId] = useState('')
   const [moveFolderId, setMoveFolderId] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
@@ -224,6 +230,10 @@ export function RawNoteEditorPage({
     : { label: 'Draft', tone: 'idle' as const }
   const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
   const selectedProject = sourceProjects.find((project) => project.id === selectedProjectId)
+  const selectedFolder =
+    selectedFolderFilter === 'all' || selectedFolderFilter === 'uncategorized'
+      ? null
+      : selectedProject?.folders.find((folder) => folder.id === selectedFolderFilter) ?? null
   const moveProject = sourceProjects.find((project) => project.id === moveProjectId)
 
   useEffect(() => {
@@ -247,6 +257,14 @@ export function RawNoteEditorPage({
     setMoveProjectId(selectedRawSource?.projectId ?? sourceProjects[0]?.id ?? '')
     setMoveFolderId(selectedRawSource?.folderId ?? '')
   }, [selectedRawSource?.folderId, selectedRawSource?.projectId, sourceProjects])
+
+  useEffect(() => {
+    setRenameProjectName(selectedProject?.name ?? '')
+  }, [selectedProject?.id, selectedProject?.name])
+
+  useEffect(() => {
+    setRenameFolderName(selectedFolder?.name ?? '')
+  }, [selectedFolder?.id, selectedFolder?.name])
 
   const sourceRows = useMemo(() => {
     return rawNotes.map((note) => {
@@ -337,6 +355,33 @@ export function RawNoteEditorPage({
         {selectedProject ? (
           <div className="mt-5 space-y-1">
             <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Folders</p>
+            <form
+              className="mb-2 flex gap-1.5"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const trimmedName = renameProjectName.trim()
+                if (!trimmedName || trimmedName === selectedProject.name) return
+                onRenameProject(selectedProject.id, trimmedName)
+              }}
+            >
+              <input
+                aria-label="Rename project"
+                className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                onChange={(event) => setRenameProjectName(event.target.value)}
+                value={renameProjectName}
+              />
+              <button
+                aria-label="Save project name"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                disabled={
+                  isSubmitting || !renameProjectName.trim() || renameProjectName.trim() === selectedProject.name
+                }
+                title="Save project name"
+                type="submit"
+              >
+                <Save size={13} />
+              </button>
+            </form>
             <NavButton
               active={selectedFolderFilter === 'uncategorized'}
               count={selectedProject.uncategorizedSourceCount}
@@ -354,6 +399,35 @@ export function RawNoteEditorPage({
                 onClick={() => setSelectedFolderFilter(folder.id)}
               />
             ))}
+            {selectedFolder ? (
+              <form
+                className="mt-2 flex gap-1.5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const trimmedName = renameFolderName.trim()
+                  if (!trimmedName || trimmedName === selectedFolder.name) return
+                  onRenameFolder(selectedProject.id, selectedFolder.id, trimmedName)
+                }}
+              >
+                <input
+                  aria-label="Rename folder"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                  onChange={(event) => setRenameFolderName(event.target.value)}
+                  value={renameFolderName}
+                />
+                <button
+                  aria-label="Save folder name"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                  disabled={
+                    isSubmitting || !renameFolderName.trim() || renameFolderName.trim() === selectedFolder.name
+                  }
+                  title="Save folder name"
+                  type="submit"
+                >
+                  <Save size={13} />
+                </button>
+              </form>
+            ) : null}
             <form
               className="mt-2 flex gap-1.5"
               onSubmit={(event) => {

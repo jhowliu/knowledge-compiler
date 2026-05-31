@@ -38,6 +38,14 @@ export const createSourceFolderSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const renameSourceProjectSchema = z.object({
+  name: z.string().trim().min(1),
+});
+
+export const renameSourceFolderSchema = z.object({
+  name: z.string().trim().min(1),
+});
+
 export const moveRawSourceSchema = z.object({
   projectId: z.string().uuid(),
   folderId: z.string().uuid().nullable().optional(),

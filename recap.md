@@ -66,6 +66,7 @@
 - Started issue #44 implementation on `codex/sources-codex-workspace`: redesigned Sources into a Codex-style workspace with an internal project rail, source inbox filters, central editor/preview flow, and right-side indexing/chunk context.
 - Started issue #45 implementation on `codex/project-folder-organization`: added lightweight source projects/folders, project/folder assignment fields on raw sources, source organization counts, and wired the Sources workspace rail to real project/folder data.
 - Started issue #50 implementation on `codex/editable-source-organization`: added source project/folder creation routes, source move route, and Sources UI controls for creating projects/folders and moving the selected source without re-chunking.
+- Started issue #52 implementation on `codex/source-organization-rename`: added source project/folder rename routes and inline Sources rail rename controls while keeping source counts and selected filters stable.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -164,9 +165,10 @@
 - Sources workspace redesign validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test at default and 1180px-wide viewports confirmed the Codex-style project/source/editor/context layout has no console errors, no document horizontal overflow, and no clipped editor toolbar controls.
 - Source project/folder organization validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` pass. Browser smoke test confirmed Sources renders real Default project and Uncategorized counts from `/sources/organization` with no console errors or horizontal overflow.
 - Editable source organization validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test created a project and folder, moved the selected source there, confirmed project/folder counts and current-location state updated, and found no console errors or horizontal overflow.
+- Source organization rename validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test verified a renamed project/folder render in Sources with counts intact, rename fields reflect the saved names, and no console errors appear.
 
 ## Next Target
-- After #50 merges, consider rename/delete for projects/folders or move the next focus to auth/user scoping.
+- After #52 merges, consider delete/archive for empty projects/folders or move the next focus to auth/user scoping.
 - Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

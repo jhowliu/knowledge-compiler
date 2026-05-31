@@ -107,3 +107,11 @@ export type CreateSourceFolderInput = {
   name: string;
   metadata?: Record<string, unknown>;
 };
+
+export type RenameSourceProjectInput = {
+  name: string;
+};
+
+export type RenameSourceFolderInput = {
+  name: string;
+};

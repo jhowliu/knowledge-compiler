@@ -169,6 +169,9 @@ export function RawNoteEditorPage({
   onSave,
   onDelete,
   onSubmit,
+  onCreateProject,
+  onCreateFolder,
+  onMoveSource,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
 }: {
@@ -195,6 +198,9 @@ export function RawNoteEditorPage({
   onSave: () => void
   onDelete: () => void
   onSubmit: (event: React.FormEvent) => void
+  onCreateProject: (name: string) => void
+  onCreateFolder: (projectId: string, name: string) => void
+  onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
 }) {
@@ -202,6 +208,10 @@ export function RawNoteEditorPage({
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all')
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<FolderFilter>('all')
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newFolderName, setNewFolderName] = useState('')
+  const [moveProjectId, setMoveProjectId] = useState('')
+  const [moveFolderId, setMoveFolderId] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
   const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
@@ -214,6 +224,7 @@ export function RawNoteEditorPage({
     : { label: 'Draft', tone: 'idle' as const }
   const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
   const selectedProject = sourceProjects.find((project) => project.id === selectedProjectId)
+  const moveProject = sourceProjects.find((project) => project.id === moveProjectId)
 
   useEffect(() => {
     if (selectedProjectId !== 'all' && !sourceProjects.some((project) => project.id === selectedProjectId)) {
@@ -231,6 +242,11 @@ export function RawNoteEditorPage({
       setSelectedFolderFilter('all')
     }
   }, [selectedFolderFilter, selectedProject])
+
+  useEffect(() => {
+    setMoveProjectId(selectedRawSource?.projectId ?? sourceProjects[0]?.id ?? '')
+    setMoveFolderId(selectedRawSource?.folderId ?? '')
+  }, [selectedRawSource?.folderId, selectedRawSource?.projectId, sourceProjects])
 
   const sourceRows = useMemo(() => {
     return rawNotes.map((note) => {
@@ -252,6 +268,10 @@ export function RawNoteEditorPage({
   })
 
   const activeProposal = indexingTrace?.proposals[0] ?? null
+  const canMoveSource =
+    Boolean(selectedRawSource) &&
+    Boolean(moveProjectId) &&
+    (selectedRawSource?.projectId !== moveProjectId || (selectedRawSource?.folderId ?? '') !== moveFolderId)
 
   return (
     <section className="grid min-h-0 flex-1 grid-cols-[156px_240px_minmax(0,1fr)] bg-canvas text-ink">
@@ -285,6 +305,33 @@ export function RawNoteEditorPage({
               }}
             />
           ))}
+          <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const trimmedName = newProjectName.trim()
+              if (!trimmedName) return
+              onCreateProject(trimmedName)
+              setNewProjectName('')
+            }}
+          >
+            <input
+              aria-label="New project name"
+              className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+              onChange={(event) => setNewProjectName(event.target.value)}
+              placeholder="New project"
+              value={newProjectName}
+            />
+            <button
+              aria-label="Create project"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+              disabled={isSubmitting || !newProjectName.trim()}
+              title="Create project"
+              type="submit"
+            >
+              <Plus size={14} />
+            </button>
+          </form>
         </div>
 
         {selectedProject ? (
@@ -307,6 +354,33 @@ export function RawNoteEditorPage({
                 onClick={() => setSelectedFolderFilter(folder.id)}
               />
             ))}
+            <form
+              className="mt-2 flex gap-1.5"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const trimmedName = newFolderName.trim()
+                if (!trimmedName) return
+                onCreateFolder(selectedProject.id, trimmedName)
+                setNewFolderName('')
+              }}
+            >
+              <input
+                aria-label="New folder name"
+                className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                onChange={(event) => setNewFolderName(event.target.value)}
+                placeholder="New folder"
+                value={newFolderName}
+              />
+              <button
+                aria-label="Create folder"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                disabled={isSubmitting || !newFolderName.trim()}
+                title="Create folder"
+                type="submit"
+              >
+                <Plus size={14} />
+              </button>
+            </form>
           </div>
         ) : null}
 
@@ -676,6 +750,59 @@ export function RawNoteEditorPage({
           <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
             <p className="text-[12px] font-extrabold text-ink">Source metadata</p>
             <div className="mt-3 space-y-2 text-xs leading-5 text-gray-600">
+              {selectedRawSource ? (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <p className="mb-2 text-[11px] font-bold uppercase text-gray-500">Location</p>
+                  <div className="space-y-2">
+                    <select
+                      aria-label="Move source to project"
+                      className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+                      onChange={(event) => {
+                        setMoveProjectId(event.target.value)
+                        setMoveFolderId('')
+                      }}
+                      value={moveProjectId}
+                    >
+                      {sourceProjects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Move source to folder"
+                      className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+                      onChange={(event) => setMoveFolderId(event.target.value)}
+                      value={moveFolderId}
+                    >
+                      <option value="">Uncategorized</option>
+                      {moveProject?.folders.map((folder) => (
+                        <option key={folder.id} value={folder.id}>
+                          {folder.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className={`h-8 w-full rounded-md px-2 text-xs font-extrabold ${
+                        canMoveSource
+                          ? 'bg-ink text-white'
+                          : 'border border-gray-200 bg-slate-100 text-gray-500'
+                      }`}
+                      disabled={isSubmitting || !canMoveSource}
+                      onClick={() => {
+                        if (!selectedRawSource || !moveProjectId) return
+                        onMoveSource(selectedRawSource.id, {
+                          projectId: moveProjectId,
+                          folderId: moveFolderId || null,
+                        })
+                      }}
+                      type="button"
+                    >
+                      {canMoveSource ? 'Move source' : 'Current location'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <p>
                 <span className="font-bold text-gray-500">Role:</span>{' '}
                 {roleLabel(sourceRole)}

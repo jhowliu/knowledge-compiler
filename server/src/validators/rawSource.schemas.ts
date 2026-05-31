@@ -25,3 +25,20 @@ export const updateRawSourceSchema = z.object({
   bodyMarkdown: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
+
+export const createSourceProjectSchema = z.object({
+  userId: z.string().uuid().nullable().optional(),
+  name: z.string().trim().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const createSourceFolderSchema = z.object({
+  userId: z.string().uuid().nullable().optional(),
+  name: z.string().trim().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const moveRawSourceSchema = z.object({
+  projectId: z.string().uuid(),
+  folderId: z.string().uuid().nullable().optional(),
+});

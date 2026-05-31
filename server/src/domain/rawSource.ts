@@ -56,6 +56,11 @@ export type UpdateRawSourceInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type MoveRawSourceInput = {
+  projectId: string;
+  folderId?: string | null;
+};
+
 export type CreateRawSourceChunkInput = {
   chunkIndex: number;
   heading?: string | null;
@@ -89,4 +94,16 @@ export type SourceProject = {
 
 export type SourceOrganization = {
   projects: SourceProject[];
+};
+
+export type CreateSourceProjectInput = {
+  userId?: string | null;
+  name: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type CreateSourceFolderInput = {
+  userId?: string | null;
+  name: string;
+  metadata?: Record<string, unknown>;
 };

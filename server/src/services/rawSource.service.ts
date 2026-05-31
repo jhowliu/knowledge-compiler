@@ -1,5 +1,11 @@
 import { AppError } from "../domain/errors.js";
-import type { CreateRawSourceInput, UpdateRawSourceInput } from "../domain/rawSource.js";
+import type {
+  CreateRawSourceInput,
+  CreateSourceFolderInput,
+  CreateSourceProjectInput,
+  MoveRawSourceInput,
+  UpdateRawSourceInput,
+} from "../domain/rawSource.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { AgentRunQueueService } from "./agentRunQueue.service.js";
@@ -14,6 +20,18 @@ export class RawSourceService {
 
   async createRawSource(input: CreateRawSourceInput) {
     return this.rawSourceRepository.create(input, chunkSourceMarkdown(input.bodyMarkdown));
+  }
+
+  async createSourceProject(input: CreateSourceProjectInput) {
+    return this.rawSourceRepository.createProject(input);
+  }
+
+  async createSourceFolder(projectId: string, input: CreateSourceFolderInput) {
+    const folder = await this.rawSourceRepository.createFolder(projectId, input);
+    if (!folder) {
+      throw new AppError("Source project not found", 404);
+    }
+    return folder;
   }
 
   async listRecentRawSources() {
@@ -40,6 +58,14 @@ export class RawSourceService {
     );
     if (!rawSource) {
       throw new AppError("Raw source not found", 404);
+    }
+    return rawSource;
+  }
+
+  async moveRawSource(id: string, input: MoveRawSourceInput) {
+    const rawSource = await this.rawSourceRepository.move(id, input);
+    if (!rawSource) {
+      throw new AppError("Raw source or target organization not found", 404);
     }
     return rawSource;
   }

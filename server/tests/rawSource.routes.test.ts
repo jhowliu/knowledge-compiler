@@ -86,7 +86,7 @@ describe("raw source routes", () => {
 
     expect(response.status).toBe(201);
     expect(response.body.rawSource).toMatchObject({
-      projectId: "default-project",
+      projectId: rawSourceRepository.projects[0].id,
       folderId: null,
       sourceRole: "reference",
       sourceType: "paper",
@@ -120,13 +120,97 @@ describe("raw source routes", () => {
     expect(response.status).toBe(200);
     expect(response.body.sourceOrganization.projects).toEqual([
       expect.objectContaining({
-        id: "default-project",
+        id: rawSourceRepository.projects[0].id,
         name: "Default project",
         sourceCount: 2,
         uncategorizedSourceCount: 2,
         folders: [],
       }),
     ]);
+  });
+
+  test("POST /sources/projects and folders creates organization nodes", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Research",
+    });
+    const folderResponse = await request(app)
+      .post(`/sources/projects/${projectResponse.body.sourceProject.id}/folders`)
+      .send({
+        name: "Papers",
+      });
+
+    expect(projectResponse.status).toBe(201);
+    expect(projectResponse.body.sourceProject).toMatchObject({
+      id: projectResponse.body.sourceProject.id,
+      name: "Research",
+      sourceCount: 0,
+    });
+    expect(folderResponse.status).toBe(201);
+    expect(folderResponse.body.sourceFolder).toMatchObject({
+      id: folderResponse.body.sourceFolder.id,
+      projectId: projectResponse.body.sourceProject.id,
+      name: "Papers",
+      sourceCount: 0,
+    });
+  });
+
+  test("PATCH /sources/:id/organization moves a source without re-chunking", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const sourceResponse = await request(app).post("/sources").send({
+      title: "Move me",
+      bodyMarkdown: "# Original\n\nKeep these chunks.",
+    });
+    const originalChunkId = sourceResponse.body.rawSource.chunks[0].id;
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Research",
+    });
+    const folderResponse = await request(app)
+      .post(`/sources/projects/${projectResponse.body.sourceProject.id}/folders`)
+      .send({
+        name: "Papers",
+      });
+
+    const moveResponse = await request(app)
+      .patch(`/sources/${sourceResponse.body.rawSource.id}/organization`)
+      .send({
+        projectId: projectResponse.body.sourceProject.id,
+        folderId: folderResponse.body.sourceFolder.id,
+      });
+    const organizationResponse = await request(app).get("/sources/organization");
+
+    expect(moveResponse.status).toBe(200);
+    expect(moveResponse.body.rawSource).toMatchObject({
+      id: sourceResponse.body.rawSource.id,
+      projectId: projectResponse.body.sourceProject.id,
+      folderId: folderResponse.body.sourceFolder.id,
+      title: "Move me",
+    });
+    expect(moveResponse.body.rawSource.chunks[0].id).toBe(originalChunkId);
+    expect(organizationResponse.body.sourceOrganization.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: projectResponse.body.sourceProject.id,
+          sourceCount: 1,
+          uncategorizedSourceCount: 0,
+          folders: [
+            expect.objectContaining({
+              id: folderResponse.body.sourceFolder.id,
+              sourceCount: 1,
+            }),
+          ],
+        }),
+      ]),
+    );
   });
 
   test("POST /sources rejects unsupported source roles", async () => {

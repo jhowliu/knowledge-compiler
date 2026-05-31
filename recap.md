@@ -65,6 +65,7 @@
 - Started issue #37 implementation on `codex/remove-legacy-review-surfaces`: removed legacy readiness/mistake/review-task UI/API surfaces, stopped generating/writing legacy proposal actions, removed frontend workspace dependencies on the old endpoints, and added migration `007_drop_legacy_review_surfaces.sql`.
 - Started issue #44 implementation on `codex/sources-codex-workspace`: redesigned Sources into a Codex-style workspace with an internal project rail, source inbox filters, central editor/preview flow, and right-side indexing/chunk context.
 - Started issue #45 implementation on `codex/project-folder-organization`: added lightweight source projects/folders, project/folder assignment fields on raw sources, source organization counts, and wired the Sources workspace rail to real project/folder data.
+- Started issue #50 implementation on `codex/editable-source-organization`: added source project/folder creation routes, source move route, and Sources UI controls for creating projects/folders and moving the selected source without re-chunking.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -162,9 +163,10 @@
 - Review Queue source evidence validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test opened Review Queue, switched to Done, confirmed source evidence, evidence chunks, and suggested knowledge update sections render with no console errors.
 - Sources workspace redesign validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test at default and 1180px-wide viewports confirmed the Codex-style project/source/editor/context layout has no console errors, no document horizontal overflow, and no clipped editor toolbar controls.
 - Source project/folder organization validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `npm run migrate --workspace=server` pass. Browser smoke test confirmed Sources renders real Default project and Uncategorized counts from `/sources/organization` with no console errors or horizontal overflow.
+- Editable source organization validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test created a project and folder, moved the selected source there, confirmed project/folder counts and current-location state updated, and found no console errors or horizontal overflow.
 
 ## Next Target
-- After #45 merges, add basic project/folder creation and move-source controls if workspace organization needs direct editing.
+- After #50 merges, consider rename/delete for projects/folders or move the next focus to auth/user scoping.
 - Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

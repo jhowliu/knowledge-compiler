@@ -1,19 +1,39 @@
 import type {
   CreateRawSourceChunkInput,
   CreateRawSourceInput,
+  CreateSourceFolderInput,
+  CreateSourceProjectInput,
+  MoveRawSourceInput,
   RawSourceWithChunks,
+  SourceFolder,
+  SourceProject,
   UpdateRawSourceInput,
 } from "../../src/domain/rawSource.js";
 import type { RawSourceRepository } from "../../src/repositories/rawSource.repository.js";
 
+const defaultProjectId = "00000000-0000-4000-8000-000000000001";
+
 export class InMemoryRawSourceRepository implements RawSourceRepository {
   readonly sources: RawSourceWithChunks[] = [];
+  readonly projects: SourceProject[] = [
+    {
+      id: defaultProjectId,
+      userId: null,
+      name: "Default project",
+      sourceCount: 0,
+      uncategorizedSourceCount: 0,
+      metadata: { system: "default" },
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+      folders: [],
+    },
+  ];
 
   async create(input: CreateRawSourceInput, chunks: CreateRawSourceChunkInput[]) {
     const source: RawSourceWithChunks = {
       id: `raw-source-${this.sources.length + 1}`,
       userId: input.userId ?? null,
-      projectId: input.projectId ?? "default-project",
+      projectId: input.projectId ?? this.projects[0].id,
       folderId: input.folderId ?? null,
       domain: input.domain ?? null,
       sourceType: input.sourceType ?? "markdown",
@@ -39,6 +59,41 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     return source;
   }
 
+  async createProject(input: CreateSourceProjectInput) {
+    const project: SourceProject = {
+      id: `00000000-0000-4000-8000-${String(this.projects.length + 1).padStart(12, "0")}`,
+      userId: input.userId ?? null,
+      name: input.name,
+      sourceCount: 0,
+      uncategorizedSourceCount: 0,
+      metadata: input.metadata ?? {},
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+      folders: [],
+    };
+    this.projects.push(project);
+    return project;
+  }
+
+  async createFolder(projectId: string, input: CreateSourceFolderInput) {
+    const project = this.projects.find((item) => item.id === projectId);
+    if (!project) {
+      return null;
+    }
+    const folder: SourceFolder = {
+      id: `00000000-0000-4000-9000-${String(project.folders.length + 1).padStart(12, "0")}`,
+      projectId,
+      userId: input.userId ?? null,
+      name: input.name,
+      sourceCount: 0,
+      metadata: input.metadata ?? {},
+      createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-24T00:00:00.000Z"),
+    };
+    project.folders.push(folder);
+    return folder;
+  }
+
   async getById(id: string) {
     return this.sources.find((source) => source.id === id) ?? null;
   }
@@ -48,24 +103,36 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
   }
 
   async listOrganization() {
-    const sourceCount = this.sources.filter((source) => source.projectId === "default-project").length;
     return {
-      projects: [
-        {
-          id: "default-project",
-          userId: null,
-          name: "Default project",
-          sourceCount,
-          uncategorizedSourceCount: this.sources.filter(
-            (source) => source.projectId === "default-project" && !source.folderId,
-          ).length,
-          metadata: { system: "default" },
-          createdAt: new Date("2026-05-24T00:00:00.000Z"),
-          updatedAt: new Date("2026-05-24T00:00:00.000Z"),
-          folders: [],
-        },
-      ],
+      projects: this.projects.map((project) => {
+        const projectSources = this.sources.filter((source) => source.projectId === project.id);
+        return {
+          ...project,
+          sourceCount: projectSources.length,
+          uncategorizedSourceCount: projectSources.filter((source) => !source.folderId).length,
+          folders: project.folders.map((folder) => ({
+            ...folder,
+            sourceCount: this.sources.filter((source) => source.folderId === folder.id).length,
+          })),
+        };
+      }),
     };
+  }
+
+  async move(id: string, input: MoveRawSourceInput) {
+    const source = await this.getById(id);
+    const project = this.projects.find((item) => item.id === input.projectId);
+    const folder =
+      input.folderId === null || input.folderId === undefined
+        ? null
+        : project?.folders.find((item) => item.id === input.folderId);
+    if (!source || !project || (input.folderId && !folder)) {
+      return null;
+    }
+    source.projectId = input.projectId;
+    source.folderId = input.folderId ?? null;
+    source.updatedAt = new Date("2026-05-24T01:00:00.000Z");
+    return source;
   }
 
   async update(id: string, input: UpdateRawSourceInput, chunks: CreateRawSourceChunkInput[]) {

@@ -29,6 +29,29 @@ export class RawSourceController {
     }
   };
 
+  createProject = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response
+        .status(201)
+        .json({ sourceProject: await this.rawSourceService.createSourceProject(request.body) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createFolder = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.status(201).json({
+        sourceFolder: await this.rawSourceService.createSourceFolder(
+          requireStringParam(request, "projectId"),
+          request.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   get = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({ rawSource: await this.rawSourceService.getRawSource(requireStringParam(request, "id")) });
@@ -41,6 +64,19 @@ export class RawSourceController {
     try {
       response.json({
         rawSource: await this.rawSourceService.updateRawSource(
+          requireStringParam(request, "id"),
+          request.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  move = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        rawSource: await this.rawSourceService.moveRawSource(
           requireStringParam(request, "id"),
           request.body,
         ),

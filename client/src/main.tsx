@@ -416,6 +416,60 @@ function App() {
     setIsRawNoteDirty(true)
   }
 
+  async function createSourceProject(name: string) {
+    try {
+      await requestJson('/sources/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      })
+      setNotice(`Project "${name}" created.`)
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to create project')
+      setNotice(null)
+    }
+  }
+
+  async function createSourceFolder(projectId: string, name: string) {
+    try {
+      await requestJson(`/sources/projects/${projectId}/folders`, {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      })
+      setNotice(`Folder "${name}" created.`)
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to create folder')
+      setNotice(null)
+    }
+  }
+
+  async function moveRawSource(rawSourceId: string, input: { projectId: string; folderId: string | null }) {
+    try {
+      await requestJson(`/sources/${rawSourceId}/organization`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      })
+      setNotice('Source moved.')
+      setError(null)
+      const nextData = await refresh()
+      const selectedRawNote = selectedRawNoteId
+        ? nextData?.rawNotes.find((note) => note.id === selectedRawNoteId)
+        : null
+      if (selectedRawNote) {
+        setTitle(selectedRawNote.title ?? '')
+        setSourceRole(selectedRawNote.sourceRole)
+        setBodyMarkdown(selectedRawNote.bodyMarkdown)
+        setIsRawNoteDirty(false)
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to move source')
+      setNotice(null)
+    }
+  }
+
   async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
     setIsSubmitting(true)
     try {
@@ -676,7 +730,10 @@ function App() {
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
             onBodyChange={updateDraftBody}
+            onCreateFolder={(projectId, name) => void createSourceFolder(projectId, name)}
+            onCreateProject={(name) => void createSourceProject(name)}
             onDelete={() => void deleteSelectedRawNote()}
+            onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}

@@ -1,5 +1,22 @@
-import React from 'react'
-import { BookOpen, CheckCircle2, Eye, FileText, PencilLine, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import {
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  Clock3,
+  Eye,
+  FileText,
+  Folder,
+  GitBranch,
+  Inbox,
+  Library,
+  PanelRight,
+  PencilLine,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+} from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
 import type {
   AgentRun,
@@ -14,6 +31,9 @@ type SourceLifecycle = {
   label: string
   tone: 'idle' | 'active' | 'pending' | 'done' | 'failed'
 }
+
+type RoleFilter = 'all' | RawSourceRole
+type LifecycleFilter = 'all' | SourceLifecycle['tone']
 
 function getRunRawNoteId(agentRun: AgentRun) {
   if (!agentRun.input || typeof agentRun.input !== 'object') {
@@ -56,12 +76,67 @@ function getLifecycle(note: RawNote, proposals: Proposal[], agentRuns: AgentRun[
 
 function lifecycleClass(tone: SourceLifecycle['tone']) {
   return {
-    idle: 'border-[#3A3A3A] bg-[#252525] text-gray-300',
-    active: 'border-violet/60 bg-violet/15 text-violet-100',
-    pending: 'border-amber-700/70 bg-amber-950/30 text-amber-100',
-    done: 'border-emerald-800/70 bg-emerald-950/30 text-emerald-100',
-    failed: 'border-red-900/70 bg-red-950/40 text-red-100',
+    idle: 'border-gray-200 bg-slate-100 text-gray-600',
+    active: 'border-violet/30 bg-violet/10 text-violet',
+    pending: 'border-amber-200 bg-amber-50 text-amber-800',
+    done: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    failed: 'border-red-200 bg-red-50 text-red-700',
   }[tone]
+}
+
+function roleLabel(role: RawSourceRole) {
+  return role === 'reference' ? 'Reference' : 'Personal note'
+}
+
+function sourceTypeLabel(sourceType: string) {
+  return sourceType.replaceAll('_', ' ')
+}
+
+function sourceTitle(note: RawNote | null | undefined, source: RawSource | null | undefined) {
+  return source?.title ?? note?.title ?? 'Untitled source'
+}
+
+function formatDate(value: string | undefined) {
+  if (!value) return 'Draft'
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
+}
+
+function NavButton({
+  active,
+  count,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active?: boolean
+  count?: number
+  icon: typeof Inbox
+  label: string
+  onClick?: () => void
+}) {
+  return (
+    <button
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] font-semibold ${
+        active ? 'bg-slate-100 text-ink' : 'text-gray-600 hover:bg-slate-50 hover:text-ink'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <Icon size={15} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {typeof count === 'number' ? (
+        <span className="text-[11px] font-bold text-gray-400">{count}</span>
+      ) : null}
+    </button>
+  )
+}
+
+function SmallPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
+      {children}
+    </span>
+  )
 }
 
 export function RawNoteEditorPage({
@@ -87,6 +162,8 @@ export function RawNoteEditorPage({
   onSave,
   onDelete,
   onSubmit,
+  onOpenKnowledgeMap,
+  onOpenReviewQueue,
 }: {
   indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
@@ -110,9 +187,14 @@ export function RawNoteEditorPage({
   onSave: () => void
   onDelete: () => void
   onSubmit: (event: React.FormEvent) => void
+  onOpenKnowledgeMap?: () => void
+  onOpenReviewQueue?: () => void
 }) {
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all')
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
-  const sourceById = new Map(rawSources.map((source) => [source.id, source]))
+  const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
   const selectedRawSource = selectedRawNote?.rawSourceId
     ? sourceById.get(selectedRawNote.rawSourceId) ?? null
     : null
@@ -120,104 +202,169 @@ export function RawNoteEditorPage({
   const selectedLifecycle = selectedRawNote
     ? getLifecycle(selectedRawNote, proposals, agentRuns)
     : { label: 'Draft', tone: 'idle' as const }
-  const visibleRawNotes = rawNotes.slice(0, 12)
+  const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
+
+  const sourceRows = useMemo(() => {
+    return rawNotes.map((note) => {
+      const source = note.rawSourceId ? sourceById.get(note.rawSourceId) ?? null : null
+      const lifecycle = getLifecycle(note, proposals, agentRuns)
+      return { lifecycle, note, source }
+    })
+  }, [agentRuns, proposals, rawNotes, sourceById])
+
+  const filteredRows = sourceRows.filter(({ lifecycle, note }) => {
+    const matchesRole = roleFilter === 'all' || note.sourceRole === roleFilter
+    const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
+    return matchesRole && matchesLifecycle
+  })
+
+  const activeProposal = indexingTrace?.proposals[0] ?? null
 
   return (
-    <section className="flex min-h-0 flex-1 bg-[#181818] text-white">
-      <aside className="flex w-[304px] shrink-0 flex-col border-r border-[#2B2B2B] bg-[#181818] px-5 py-6">
-        <div className="mb-7 flex items-center gap-4">
-          <PencilLine size={34} strokeWidth={1.9} className="text-gray-400" />
-          <h1 className="text-[26px] font-semibold leading-none tracking-normal text-gray-100">
-            Sources
-          </h1>
+    <section className="grid min-h-0 flex-1 grid-cols-[156px_240px_minmax(0,1fr)] bg-canvas text-ink">
+      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white px-3 py-4">
+        <div className="mb-4 px-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Workspace</p>
+          <h1 className="mt-1 text-lg font-extrabold text-ink">Knowledge sources</h1>
         </div>
 
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-            Source inbox
-          </p>
-          <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[11px] font-bold text-gray-300">
-            {rawNotes.length}
-          </span>
+        <div className="space-y-1">
+          <NavButton active count={rawNotes.length} icon={Inbox} label="Sources" />
+          <NavButton count={rawSources.length} icon={Folder} label="Default project" />
+          <NavButton count={rawNotes.filter((note) => note.sourceRole === 'personal_note').length} icon={PencilLine} label="Personal notes" />
+          <NavButton count={rawNotes.filter((note) => note.sourceRole === 'reference').length} icon={BookOpen} label="References" />
         </div>
 
-        <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
-          {rawNotes.length ? (
-            visibleRawNotes.map((note) => {
-              const source = note.rawSourceId ? sourceById.get(note.rawSourceId) ?? null : null
-              const lifecycle = getLifecycle(note, proposals, agentRuns)
+        <div className="mt-5 space-y-1">
+          <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Open</p>
+          <NavButton icon={Library} label="Knowledge" onClick={onOpenKnowledgeMap} />
+          <NavButton count={pendingCount} icon={GitBranch} label="Review Queue" onClick={onOpenReviewQueue} />
+        </div>
 
-              return (
-                <button
-                  className={`w-full rounded-md border p-3 text-left transition ${
-                    note.id === selectedRawNoteId
-                      ? 'border-violet bg-[#252039]'
-                      : 'border-[#2B2B2B] bg-[#202020] hover:border-[#3A3A3A]'
-                  }`}
-                  key={note.id}
-                  onClick={() => onSelectRawNote(note)}
-                  type="button"
-                >
-                  <p className="line-clamp-1 text-[13px] font-bold text-gray-100">
-                    {note.title ?? 'Untitled source'}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
-                      {note.sourceRole === 'reference' ? 'Reference' : 'Personal note'}
-                    </span>
-                    <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
-                      {source?.chunks.length ?? 0} chunks
-                    </span>
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(
-                        lifecycle.tone,
-                      )}`}
-                    >
-                      {lifecycle.label}
-                    </span>
+        <div className="mt-auto rounded-lg border border-gray-200 bg-slate-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Index status</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-lg font-extrabold text-ink">{rawSources.length}</p>
+              <p className="text-[11px] text-gray-500">sources</p>
+            </div>
+            <div>
+              <p className="text-lg font-extrabold text-ink">
+                {sourceRows.filter((row) => row.lifecycle.tone === 'pending').length}
+              </p>
+              <p className="text-[11px] text-gray-500">pending</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white">
+        <div className="border-b border-gray-200 px-4 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Source inbox</p>
+              <p className="text-sm font-extrabold text-ink">{filteredRows.length} visible</p>
+            </div>
+            <button
+              aria-label="New source"
+              className="grid h-9 w-9 place-items-center rounded-lg bg-ink text-white"
+              onClick={onNewNote}
+              type="button"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              aria-label="Filter sources by role"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+              value={roleFilter}
+            >
+              <option value="all">All roles</option>
+              <option value="personal_note">Personal</option>
+              <option value="reference">Reference</option>
+            </select>
+            <select
+              aria-label="Filter sources by status"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
+              value={lifecycleFilter}
+            >
+              <option value="all">All states</option>
+              <option value="idle">Captured</option>
+              <option value="active">Indexing</option>
+              <option value="pending">Needs approval</option>
+              <option value="done">Applied</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {filteredRows.length ? (
+            filteredRows.map(({ lifecycle, note, source }) => (
+              <button
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  note.id === selectedRawNoteId
+                    ? 'border-violet bg-violet/10'
+                    : 'border-transparent hover:border-gray-200 hover:bg-slate-50'
+                }`}
+                key={note.id}
+                onClick={() => onSelectRawNote(note)}
+                type="button"
+              >
+                <div className="mb-2 flex items-start gap-2">
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-500">
+                    {note.sourceRole === 'reference' ? <BookOpen size={14} /> : <FileText size={14} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-1 text-[13px] font-extrabold text-ink">
+                      {sourceTitle(note, source)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
+                      {formatDate(source?.updatedAt ?? note.createdAt)}
+                    </p>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
-                    {note.bodyMarkdown}
-                  </p>
-                </button>
-              )
-            })
+                </div>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  <SmallPill>{roleLabel(note.sourceRole)}</SmallPill>
+                  <SmallPill>{source?.chunks.length ?? 0} chunks</SmallPill>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}>
+                    {lifecycle.label}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-xs leading-5 text-gray-500">{note.bodyMarkdown}</p>
+              </button>
+            ))
           ) : (
-            <p className="rounded-md border border-[#2B2B2B] bg-[#202020] p-3 text-xs leading-5 text-gray-400">
-              No sources yet.
-            </p>
+            <div className="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-4 text-sm leading-6 text-gray-500">
+              No sources match these filters.
+            </div>
           )}
         </div>
       </aside>
 
-      <form className="flex min-w-0 flex-1 flex-col bg-[#202020]" onSubmit={onSubmit}>
-        <header className="flex h-[78px] items-center justify-between gap-4 border-b border-[#303030] px-8">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              {selectedRawNote
-                ? isDirty
-                  ? 'Editing source'
-                  : 'Saved source'
-                : 'New source'}
-            </p>
-            <div className="mt-1 flex items-center gap-3">
-              <h2 className="text-[15px] font-bold text-gray-100">
-                {selectedRawNote?.title ?? 'Capture source evidence'}
-              </h2>
-              {selectedRawNote ? (
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${lifecycleClass(
-                    selectedLifecycle.tone,
-                  )}`}
-                >
-                  {indexingTrace?.status ?? selectedLifecycle.label}
-                </span>
-              ) : null}
+      <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_232px]">
+      <form className="flex min-h-0 min-w-0 flex-col bg-white" onSubmit={onSubmit}>
+        <header className="shrink-0 border-b border-gray-200 px-5 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                {selectedRawNote ? (isDirty ? 'Unsaved changes' : 'Saved source') : 'New source'}
+              </p>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(selectedLifecycle.tone)}`}>
+                {indexingTrace?.status ?? selectedLifecycle.label}
+              </span>
             </div>
+            <p className="mt-1 truncate text-sm font-extrabold text-ink">
+              {selectedRawNote ? sourceTitle(selectedRawNote, selectedRawSource) : 'Capture source evidence'}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 rounded-lg border border-[#3A3A3A] bg-[#191919] p-1">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="flex h-9 rounded-lg border border-gray-200 bg-slate-50 p-1">
               {[
                 { value: 'personal_note' as const, label: 'Personal', icon: PencilLine },
                 { value: 'reference' as const, label: 'Reference', icon: BookOpen },
@@ -225,10 +372,8 @@ export function RawNoteEditorPage({
                 const Icon = option.icon
                 return (
                   <button
-                    className={`flex items-center gap-1.5 rounded-md px-3 text-[12px] font-extrabold transition ${
-                      sourceRole === option.value
-                        ? 'bg-[#303030] text-white'
-                        : 'text-gray-500 hover:text-gray-200'
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 text-[12px] font-extrabold transition ${
+                      sourceRole === option.value ? 'bg-white text-ink shadow-sm' : 'text-gray-500 hover:text-ink'
                     }`}
                     key={option.value}
                     onClick={() => onSourceRoleChange(option.value)}
@@ -241,63 +386,64 @@ export function RawNoteEditorPage({
               })}
             </div>
             <button
-              className="flex h-10 items-center gap-2 rounded-lg border border-[#3A3A3A] px-3.5 text-[13px] font-bold text-gray-200 hover:bg-[#2A2A2A]"
-              onClick={onNewNote}
+              aria-label={isPreviewOpen ? 'Hide preview' : 'Show preview'}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-slate-50"
+              onClick={() => setIsPreviewOpen((current) => !current)}
+              title={isPreviewOpen ? 'Hide preview' : 'Show preview'}
               type="button"
             >
-              <Plus size={16} />
-              New source
+              {isPreviewOpen ? <PanelRight size={16} /> : <Eye size={16} />}
             </button>
             {selectedRawNote ? (
               <>
                 <button
-                  className="flex h-10 items-center gap-2 rounded-lg border border-[#3A3A3A] px-3.5 text-[13px] font-bold text-gray-200 hover:bg-[#2A2A2A] disabled:opacity-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-ink disabled:opacity-50"
                   disabled={isSubmitting || !isDirty}
                   onClick={onSave}
                   type="button"
                 >
-                  <Save size={16} />
+                  <Save size={14} />
                   Save
                 </button>
                 <button
                   aria-label="Delete source"
-                  className="grid h-10 w-10 place-items-center rounded-lg border border-red-900/70 text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50"
                   disabled={isSubmitting}
                   onClick={onDelete}
                   title="Delete source"
                   type="button"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={15} />
                 </button>
               </>
             ) : null}
             <button
-              className="flex h-10 items-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-violet px-3 text-xs font-extrabold text-white disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >
-              <Sparkles size={16} />
-              {isSubmitting ? 'Compiling' : selectedRawNote ? 'Compile saved' : 'Compile source'}
+              <Sparkles size={14} />
+              {isSubmitting ? 'Indexing' : selectedRawNote ? 'Index source' : 'Save & index'}
             </button>
           </div>
         </header>
 
         {error ? (
-          <div className="mx-8 mt-5 rounded-lg border border-red-900/60 bg-red-950/50 px-4 py-3 text-sm text-red-100">
+          <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {error}
           </div>
         ) : null}
         {notice ? (
-          <div className="mx-8 mt-5 rounded-lg border border-emerald-900/60 bg-emerald-950/50 px-4 py-3 text-sm font-semibold text-emerald-100">
+          <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             {notice}
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(360px,1fr)_minmax(320px,0.9fr)] gap-0">
-          <div className="flex min-h-0 flex-col px-8 py-7">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-[430px] flex-col px-6 py-5">
             <input
               aria-label="Source title"
-              className="mb-5 h-14 w-full border-0 bg-transparent text-3xl font-semibold tracking-normal text-white outline-none placeholder:text-gray-600"
+              className="mb-4 h-11 w-full border-0 bg-transparent text-2xl font-extrabold tracking-normal text-ink outline-none placeholder:text-gray-400"
               onChange={(event) => onTitleChange(event.target.value)}
               placeholder="Untitled source"
               ref={titleInputRef}
@@ -305,128 +451,155 @@ export function RawNoteEditorPage({
             />
             <textarea
               aria-label="Source body"
-              className="min-h-0 flex-1 resize-none border-0 bg-transparent text-[15px] leading-7 text-gray-200 outline-none placeholder:text-gray-600"
+              className="min-h-0 flex-1 resize-none rounded-lg border border-transparent bg-transparent p-0 text-[15px] leading-7 text-gray-700 outline-none placeholder:text-gray-400 focus:border-gray-200 focus:bg-slate-50 focus:p-4"
               onChange={(event) => onBodyChange(event.target.value)}
               placeholder={
                 sourceRole === 'reference'
-                  ? 'Paste paper highlights, reference excerpts, or source notes. The indexer will draft knowledge updates after you compile.'
-                  : 'Write the messy version here. The compiler will turn it into proposal-backed knowledge after you compile.'
+                  ? 'Paste paper highlights, reference excerpts, or source notes.'
+                  : 'Write notes here. Indexing will draft knowledge updates for review.'
               }
               value={bodyMarkdown}
             />
           </div>
 
-          <aside className="min-h-0 overflow-y-auto border-l border-[#303030] bg-[#1B1B1B] px-7 py-7">
-            <div className="mb-5 flex items-center gap-2 text-[13px] font-bold text-gray-300">
-              {sourceRole === 'reference' ? (
-                <FileText size={16} className="text-gray-500" />
+          {isPreviewOpen ? (
+            <aside className="border-t border-gray-200 bg-slate-50 px-5 py-5">
+              <div className="mb-4 flex items-center gap-2 text-[13px] font-extrabold text-gray-600">
+                <Eye size={15} />
+                Preview
+              </div>
+              {title.trim() ? <h2 className="mb-4 text-xl font-extrabold text-ink">{title}</h2> : null}
+              {bodyMarkdown.trim() ? (
+                <MarkdownPreview markdown={bodyMarkdown} />
               ) : (
-                <Eye size={16} className="text-gray-500" />
+                <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm leading-6 text-gray-500">
+                  Nothing to preview yet.
+                </div>
               )}
-              Preview
-            </div>
-            {selectedRawNote && indexingTrace ? (
-              <div className="mb-5 rounded-lg border border-[#303030] bg-[#202020] p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-[12px] font-extrabold text-gray-100">Indexing trace</p>
-                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
-                    {indexingTrace.agentRuns[0]?.status ?? 'idle'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  {[
-                    ['Runs', indexingTrace.agentRuns.length],
-                    ['Proposals', indexingTrace.proposals.length],
-                    ['Items', indexingTrace.proposals[0]?.items.length ?? 0],
-                  ].map(([label, value]) => (
-                    <div className="rounded-md border border-[#303030] bg-[#171717] p-2" key={label}>
-                      <p className="text-[10px] font-bold uppercase text-gray-500">{label}</p>
-                      <p className="mt-1 text-base font-extrabold text-white">{value}</p>
-                    </div>
-                  ))}
-                </div>
-                {indexingTrace.proposals[0] ? (
-                  <p className="mt-3 text-xs leading-5 text-gray-400">
-                    {indexingTrace.proposals[0].rationale ?? 'Proposal generated from this source.'}
-                  </p>
-                ) : indexingTrace.status === 'Failed' ? (
-                  <p className="mt-3 rounded-md border border-red-900/60 bg-red-950/40 p-3 text-xs leading-5 text-red-100">
-                    {indexingTrace.agentRuns[0]?.error ??
-                      'LLM wiki indexing failed. No proposal was created.'}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs leading-5 text-gray-500">
-                    Compile this source with LLM wiki indexing to create a proposal.
-                  </p>
-                )}
-              </div>
-            ) : null}
-            {selectedRawNote ? (
-              <div className="mb-5 rounded-lg border border-[#303030] bg-[#202020] p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-[12px] font-extrabold text-gray-100">Source lifecycle</p>
-                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400">
-                    {selectedChunks.length} chunks
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 gap-1.5 text-[10px] font-bold uppercase">
-                  {([
-                    ['Captured', true],
-                    ['Chunked', selectedChunks.length > 0],
-                    ['Indexed', indexingTrace ? indexingTrace.agentRuns.length > 0 : false],
-                    ['Approval', indexingTrace ? indexingTrace.proposals.length > 0 : false],
-                  ] as Array<[string, boolean]>).map(([label, isReady]) => (
-                    <div
-                      className={`rounded-md border px-2 py-2 text-center ${
-                        isReady
-                          ? 'border-emerald-900/70 bg-emerald-950/30 text-emerald-100'
-                          : 'border-[#303030] bg-[#171717] text-gray-500'
-                      }`}
-                      key={label}
-                    >
-                      {isReady ? <CheckCircle2 className="mx-auto mb-1" size={13} /> : null}
-                      {label}
-                    </div>
-                  ))}
-                </div>
-                {selectedChunks.length ? (
-                  <div className="mt-4 space-y-2">
-                    {selectedChunks.slice(0, 3).map((chunk) => (
-                      <div className="rounded-md border border-[#303030] bg-[#171717] p-3" key={chunk.id}>
-                        <div className="mb-1 flex items-center justify-between gap-3">
-                          <p className="line-clamp-1 text-[11px] font-bold text-gray-300">
-                            {chunk.heading ?? `Chunk ${chunk.chunkIndex + 1}`}
-                          </p>
-                          <span className="text-[10px] font-bold uppercase text-gray-600">
-                            ~{chunk.tokenEstimate} tokens
-                          </span>
-                        </div>
-                        <p className="line-clamp-2 text-xs leading-5 text-gray-500">
-                          {chunk.bodyMarkdown}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs leading-5 text-gray-500">
-                    Saving this source will create chunks for indexing and retrieval.
-                  </p>
-                )}
-              </div>
-            ) : null}
-            {title.trim() ? (
-              <h2 className="mb-5 text-2xl font-bold tracking-normal text-white">{title}</h2>
-            ) : null}
-            {bodyMarkdown.trim() ? (
-              <MarkdownPreview markdown={bodyMarkdown} />
-            ) : (
-              <div className="rounded-lg border border-dashed border-[#3A3A3A] p-4 text-sm leading-6 text-gray-500">
-                Nothing to preview yet.
-              </div>
-            )}
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </form>
+
+      <aside className="flex min-h-0 flex-col border-l border-gray-200 bg-white">
+        <div className="border-b border-gray-200 px-4 py-4">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Context</p>
+          <h2 className="mt-1 text-sm font-extrabold text-ink">Indexing and chunks</h2>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[12px] font-extrabold text-ink">Lifecycle</p>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(selectedLifecycle.tone)}`}>
+                {selectedLifecycle.label}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold uppercase">
+              {([
+                ['Saved', Boolean(selectedRawNote)],
+                ['Chunked', selectedChunks.length > 0],
+                ['Indexed', indexingTrace ? indexingTrace.agentRuns.length > 0 : false],
+                ['Review', indexingTrace ? indexingTrace.proposals.length > 0 : false],
+              ] as Array<[string, boolean]>).map(([label, isReady]) => (
+                <div
+                  className={`rounded-md border px-1.5 py-2 ${
+                    isReady
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-gray-200 bg-white text-gray-400'
+                  }`}
+                  key={label}
+                >
+                  {isReady ? <CheckCircle2 className="mx-auto mb-1" size={13} /> : <Clock3 className="mx-auto mb-1" size={13} />}
+                  {label}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {selectedRawNote && indexingTrace ? (
+            <section className="rounded-lg border border-gray-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[12px] font-extrabold text-ink">Index trace</p>
+                <SmallPill>{indexingTrace.agentRuns[0]?.status ?? 'idle'}</SmallPill>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  ['Runs', indexingTrace.agentRuns.length],
+                  ['Proposals', indexingTrace.proposals.length],
+                  ['Items', indexingTrace.proposals[0]?.items.length ?? 0],
+                ].map(([label, value]) => (
+                  <div className="rounded-md border border-gray-200 bg-slate-50 p-2" key={label}>
+                    <p className="text-[10px] font-bold uppercase text-gray-500">{label}</p>
+                    <p className="mt-1 text-base font-extrabold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {activeProposal ? (
+                <p className="mt-3 text-xs leading-5 text-gray-600">
+                  {activeProposal.rationale ?? 'Proposal generated from this source.'}
+                </p>
+              ) : indexingTrace.status === 'Failed' ? (
+                <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
+                  {indexingTrace.agentRuns[0]?.error ?? 'LLM wiki indexing failed. No proposal was created.'}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs leading-5 text-gray-500">
+                  Index this source to draft a proposal.
+                </p>
+              )}
+            </section>
+          ) : null}
+
+          <section className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[12px] font-extrabold text-ink">Chunks</p>
+              <SmallPill>{selectedChunks.length}</SmallPill>
+            </div>
+            {selectedChunks.length ? (
+              <div className="space-y-2">
+                {selectedChunks.map((chunk) => (
+                  <details className="rounded-md border border-gray-200 bg-slate-50 p-3" key={chunk.id}>
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-[12px] font-extrabold text-ink">
+                        {chunk.heading ?? `Chunk ${chunk.chunkIndex + 1}`}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase text-gray-500">
+                        ~{chunk.tokenEstimate}
+                        <ChevronDown size={12} />
+                      </span>
+                    </summary>
+                    <p className="mt-2 text-xs leading-5 text-gray-600">{chunk.bodyMarkdown}</p>
+                  </details>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-md border border-dashed border-gray-300 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
+                Save this source to create indexing chunks.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
+            <p className="text-[12px] font-extrabold text-ink">Source metadata</p>
+            <div className="mt-3 space-y-2 text-xs leading-5 text-gray-600">
+              <p>
+                <span className="font-bold text-gray-500">Role:</span>{' '}
+                {roleLabel(sourceRole)}
+              </p>
+              <p>
+                <span className="font-bold text-gray-500">Type:</span>{' '}
+                {sourceTypeLabel(selectedRawSource?.sourceType ?? (sourceRole === 'reference' ? 'paper' : 'manual'))}
+              </p>
+              <p>
+                <span className="font-bold text-gray-500">Updated:</span>{' '}
+                {formatDate(selectedRawSource?.updatedAt ?? selectedRawNote?.createdAt)}
+              </p>
+            </div>
+          </section>
+        </div>
+      </aside>
+      </div>
     </section>
   )
 }

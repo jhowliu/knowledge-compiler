@@ -678,6 +678,8 @@ function App() {
             onBodyChange={updateDraftBody}
             onDelete={() => void deleteSelectedRawNote()}
             onNewNote={openNewRawNoteEditor}
+            onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
+            onOpenReviewQueue={openUpdateProposalsView}
             onSave={() => void saveSelectedRawNote()}
             onSelectRawNote={selectRawNote}
             onSourceRoleChange={updateSourceRole}

@@ -48,7 +48,22 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   }
 }
 
+const workspaceDataRequests = new Map<BoardKey, Promise<WorkspaceData>>()
+
 export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
+  const inFlightRequest = workspaceDataRequests.get(boardKey)
+  if (inFlightRequest) {
+    return inFlightRequest
+  }
+
+  const request = loadWorkspaceDataWithoutCache(boardKey).finally(() => {
+    workspaceDataRequests.delete(boardKey)
+  })
+  workspaceDataRequests.set(boardKey, request)
+  return request
+}
+
+async function loadWorkspaceDataWithoutCache(boardKey: BoardKey): Promise<WorkspaceData> {
   const [
     rawNotes,
     rawSources,

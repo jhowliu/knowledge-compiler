@@ -169,6 +169,7 @@
 - Source organization rename validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test verified a renamed project/folder render in Sources with counts intact, rename fields reflect the saved names, and no console errors appear.
 - Empty source organization delete validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test deleted an empty folder and project from Sources, confirmed non-empty delete controls stay disabled, and found no console errors.
 - Sources sidebar consolidation and Review Maps removal validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` pass. Sources now uses one combined app/source sidebar, the Review Maps page/API/workspace board/fetch path are removed, old `review_map` rows are normalized to `knowledge_note`, and browser smoke test confirmed `/review-maps` returns 404 with no unexpected UI overflow.
+- Workspace request de-dupe validation: added a single-flight cache around `loadWorkspaceData` so React dev `StrictMode` no longer causes duplicate initial workspace API calls. `npm run typecheck` and `npm run build` pass; browser fetch instrumentation on `http://localhost:5173/` confirmed each workspace endpoint is called once on reload.
 
 ## Next Target
 - After #54 merges, move the next focus to auth/user scoping or richer search filters.

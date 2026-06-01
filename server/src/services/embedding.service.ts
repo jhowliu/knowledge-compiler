@@ -33,7 +33,7 @@ export class OpenAIEmbeddingService implements EmbeddingService {
       throw new Error(`OpenAI embedding request failed with ${response.status}`);
     }
 
-    const embedding = firstEmbedding(await response.json());
+    const embedding = parseEmbeddingResponse(await response.json());
     if (!embedding) {
       throw new Error("OpenAI embedding response did not include an embedding");
     }
@@ -50,7 +50,7 @@ export async function embedKnowledgeBlock(
   return embeddingService.embedText(text);
 }
 
-function firstEmbedding(response: unknown) {
+function parseEmbeddingResponse(response: unknown) {
   if (!response || typeof response !== "object") {
     return null;
   }

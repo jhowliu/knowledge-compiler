@@ -214,7 +214,14 @@ describe("ProposalService", () => {
               title: "Dijkstra",
               bodyMarkdown: "Use Dijkstra for positive weighted shortest paths.",
               structuredData: {
-                concepts: [{ name: "Shortest Path", conceptType: "pattern" }],
+                concepts: [
+                  {
+                    name: "Shortest Path",
+                    type: "method",
+                    specificity: "specific",
+                    confidence: "high",
+                  },
+                ],
               },
             },
             rationale: "Create approved knowledge.",
@@ -250,5 +257,67 @@ describe("ProposalService", () => {
       relationType: "related_concept",
       status: "pending",
     });
+  });
+
+  test("does not create link suggestions from generic generalized concepts", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+    knowledge.relatedResults = [
+      {
+        id: "compiled-existing-1",
+        targetType: "compiled_note",
+        title: "Unrelated shortest path note",
+        bodyMarkdown: "Dijkstra with state.",
+        domain: "coding",
+        noteType: "algorithm",
+        rank: 2,
+        createdAt: new Date("2026-05-24T00:00:00.000Z"),
+      },
+    ];
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-4",
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "knowledge_note",
+        impactLevel: 2,
+        confidence: "medium",
+        rationale: "Generic concept only.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "coding",
+              knowledgeType: "knowledge_note",
+              title: "Merge Sorted Array",
+              bodyMarkdown: "Merge sorted arrays in-place from the end.",
+              structuredData: {
+                summary: "In-place array merge.",
+                concepts: [
+                  {
+                    name: "array",
+                    type: "topic",
+                    specificity: "generic",
+                    confidence: "high",
+                  },
+                ],
+                claims: [],
+                methods: [],
+                examples: [],
+                constraints: [],
+              },
+            },
+            rationale: "Create approved knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.concepts).toHaveLength(1);
+    expect(noteLinks.noteLinks).toHaveLength(0);
   });
 });

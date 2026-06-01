@@ -1,6 +1,6 @@
 import request from "supertest";
 import { createApp } from "../src/app.js";
-import type { CodingExtraction } from "../src/domain/compiler.js";
+import type { KnowledgeExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
 import type { WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
@@ -15,33 +15,42 @@ const routeWikiIndexer = {
     return {
       provider: "openai" as const,
       extraction: {
-        domain: "coding" as const,
-        knowledgeType: "general_coding_note" as const,
-        problemNumber: null,
-        problemTitle: null,
-        decisionRules: [],
-        commonTraps: [],
-        patterns: ["Source-first Indexing"],
-        algorithms: [],
-        recognitionSignals: ["source chunks"],
-        keyInsights: ["Index source chunks before drafting approved knowledge."],
-        mistakes: [],
-        implementationDetails: ["Compile from /sources/:id/compile."],
-        reviewActions: [],
+        domain: "knowledge_workspace",
+        knowledgeType: "knowledge_note",
+        title: "Source-first Indexing",
+        summary: "Index source chunks before drafting approved knowledge.",
         concepts: [
           {
             name: "Source-first Indexing",
-            conceptType: "workflow",
+            type: "method",
+            specificity: "specific",
             confidence: "high" as const,
           },
         ],
+        claims: [
+          {
+            text: "Source chunks should be indexed before drafting approved knowledge.",
+            confidence: "high" as const,
+            evidenceChunkIds: [],
+          },
+        ],
+        methods: [
+          {
+            name: "Source-first Indexing",
+            purpose: "Compile from source chunks while preserving evidence.",
+            steps: ["Compile from /sources/:id/compile."],
+            conditions: ["A raw source has chunk evidence."],
+          },
+        ],
+        examples: [],
+        constraints: [],
         confidence: "high" as const,
-      },
+      } satisfies KnowledgeExtraction,
     };
   },
   draftProposal(
     source: WikiIndexingSource,
-    extraction: CodingExtraction,
+    extraction: KnowledgeExtraction,
     relatedNotes: SearchResult[],
   ) {
     return {
@@ -58,7 +67,7 @@ const routeWikiIndexer = {
             domain: extraction.domain,
             knowledgeType: "knowledge_note",
             title: source.title ?? "Untitled source",
-            bodyMarkdown: extraction.keyInsights.join("\n"),
+            bodyMarkdown: extraction.summary,
             structuredData: { rawSourceId: source.rawSourceId },
           },
           rationale: "Create approved knowledge from this source.",

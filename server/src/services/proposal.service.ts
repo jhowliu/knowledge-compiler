@@ -3,6 +3,7 @@ import type { KnowledgeRepository } from "../repositories/knowledge.repository.j
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
+import { isLinkableConcept, legacyConceptType } from "../domain/compiler.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -153,11 +154,21 @@ export class ProposalService {
       for (const concept of concepts) {
         const conceptRecord = asRecord(concept);
         const name = stringValue(conceptRecord, "name");
-        const conceptType = stringValue(conceptRecord, "conceptType", "topic");
+        const conceptType = legacyConceptType({
+          type: stringValue(conceptRecord, "type"),
+          conceptType: stringValue(conceptRecord, "conceptType"),
+        });
+        const confidence = stringValue(conceptRecord, "confidence", proposal.confidence);
         if (!name) {
           continue;
         }
-        conceptNames.push(name);
+        if (isLinkableConcept({
+          name,
+          specificity: stringValue(conceptRecord, "specificity"),
+          confidence,
+        })) {
+          conceptNames.push(name);
+        }
         const savedConcept = await this.knowledgeRepository.upsertConcept({
           userId: proposal.userId,
           name,
@@ -169,7 +180,7 @@ export class ProposalService {
           targetType: "compiled_note",
           targetId: compiledNote.id,
           relationType: "canonicalizes",
-          confidence: proposal.confidence,
+          confidence,
           source: "approved_proposal",
         });
       }
@@ -222,6 +233,10 @@ export class ProposalService {
     bodyMarkdown: string;
     conceptNames: string[];
   }) {
+    if (input.conceptNames.length === 0) {
+      return;
+    }
+
     const relatedNotes = await this.knowledgeRepository.searchRelated({
       query: `${input.title}\n${input.bodyMarkdown}`,
       conceptNames: input.conceptNames,

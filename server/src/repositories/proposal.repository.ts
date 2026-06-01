@@ -30,6 +30,12 @@ type ProposalItemRow = {
   payload: Record<string, unknown>;
   rationale: string | null;
   status: ProposalStatus;
+  source_spans: unknown;
+  conflict_detected: boolean;
+  conflict_summary: string | null;
+  conflict_resolution: string | null;
+  eval_verdict: "pass" | "warn" | "fail" | null;
+  incomplete_reasoning: boolean;
   created_at: Date;
 };
 
@@ -59,6 +65,12 @@ function mapProposalItem(row: ProposalItemRow): ProposalItem {
     payload: row.payload,
     rationale: row.rationale,
     status: row.status,
+    sourceSpans: row.source_spans,
+    conflictDetected: row.conflict_detected,
+    conflictSummary: row.conflict_summary,
+    conflictResolution: row.conflict_resolution,
+    evalVerdict: row.eval_verdict,
+    incompleteReasoning: row.incomplete_reasoning,
     createdAt: row.created_at,
   };
 }
@@ -120,12 +132,30 @@ export class PostgresProposalRepository implements ProposalRepository {
             action_type,
             target_type,
             payload,
-            rationale
+            rationale,
+            source_spans,
+            conflict_detected,
+            conflict_summary,
+            conflict_resolution,
+            eval_verdict,
+            incomplete_reasoning
           )
-          values ($1, $2, $3, $4, $5)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           returning *
         `,
-        [proposal.id, item.actionType, item.targetType, item.payload, item.rationale],
+        [
+          proposal.id,
+          item.actionType,
+          item.targetType,
+          item.payload,
+          item.rationale,
+          item.sourceSpans ?? null,
+          item.conflictDetected ?? false,
+          item.conflictSummary ?? null,
+          item.conflictResolution ?? null,
+          item.evalVerdict ?? null,
+          item.incompleteReasoning ?? false,
+        ],
       );
       items.push(mapProposalItem(itemResult.rows[0]));
     }

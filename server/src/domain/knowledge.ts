@@ -141,6 +141,12 @@ export type ProposalItem = {
   payload: Record<string, unknown>;
   rationale: string | null;
   status: ProposalStatus;
+  sourceSpans: unknown;
+  conflictDetected: boolean;
+  conflictSummary: string | null;
+  conflictResolution: string | null;
+  evalVerdict: "pass" | "warn" | "fail" | null;
+  incompleteReasoning: boolean;
   createdAt: Date;
 };
 
@@ -185,6 +191,7 @@ export type AgentRun = {
   input: unknown;
   output: unknown;
   error: string | null;
+  metadata: Record<string, unknown>;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;

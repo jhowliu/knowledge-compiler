@@ -35,6 +35,12 @@ export type DraftProposalItem = {
   targetType: string | null;
   payload: Record<string, unknown>;
   rationale: string;
+  sourceSpans?: unknown;
+  conflictDetected?: boolean;
+  conflictSummary?: string | null;
+  conflictResolution?: string | null;
+  evalVerdict?: "pass" | "warn" | "fail" | null;
+  incompleteReasoning?: boolean;
 };
 
 export type DraftUpdateProposal = {

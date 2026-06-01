@@ -17,6 +17,12 @@ export class InMemoryAgentRunRepository implements AgentRunRepository {
     });
   }
 
+  async updateMetadata(id: string, metadata: Record<string, unknown>): Promise<AgentRun> {
+    const agentRun = this.requiredRun(id);
+    agentRun.metadata = { ...agentRun.metadata, ...metadata };
+    return agentRun;
+  }
+
   private createRun(input: {
     userId?: string | null;
     runType: string;
@@ -32,6 +38,7 @@ export class InMemoryAgentRunRepository implements AgentRunRepository {
       input: input.input,
       output: {},
       error: null,
+      metadata: {},
       startedAt: input.startedAt,
       completedAt: null,
       createdAt: new Date("2026-05-25T00:00:00.000Z"),

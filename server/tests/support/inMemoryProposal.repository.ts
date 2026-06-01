@@ -35,6 +35,12 @@ export class InMemoryProposalRepository implements ProposalRepository {
         payload: item.payload,
         rationale: item.rationale,
         status: "pending",
+        sourceSpans: item.sourceSpans ?? null,
+        conflictDetected: item.conflictDetected ?? false,
+        conflictSummary: item.conflictSummary ?? null,
+        conflictResolution: item.conflictResolution ?? null,
+        evalVerdict: item.evalVerdict ?? null,
+        incompleteReasoning: item.incompleteReasoning ?? false,
         createdAt: new Date("2026-05-24T00:00:00.000Z"),
       })),
     };

@@ -68,6 +68,7 @@
 - Started issue #50 implementation on `codex/editable-source-organization`: added source project/folder creation routes, source move route, and Sources UI controls for creating projects/folders and moving the selected source without re-chunking.
 - Started issue #52 implementation on `codex/source-organization-rename`: added source project/folder rename routes and inline Sources rail rename controls while keeping source counts and selected filters stable.
 - Started issue #54 implementation on `codex/delete-empty-source-organization`: added empty source project/folder delete routes, conflict guards, and compact disabled delete controls in the Sources rail.
+- Started Phase B agentic runtime implementation on `codex/phase-b-agentic-runtime`: added `packages/agent-contracts` with Zod schemas for the six tool I/O contracts, typed server tool functions, source-span/conflict/eval proposal metadata, prompt/tool version metadata on agent runs, an eval judge service, and a source-backed ReAct-style compile loop.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -116,6 +117,9 @@
 - The first search UI should be an overlay from the Notes Graph toolbar rather than a new workspace page, so retrieval can be tested without adding another navigation surface.
 - Keep `agent_runs` and `agent_run_events` as the active runtime audit model; remove unused early `agent_sessions`, `agent_messages`, and `tool_calls` tables until a concrete runtime persistence design needs them.
 - Legacy mistake logs, review tasks, and readiness maps are removed from the active product model. Extraction may still keep `mistakes` as metadata, but durable writes now focus on approved knowledge, evidence links, and note links.
+- Phase B tool contracts are owned by `packages/agent-contracts`; server scripts build that package before direct server build/typecheck/test runs so local package exports are available from a fresh checkout.
+- Source-backed compiles use typed tool calls (`get_source`, `lookup_concepts`, `search_blocks`, `get_block`, `get_block_history`, `draft_proposal`) and record tool events. The older raw-note-only path remains as compatibility when source/tool repositories are not configured.
+- Proposal approval now has richer audit metadata: source spans prove grounding, conflict flags mark revision/contradiction cases, eval verdicts summarize judge output, and `agent_runs.metadata` records prompt/model/tool contract versions.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -178,9 +182,10 @@
 - Agent Review listing validation: proposal updates now render as a compact row/list view instead of grid cards, while row click still opens the detail modal. `npm run typecheck`, `npm run build`, and browser smoke of the Done list/modal pass with no console errors.
 - Notes Graph cleanup validation: removed the bottom-left Notes / Approved links / Pending links stats overlay from the graph canvas. `npm run typecheck` and `npm run build` pass.
 - Phase A topics foundation validation: added topic/source-topic/block-topic migrations, nullable raw-source `subtype`, `extraction_evals`, Topics CRUD API, source topic assignment, and Sources UI topic picker with inline create/select/remove. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` pass. Browser smoke on `http://localhost:5175/` verified Enter-to-create topic in the source editor with no console errors; the throwaway topic was deleted afterward.
+- Phase B validation: `npm run typecheck`, `npm run build`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run build --workspace=server`, and `npm run migrate --workspace=server` pass. Server tests now include the typed agent tool service path and source-span/conflict/eval proposal persistence.
 
 ## Next Target
-- After Phase A merges, continue with topic-aware agent compile context or richer link scoring.
-- Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
+- After Phase B merges, continue with topic-aware agent compile context and richer link scoring.
+- Replace the heuristic eval judge with a fuller OpenAI Agents SDK-backed judge when the runtime contract is stable.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

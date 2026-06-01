@@ -1,8 +1,18 @@
 import cors from "cors";
 import express from "express";
 import { corsOptions } from "./config/cors.js";
+import type { AgentToolReadRepository } from "./repositories/agentTool.repository.js";
+import {
+  NoopAgentToolReadRepository,
+  PostgresAgentToolReadRepository,
+} from "./repositories/agentTool.repository.js";
 import type { AgentRunRepository } from "./repositories/agentRun.repository.js";
 import { PostgresAgentRunRepository } from "./repositories/agentRun.repository.js";
+import type { ExtractionEvalRepository } from "./repositories/extractionEval.repository.js";
+import {
+  NoopExtractionEvalRepository,
+  PostgresExtractionEvalRepository,
+} from "./repositories/extractionEval.repository.js";
 import type { KnowledgeRepository } from "./repositories/knowledge.repository.js";
 import { PostgresKnowledgeRepository } from "./repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "./repositories/noteLink.repository.js";
@@ -45,6 +55,8 @@ export type AppDependencies = {
   noteCardPositionRepository?: NoteCardPositionRepository;
   proposalRepository?: ProposalRepository;
   agentRunRepository?: AgentRunRepository;
+  extractionEvalRepository?: ExtractionEvalRepository;
+  agentToolReadRepository?: AgentToolReadRepository;
   topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
   enablePhaseOneWorkflow?: boolean;
@@ -67,6 +79,26 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.noteCardPositionRepository ?? new PostgresNoteCardPositionRepository();
   const proposalRepository = dependencies.proposalRepository ?? new PostgresProposalRepository();
   const agentRunRepository = dependencies.agentRunRepository ?? new PostgresAgentRunRepository();
+  const usingDefaultRepositories =
+    !dependencies.rawNoteRepository &&
+    dependencies.rawSourceRepository === undefined &&
+    !dependencies.knowledgeRepository &&
+    !dependencies.noteLinkRepository &&
+    !dependencies.noteCardPositionRepository &&
+    !dependencies.proposalRepository &&
+    !dependencies.agentRunRepository &&
+    !dependencies.agentToolReadRepository &&
+    !dependencies.topicRepository;
+  const extractionEvalRepository =
+    dependencies.extractionEvalRepository ??
+    (usingDefaultRepositories
+      ? new PostgresExtractionEvalRepository()
+      : new NoopExtractionEvalRepository());
+  const agentToolReadRepository =
+    dependencies.agentToolReadRepository ??
+    (usingDefaultRepositories
+      ? new PostgresAgentToolReadRepository()
+      : new NoopAgentToolReadRepository());
   const enablePhaseOneWorkflow = dependencies.enablePhaseOneWorkflow ?? true;
   const phaseOneWorkflowService = enablePhaseOneWorkflow
     ? new PhaseOneWorkflowService(
@@ -92,6 +124,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     proposalRepository,
     dependencies.wikiIndexer,
     rawSourceRepository,
+    extractionEvalRepository,
+    agentToolReadRepository,
   );
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(

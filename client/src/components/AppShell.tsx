@@ -112,25 +112,6 @@ export function LeftNavigation({
         </button>
       </nav>
 
-      <nav className="space-y-1.5">
-        <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">DOMAINS</p>
-        {[
-          ['Coding / LeetCode', 'bg-violet'],
-          ['System design', 'bg-emerald-500'],
-          ['Behavioral stories', 'bg-amber-500'],
-        ].map(([label, color]) => (
-          <a
-            className={`flex h-8 items-center gap-2 px-2.5 text-[13px] ${
-              isDark ? 'text-gray-300' : 'text-gray-600'
-            }`}
-            key={label}
-          >
-            <span className={`h-2 w-2 rounded-full ${color}`} />
-            {label}
-          </a>
-        ))}
-      </nav>
-
       <button
         className={`mt-auto flex h-10 items-center justify-between rounded-lg border px-3 text-left text-[13px] font-bold ${
           isDark

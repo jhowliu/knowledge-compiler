@@ -58,15 +58,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const selectedProposal = useMemo(() => {
-    return (
-      workspaceData.proposals.find((proposal) => proposal.id === selectedProposalId) ??
-      workspaceData.proposals.find((proposal) => proposal.status === 'pending') ??
-      workspaceData.proposals[0] ??
-      null
-    )
-  }, [selectedProposalId, workspaceData.proposals])
-
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const latestAgentRun = workspaceData.agentRuns[0] ?? null
   const isAgentRunning = workspaceData.agentRuns.some((agentRun) =>
@@ -715,6 +706,7 @@ function App() {
           </>
         ) : activeView === 'update_proposals' ? (
           <ReviewQueuePage
+            compiledNotes={workspaceData.compiledNotes}
             error={error}
             isSubmitting={isSubmitting || isLoading}
             noteLinks={workspaceData.noteLinks}
@@ -728,7 +720,7 @@ function App() {
             proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
-            selectedProposalId={selectedProposal?.id ?? null}
+            selectedProposalId={selectedProposalId}
           />
         ) : (
           <RawNoteEditorPage

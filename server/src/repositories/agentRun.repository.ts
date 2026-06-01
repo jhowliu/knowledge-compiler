@@ -9,6 +9,7 @@ type AgentRunRow = {
   input: unknown;
   output: unknown;
   error: string | null;
+  metadata: Record<string, unknown>;
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
@@ -31,6 +32,7 @@ function mapAgentRun(row: AgentRunRow): AgentRun {
     input: row.input,
     output: row.output,
     error: row.error,
+    metadata: row.metadata,
     startedAt: row.started_at,
     completedAt: row.completed_at,
     createdAt: row.created_at,
@@ -50,6 +52,7 @@ function mapAgentRunEvent(row: AgentRunEventRow): AgentRunEvent {
 export interface AgentRunRepository {
   enqueue(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
   create(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
+  updateMetadata(id: string, metadata: Record<string, unknown>): Promise<AgentRun>;
   addEvent(input: { agentRunId: string; eventType: string; payload: unknown }): Promise<AgentRunEvent>;
   start(id: string): Promise<AgentRun>;
   complete(id: string, output: unknown): Promise<AgentRun>;
@@ -82,6 +85,20 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
         returning *
       `,
       [input.userId ?? null, input.runType, input.input],
+    );
+
+    return mapAgentRun(result.rows[0]);
+  }
+
+  async updateMetadata(id: string, metadata: Record<string, unknown>) {
+    const result = await query<AgentRunRow>(
+      `
+        update agent_runs
+        set metadata = metadata || $2::jsonb
+        where id = $1
+        returning *
+      `,
+      [id, metadata],
     );
 
     return mapAgentRun(result.rows[0]);

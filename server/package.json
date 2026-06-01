@@ -12,7 +12,11 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build --workspace=@knowledge-compiler/agent-contracts",
     "test": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --runInBand",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "prebackfill:embeddings": "npm run build",
+    "backfill:embeddings": "node dist/scripts/backfillEmbeddings.js",
+    "preeval": "npm run build",
+    "eval": "node dist/scripts/runEval.js"
   },
   "dependencies": {
     "@knowledge-compiler/agent-contracts": "0.1.0",

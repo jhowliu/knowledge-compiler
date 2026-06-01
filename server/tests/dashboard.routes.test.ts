@@ -96,6 +96,43 @@ describe("dashboard routes", () => {
     });
   });
 
+  test("GET /search can retrieve blocks through embedding similarity", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const snapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Attention Mechanisms",
+      bodyMarkdown: "Query and key vectors choose which tokens to attend to.",
+      structuredData: {},
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Attention",
+          bodyMarkdown: "Query and key vectors choose which tokens to attend to.",
+          tokenEstimate: 10,
+        },
+      ],
+    });
+    await knowledgeRepository.updateKnowledgeBlockEmbedding(snapshot.blocks[0].id, [1, 0, 0]);
+
+    const app = createApp({
+      knowledgeRepository,
+      enablePhaseOneWorkflow: false,
+      embeddingService: {
+        async embedText() {
+          return [1, 0, 0];
+        },
+      },
+    });
+    const response = await request(app).get("/search?q=semantic-neighbor");
+
+    expect(response.status).toBe(200);
+    expect(response.body.results[0]).toMatchObject({
+      blockId: snapshot.blocks[0].id,
+      title: "Attention Mechanisms",
+    });
+  });
+
   test("GET /knowledge-sources/:id/timeline returns versions and source evidence", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const first = await knowledgeRepository.upsertKnowledgeSourceVersion({

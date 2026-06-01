@@ -1,0 +1,8 @@
+{
+  "min_concepts": 3,
+  "required_concepts": ["RAG", "approved knowledge blocks", "raw source chunks"],
+  "forbidden_hallucinations": ["vector database vendor", "Pinecone"],
+  "should_conflict": true,
+  "min_coverage_score": 0.7,
+  "min_grounding_score": 0.8
+}

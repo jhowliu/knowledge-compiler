@@ -3,6 +3,7 @@ import type { AskCitation, AskResponse } from "../domain/ask.js";
 import type { KnowledgeBlockSearchResult } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
+import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 
 const notEnoughInformationAnswer =
@@ -81,7 +82,11 @@ export class AskService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly noteLinkRepository: NoteLinkRepository,
-    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(knowledgeRepository),
+    embeddingService: EmbeddingService = new NoopEmbeddingService(),
+    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(
+      knowledgeRepository,
+      embeddingService,
+    ),
     private readonly answerer: AskAnswerer = new OpenAIAskAnswerer(),
   ) {}
 

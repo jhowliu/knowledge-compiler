@@ -1,0 +1,5 @@
+{
+  "description": "Minimal note that should still compile gracefully",
+  "topics": ["chunking"],
+  "difficulty": "easy"
+}

@@ -441,6 +441,7 @@ export interface KnowledgeRepository {
     limit: number;
     includeArchived?: boolean;
     topicIds?: string[];
+    queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]>;
   listKnowledgeBlocksByCompiledNoteIds(input: {
     compiledNoteIds: string[];
@@ -469,6 +470,8 @@ export interface KnowledgeRepository {
     blocks: CreateKnowledgeBlockInput[];
   }): Promise<KnowledgeSourceSnapshot>;
   listActiveKnowledgeBlocks(limit: number): Promise<KnowledgeBlock[]>;
+  listKnowledgeBlocksNeedingEmbeddings(limit: number): Promise<KnowledgeBlock[]>;
+  updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]): Promise<void>;
   createEvidenceLink(input: {
     userId?: string | null;
     sourceType: string;
@@ -492,7 +495,32 @@ export interface KnowledgeRepository {
   getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null>;
 }
 
+function vectorLiteral(values: number[]) {
+  return `[${values.map((value) => Number(value).toString()).join(",")}]`;
+}
+
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
+  private embeddingSupport: boolean | null = null;
+
+  private async hasEmbeddingSupport() {
+    if (this.embeddingSupport !== null) {
+      return this.embeddingSupport;
+    }
+
+    const result = await query<{ supported: boolean }>(
+      `
+        select exists (
+          select 1
+          from information_schema.columns
+          where table_name = 'knowledge_blocks'
+            and column_name = 'embedding'
+        ) as supported
+      `,
+    );
+    this.embeddingSupport = result.rows[0]?.supported ?? false;
+    return this.embeddingSupport;
+  }
+
   async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }) {
     const normalizedName = normalizeConcept(input.name);
     const result = await query<ConceptRow>(
@@ -626,7 +654,16 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     limit: number;
     includeArchived?: boolean;
     topicIds?: string[];
+    queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
+    const useVectorSearch = Boolean(input.queryEmbedding?.length && (await this.hasEmbeddingSupport()));
+    if (useVectorSearch) {
+      return this.searchKnowledgeBlocksWithEmbeddings({
+        ...input,
+        queryEmbedding: input.queryEmbedding ?? [],
+      });
+    }
+
     const blockResult = await query<KnowledgeBlockSearchRow>(
       `
         with query as (
@@ -711,6 +748,122 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         limit $3
       `,
       [input.query, input.includeArchived ?? false, input.limit, input.topicIds ?? []],
+    );
+
+    return hydrateKnowledgeBlockSearchRows(blockResult.rows);
+  }
+
+  private async searchKnowledgeBlocksWithEmbeddings(input: {
+    query: string;
+    limit: number;
+    includeArchived?: boolean;
+    topicIds?: string[];
+    queryEmbedding: number[];
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    const blockResult = await query<KnowledgeBlockSearchRow>(
+      `
+        with query as (
+          select plainto_tsquery('english', $1) as ts_query,
+                 $5::vector as query_embedding
+        ),
+        fts_ranked as (
+          select
+            knowledge_blocks.id as block_id,
+            row_number() over (
+              order by ts_rank(knowledge_blocks.search_vector, query.ts_query) desc,
+                       knowledge_blocks.updated_at desc
+            ) as rank_position
+          from knowledge_blocks
+          cross join query
+          where knowledge_blocks.search_vector @@ query.ts_query
+        ),
+        concept_ranked as (
+          select distinct
+            knowledge_blocks.id as block_id,
+            row_number() over (
+              order by case concept_index.confidence
+                         when 'high' then 3
+                         when 'medium' then 2
+                         else 1
+                       end desc,
+                       knowledge_blocks.updated_at desc
+            ) as rank_position
+          from knowledge_blocks
+          join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+          join concept_index
+            on concept_index.target_type = 'compiled_note'
+           and concept_index.target_id = knowledge_versions.compiled_note_id
+          join concepts on concepts.id = concept_index.concept_id
+          where knowledge_versions.compiled_note_id is not null
+            and (
+              lower($1) like '%' || concepts.normalized_name || '%'
+              or concepts.normalized_name like '%' || lower($1) || '%'
+            )
+        ),
+        vector_ranked as (
+          select
+            knowledge_blocks.id as block_id,
+            row_number() over (
+              order by knowledge_blocks.embedding <=> query.query_embedding,
+                       knowledge_blocks.updated_at desc
+            ) as rank_position
+          from knowledge_blocks
+          cross join query
+          where knowledge_blocks.embedding is not null
+        ),
+        merged as (
+          select
+            block_id,
+            sum(1.0 / (60 + rank_position))::real as rank
+          from (
+            select * from fts_ranked
+            union all
+            select * from concept_ranked
+            union all
+            select * from vector_ranked
+          ) ranked
+          group by block_id
+        )
+        select
+          knowledge_blocks.id as block_id,
+          knowledge_blocks.knowledge_source_id,
+          knowledge_blocks.knowledge_version_id,
+          knowledge_versions.compiled_note_id,
+          knowledge_sources.title,
+          knowledge_sources.domain,
+          knowledge_sources.knowledge_type,
+          knowledge_versions.version_number,
+          knowledge_blocks.block_index,
+          knowledge_blocks.heading,
+          knowledge_blocks.body_markdown,
+          merged.rank,
+          knowledge_blocks.status,
+          knowledge_blocks.updated_at
+        from merged
+        join knowledge_blocks on knowledge_blocks.id = merged.block_id
+        join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
+        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+        where knowledge_sources.status = 'active'
+          and ($2::boolean or knowledge_blocks.status = 'active')
+          and (
+            cardinality($4::uuid[]) = 0
+            or exists (
+              select 1
+              from block_topics
+              where block_topics.block_id = knowledge_blocks.id
+                and block_topics.topic_id = any($4::uuid[])
+            )
+          )
+        order by rank desc, knowledge_blocks.updated_at desc
+        limit $3
+      `,
+      [
+        input.query,
+        input.includeArchived ?? false,
+        input.limit,
+        input.topicIds ?? [],
+        vectorLiteral(input.queryEmbedding),
+      ],
     );
 
     return hydrateKnowledgeBlockSearchRows(blockResult.rows);
@@ -1050,6 +1203,42 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     return result.rows.map(mapKnowledgeBlock);
+  }
+
+  async listKnowledgeBlocksNeedingEmbeddings(limit: number) {
+    if (!(await this.hasEmbeddingSupport())) {
+      return [];
+    }
+
+    const result = await query<KnowledgeBlockRow>(
+      `
+        select *
+        from knowledge_blocks
+        where status = 'active'
+          and embedding is null
+        order by updated_at desc
+        limit $1
+      `,
+      [limit],
+    );
+
+    return result.rows.map(mapKnowledgeBlock);
+  }
+
+  async updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]) {
+    if (!(await this.hasEmbeddingSupport())) {
+      return;
+    }
+
+    await query(
+      `
+        update knowledge_blocks
+        set embedding = $2::vector,
+            updated_at = now()
+        where id = $1
+      `,
+      [blockId, vectorLiteral(embedding)],
+    );
   }
 
   async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {

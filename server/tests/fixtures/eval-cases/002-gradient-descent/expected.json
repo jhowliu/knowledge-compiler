@@ -1,0 +1,8 @@
+{
+  "min_concepts": 3,
+  "required_concepts": ["gradient descent", "learning rate", "convergence"],
+  "forbidden_hallucinations": ["AdamW", "transformer"],
+  "should_conflict": false,
+  "min_coverage_score": 0.7,
+  "min_grounding_score": 0.8
+}

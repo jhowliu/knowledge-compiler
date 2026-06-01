@@ -215,6 +215,53 @@ describe("ask routes", () => {
     });
   });
 
+  test("POST /ask can retrieve context through embedding similarity", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const snapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Semantic Retrieval",
+      bodyMarkdown: "Embeddings find related meaning even when words differ.",
+      structuredData: {},
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Embeddings",
+          bodyMarkdown: "Embeddings find related meaning even when words differ.",
+          tokenEstimate: 9,
+          metadata: {},
+        },
+      ],
+    });
+    await knowledgeRepository.updateKnowledgeBlockEmbedding(snapshot.blocks[0].id, [0, 1, 0]);
+    const app = createApp({
+      knowledgeRepository,
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+      embeddingService: {
+        async embedText() {
+          return [0, 1, 0];
+        },
+      },
+      askAnswerer: {
+        async answer(input) {
+          expect(input.blocks[0].title).toBe("Semantic Retrieval");
+          return "Embedding retrieval found the semantic note. [1]";
+        },
+      },
+      enablePhaseOneWorkflow: false,
+    });
+
+    const response = await request(app).post("/ask").send({
+      query: "meaning based lookup",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.citations[0]).toMatchObject({
+      block_id: snapshot.blocks[0].id,
+      title: "Semantic Retrieval",
+    });
+  });
+
   test("POST /ask pulls one-hop approved linked knowledge into answer context", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();

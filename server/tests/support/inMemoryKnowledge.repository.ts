@@ -41,6 +41,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly conceptIndex: ConceptIndexRecord[] = [];
+  readonly embeddings = new Map<string, number[]>();
   readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
 
@@ -86,6 +87,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     limit: number;
     includeArchived?: boolean;
     topicIds?: string[];
+    queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
     const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = this.knowledgeBlocks
@@ -98,7 +100,13 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         const conceptRank = version?.compiledNoteId
           ? this.conceptRankForQuery(input.query, version.compiledNoteId)
           : 0;
-        const rank = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0) + conceptRank;
+        const vectorRank = input.queryEmbedding?.length
+          ? cosineSimilarity(input.queryEmbedding, this.embeddings.get(block.id) ?? [])
+          : 0;
+        const rank =
+          terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0) +
+          conceptRank +
+          vectorRank;
         return { block, source, version, rank };
       })
       .filter((item) => item.source && item.version && item.source.status === "active" && item.rank > 0)
@@ -300,6 +308,16 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.knowledgeBlocks.filter((block) => block.status === "active");
   }
 
+  async listKnowledgeBlocksNeedingEmbeddings(): Promise<KnowledgeBlock[]> {
+    return this.knowledgeBlocks.filter(
+      (block) => block.status === "active" && !this.embeddings.has(block.id),
+    );
+  }
+
+  async updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]): Promise<void> {
+    this.embeddings.set(blockId, embedding);
+  }
+
   async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {
     const source = this.knowledgeSources.find((item) => item.id === id) ?? null;
     return source ? this.buildKnowledgeSourceTimeline(source) : null;
@@ -437,6 +455,27 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       return score + 1;
     }, 0);
   }
+}
+
+function cosineSimilarity(left: number[], right: number[]) {
+  if (left.length === 0 || right.length === 0 || left.length !== right.length) {
+    return 0;
+  }
+
+  let dot = 0;
+  let leftMagnitude = 0;
+  let rightMagnitude = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index];
+    leftMagnitude += left[index] * left[index];
+    rightMagnitude += right[index] * right[index];
+  }
+
+  if (leftMagnitude === 0 || rightMagnitude === 0) {
+    return 0;
+  }
+
+  return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
 }
 
 function blockMatchesTopics(block: KnowledgeBlock, topicIds: string[]) {

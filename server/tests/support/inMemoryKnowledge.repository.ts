@@ -26,6 +26,13 @@ type EvidenceLinkRecord = {
   createdAt: Date;
 };
 
+type ConceptIndexRecord = {
+  conceptId: string;
+  targetType: string;
+  targetId: string;
+  confidence: string;
+};
+
 export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly concepts: Concept[] = [];
   readonly compiledNotes: CompiledNote[] = [];
@@ -33,6 +40,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeVersions: KnowledgeVersion[] = [];
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
+  readonly conceptIndex: ConceptIndexRecord[] = [];
   readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
 
@@ -53,7 +61,21 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return concept;
   }
 
-  async indexConcept(): Promise<void> {}
+  async indexConcept(input: {
+    conceptId: string;
+    targetType: string;
+    targetId: string;
+    relationType?: string;
+    confidence: string;
+    source?: string;
+  }): Promise<void> {
+    this.conceptIndex.push({
+      conceptId: input.conceptId,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      confidence: input.confidence,
+    });
+  }
 
   async searchRelated(): Promise<SearchResult[]> {
     return this.relatedResults;
@@ -63,15 +85,20 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    topicIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]> {
     const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = this.knowledgeBlocks
       .filter((block) => input.includeArchived || block.status === "active")
+      .filter((block) => blockMatchesTopics(block, input.topicIds ?? []))
       .map((block) => {
         const source = this.knowledgeSources.find((item) => item.id === block.knowledgeSourceId);
         const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
         const haystack = `${source?.title ?? ""} ${block.heading ?? ""} ${block.bodyMarkdown}`.toLowerCase();
-        const rank = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
+        const conceptRank = version?.compiledNoteId
+          ? this.conceptRankForQuery(input.query, version.compiledNoteId)
+          : 0;
+        const rank = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0) + conceptRank;
         return { block, source, version, rank };
       })
       .filter((item) => item.source && item.version && item.source.status === "active" && item.rank > 0)
@@ -107,6 +134,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         blockId: block.id,
         knowledgeSourceId: block.knowledgeSourceId,
         knowledgeVersionId: block.knowledgeVersionId,
+        compiledNoteId: version?.compiledNoteId ?? null,
         title: source?.title ?? "Untitled",
         domain: source?.domain ?? "general",
         knowledgeType: source?.knowledgeType ?? "note",
@@ -120,6 +148,42 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         evidenceReferences,
       };
     });
+  }
+
+  async listKnowledgeBlocksByCompiledNoteIds(input: {
+    compiledNoteIds: string[];
+    limit: number;
+    topicIds?: string[];
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    const compiledNoteIds = new Set(input.compiledNoteIds);
+    const matches = this.knowledgeBlocks
+      .filter((block) => block.status === "active")
+      .filter((block) => blockMatchesTopics(block, input.topicIds ?? []))
+      .map((block) => {
+        const source = this.knowledgeSources.find((item) => item.id === block.knowledgeSourceId);
+        const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
+        return { block, source, version };
+      })
+      .filter((item) => item.version?.compiledNoteId && compiledNoteIds.has(item.version.compiledNoteId))
+      .slice(0, input.limit);
+
+    return matches.map(({ block, source, version }) => ({
+      blockId: block.id,
+      knowledgeSourceId: block.knowledgeSourceId,
+      knowledgeVersionId: block.knowledgeVersionId,
+      compiledNoteId: version?.compiledNoteId ?? null,
+      title: source?.title ?? "Untitled",
+      domain: source?.domain ?? "general",
+      knowledgeType: source?.knowledgeType ?? "note",
+      versionNumber: version?.versionNumber ?? 1,
+      blockIndex: block.blockIndex,
+      heading: block.heading,
+      bodyMarkdown: block.bodyMarkdown,
+      rank: 0.25,
+      status: block.status,
+      updatedAt: block.updatedAt,
+      evidenceReferences: this.evidenceReferencesForSearchResult(block),
+    }));
   }
 
   async upsertCompiledNote(input: {
@@ -349,4 +413,38 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         createdAt: link.createdAt,
       }));
   }
+
+  private evidenceReferencesForSearchResult(block: KnowledgeBlock): KnowledgeEvidenceReference[] {
+    return [
+      ...this.evidenceReferencesForTarget("knowledge_block", block.id),
+      ...this.evidenceReferencesForTarget("knowledge_version", block.knowledgeVersionId),
+      ...this.evidenceReferencesForTarget("knowledge_source", block.knowledgeSourceId),
+    ];
+  }
+
+  private conceptRankForQuery(query: string, compiledNoteId: string) {
+    const normalizedQuery = query.toLowerCase();
+    return this.conceptIndex.reduce((score, indexedConcept) => {
+      if (indexedConcept.targetType !== "compiled_note" || indexedConcept.targetId !== compiledNoteId) {
+        return score;
+      }
+      const concept = this.concepts.find((item) => item.id === indexedConcept.conceptId);
+      if (!concept || !normalizedQuery.includes(concept.normalizedName)) {
+        return score;
+      }
+      if (indexedConcept.confidence === "high") return score + 3;
+      if (indexedConcept.confidence === "medium") return score + 2;
+      return score + 1;
+    }, 0);
+  }
+}
+
+function blockMatchesTopics(block: KnowledgeBlock, topicIds: string[]) {
+  if (topicIds.length === 0) {
+    return true;
+  }
+  const metadataTopicIds = Array.isArray(block.metadata.topicIds)
+    ? block.metadata.topicIds.filter((topicId): topicId is string => typeof topicId === "string")
+    : [];
+  return metadataTopicIds.some((topicId) => topicIds.includes(topicId));
 }

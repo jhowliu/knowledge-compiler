@@ -69,6 +69,7 @@
 - Started issue #52 implementation on `codex/source-organization-rename`: added source project/folder rename routes and inline Sources rail rename controls while keeping source counts and selected filters stable.
 - Started issue #54 implementation on `codex/delete-empty-source-organization`: added empty source project/folder delete routes, conflict guards, and compact disabled delete controls in the Sources rail.
 - Started Phase B agentic runtime implementation on `codex/phase-b-agentic-runtime`: added `packages/agent-contracts` with Zod schemas for the six tool I/O contracts, typed server tool functions, source-span/conflict/eval proposal metadata, prompt/tool version metadata on agent runs, an eval judge service, and a source-backed ReAct-style compile loop.
+- Started Phase C RAG API implementation on `codex/phase-c-ask-rag`: added `POST /ask`, grounded answer generation, citation shaping, topic-filtered retrieval, concept-index retrieval, and one-hop approved note-link expansion over approved knowledge blocks.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -120,6 +121,8 @@
 - Phase B tool contracts are owned by `packages/agent-contracts`; server scripts build that package before direct server build/typecheck/test runs so local package exports are available from a fresh checkout.
 - Source-backed compiles use typed tool calls (`get_source`, `lookup_concepts`, `search_blocks`, `get_block`, `get_block_history`, `draft_proposal`) and record tool events. The older raw-note-only path remains as compatibility when source/tool repositories are not configured.
 - Proposal approval now has richer audit metadata: source spans prove grounding, conflict flags mark revision/contradiction cases, eval verdicts summarize judge output, and `agent_runs.metadata` records prompt/model/tool contract versions.
+- Phase C `/ask` answers should use approved `knowledge_blocks` as the answer corpus. Raw source chunks appear only as citation evidence, and the answer generator is instructed to avoid outside knowledge and say when retrieved blocks are insufficient.
+- Ask retrieval uses FTS plus concept-index matches with reciprocal-rank style merging, then expands one hop through approved `note_links` using compiled-note backing IDs.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -183,9 +186,11 @@
 - Notes Graph cleanup validation: removed the bottom-left Notes / Approved links / Pending links stats overlay from the graph canvas. `npm run typecheck` and `npm run build` pass.
 - Phase A topics foundation validation: added topic/source-topic/block-topic migrations, nullable raw-source `subtype`, `extraction_evals`, Topics CRUD API, source topic assignment, and Sources UI topic picker with inline create/select/remove. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` pass. Browser smoke on `http://localhost:5175/` verified Enter-to-create topic in the source editor with no console errors; the throwaway topic was deleted afterward.
 - Phase B validation: `npm run typecheck`, `npm run build`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run build --workspace=server`, and `npm run migrate --workspace=server` pass. Server tests now include the typed agent tool service path and source-span/conflict/eval proposal persistence.
+- Phase C validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. `npm run migrate --workspace=server` was attempted in the temporary worktree but could not connect because that worktree lacks the local database credentials; no new migration was added for Phase C.
 
 ## Next Target
-- After Phase B merges, continue with topic-aware agent compile context and richer link scoring.
+- After Phase C merges, add a frontend ask panel and manual QA with real OpenAI answers/citations.
+- Continue with topic-aware agent compile context and richer link scoring.
 - Replace the heuristic eval judge with a fuller OpenAI Agents SDK-backed judge when the runtime contract is stable.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

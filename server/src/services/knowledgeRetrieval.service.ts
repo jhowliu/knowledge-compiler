@@ -4,6 +4,7 @@ export type KnowledgeSearchInput = {
   query: string;
   limit?: number;
   includeArchived?: boolean;
+  topicIds?: string[];
 };
 
 export class KnowledgeRetrievalService {
@@ -19,6 +20,7 @@ export class KnowledgeRetrievalService {
       query,
       limit: input.limit ?? 20,
       includeArchived: input.includeArchived ?? false,
+      topicIds: input.topicIds ?? [],
     });
   }
 }

@@ -91,6 +91,7 @@ type KnowledgeBlockSearchRow = {
   block_id: string;
   knowledge_source_id: string;
   knowledge_version_id: string;
+  compiled_note_id: string | null;
   title: string;
   domain: string;
   knowledge_type: string;
@@ -123,6 +124,16 @@ type EvidenceReferenceRow = {
 
 function normalizeConcept(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function topicIdsFrom(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const topicIds = (value as Record<string, unknown>).topicIds;
+  return Array.isArray(topicIds)
+    ? topicIds.filter((topicId): topicId is string => typeof topicId === "string")
+    : [];
 }
 
 function mapConcept(row: ConceptRow): Concept {
@@ -237,6 +248,7 @@ function mapKnowledgeBlockSearchResult(
     blockId: row.block_id,
     knowledgeSourceId: row.knowledge_source_id,
     knowledgeVersionId: row.knowledge_version_id,
+    compiledNoteId: row.compiled_note_id,
     title: row.title,
     domain: row.domain,
     knowledgeType: row.knowledge_type,
@@ -253,6 +265,28 @@ function mapKnowledgeBlockSearchResult(
 
 function evidenceKey(targetType: string, targetId: string) {
   return `${targetType}:${targetId}`;
+}
+
+async function hydrateKnowledgeBlockSearchRows(
+  rows: KnowledgeBlockSearchRow[],
+): Promise<KnowledgeBlockSearchResult[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const blockIds = rows.map((row) => row.block_id);
+  const versionIds = [...new Set(rows.map((row) => row.knowledge_version_id))];
+  const sourceIds = [...new Set(rows.map((row) => row.knowledge_source_id))];
+  const evidenceByTarget = await listEvidenceReferencesForTargets({ blockIds, versionIds, sourceIds });
+
+  return rows.map((row) => {
+    const evidenceReferences = [
+      ...(evidenceByTarget.get(evidenceKey("knowledge_block", row.block_id)) ?? []),
+      ...(evidenceByTarget.get(evidenceKey("knowledge_version", row.knowledge_version_id)) ?? []),
+      ...(evidenceByTarget.get(evidenceKey("knowledge_source", row.knowledge_source_id)) ?? []),
+    ];
+    return mapKnowledgeBlockSearchResult(row, evidenceReferences);
+  });
 }
 
 async function listEvidenceReferencesForTargets(input: {
@@ -406,6 +440,12 @@ export interface KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    topicIds?: string[];
+  }): Promise<KnowledgeBlockSearchResult[]>;
+  listKnowledgeBlocksByCompiledNoteIds(input: {
+    compiledNoteIds: string[];
+    limit: number;
+    topicIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
@@ -585,16 +625,63 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    topicIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]> {
     const blockResult = await query<KnowledgeBlockSearchRow>(
       `
         with query as (
           select plainto_tsquery('english', $1) as ts_query
+        ),
+        fts_ranked as (
+          select
+            knowledge_blocks.id as block_id,
+            row_number() over (
+              order by ts_rank(knowledge_blocks.search_vector, query.ts_query) desc,
+                       knowledge_blocks.updated_at desc
+            ) as rank_position
+          from knowledge_blocks
+          cross join query
+          where knowledge_blocks.search_vector @@ query.ts_query
+        ),
+        concept_ranked as (
+          select distinct
+            knowledge_blocks.id as block_id,
+            row_number() over (
+              order by case concept_index.confidence
+                         when 'high' then 3
+                         when 'medium' then 2
+                         else 1
+                       end desc,
+                       knowledge_blocks.updated_at desc
+            ) as rank_position
+          from knowledge_blocks
+          join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+          join concept_index
+            on concept_index.target_type = 'compiled_note'
+           and concept_index.target_id = knowledge_versions.compiled_note_id
+          join concepts on concepts.id = concept_index.concept_id
+          where knowledge_versions.compiled_note_id is not null
+            and (
+              lower($1) like '%' || concepts.normalized_name || '%'
+              or concepts.normalized_name like '%' || lower($1) || '%'
+            )
+        ),
+        merged as (
+          select
+            block_id,
+            sum(1.0 / (60 + rank_position))::real as rank
+          from (
+            select * from fts_ranked
+            union all
+            select * from concept_ranked
+          ) ranked
+          group by block_id
         )
         select
           knowledge_blocks.id as block_id,
           knowledge_blocks.knowledge_source_id,
           knowledge_blocks.knowledge_version_id,
+          knowledge_versions.compiled_note_id,
           knowledge_sources.title,
           knowledge_sources.domain,
           knowledge_sources.knowledge_type,
@@ -602,39 +689,81 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           knowledge_blocks.block_index,
           knowledge_blocks.heading,
           knowledge_blocks.body_markdown,
-          ts_rank(knowledge_blocks.search_vector, query.ts_query) as rank,
+          merged.rank,
+          knowledge_blocks.status,
+          knowledge_blocks.updated_at
+        from merged
+        join knowledge_blocks on knowledge_blocks.id = merged.block_id
+        join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
+        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+        where knowledge_sources.status = 'active'
+          and ($2::boolean or knowledge_blocks.status = 'active')
+          and (
+            cardinality($4::uuid[]) = 0
+            or exists (
+              select 1
+              from block_topics
+              where block_topics.block_id = knowledge_blocks.id
+                and block_topics.topic_id = any($4::uuid[])
+            )
+          )
+        order by rank desc, knowledge_blocks.updated_at desc
+        limit $3
+      `,
+      [input.query, input.includeArchived ?? false, input.limit, input.topicIds ?? []],
+    );
+
+    return hydrateKnowledgeBlockSearchRows(blockResult.rows);
+  }
+
+  async listKnowledgeBlocksByCompiledNoteIds(input: {
+    compiledNoteIds: string[];
+    limit: number;
+    topicIds?: string[];
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    if (input.compiledNoteIds.length === 0) {
+      return [];
+    }
+
+    const blockResult = await query<KnowledgeBlockSearchRow>(
+      `
+        select
+          knowledge_blocks.id as block_id,
+          knowledge_blocks.knowledge_source_id,
+          knowledge_blocks.knowledge_version_id,
+          knowledge_versions.compiled_note_id,
+          knowledge_sources.title,
+          knowledge_sources.domain,
+          knowledge_sources.knowledge_type,
+          knowledge_versions.version_number,
+          knowledge_blocks.block_index,
+          knowledge_blocks.heading,
+          knowledge_blocks.body_markdown,
+          0.25::real as rank,
           knowledge_blocks.status,
           knowledge_blocks.updated_at
         from knowledge_blocks
         join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
         join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-        cross join query
         where knowledge_sources.status = 'active'
-          and ($2::boolean or knowledge_blocks.status = 'active')
-          and knowledge_blocks.search_vector @@ query.ts_query
-        order by rank desc, knowledge_blocks.updated_at desc
-        limit $3
+          and knowledge_blocks.status = 'active'
+          and knowledge_versions.compiled_note_id = any($1::uuid[])
+          and (
+            cardinality($3::uuid[]) = 0
+            or exists (
+              select 1
+              from block_topics
+              where block_topics.block_id = knowledge_blocks.id
+                and block_topics.topic_id = any($3::uuid[])
+            )
+          )
+        order by knowledge_blocks.updated_at desc
+        limit $2
       `,
-      [input.query, input.includeArchived ?? false, input.limit],
+      [input.compiledNoteIds, input.limit, input.topicIds ?? []],
     );
 
-    if (blockResult.rows.length === 0) {
-      return [];
-    }
-
-    const blockIds = blockResult.rows.map((row) => row.block_id);
-    const versionIds = [...new Set(blockResult.rows.map((row) => row.knowledge_version_id))];
-    const sourceIds = [...new Set(blockResult.rows.map((row) => row.knowledge_source_id))];
-    const evidenceByTarget = await listEvidenceReferencesForTargets({ blockIds, versionIds, sourceIds });
-
-    return blockResult.rows.map((row) => {
-      const evidenceReferences = [
-        ...(evidenceByTarget.get(evidenceKey("knowledge_block", row.block_id)) ?? []),
-        ...(evidenceByTarget.get(evidenceKey("knowledge_version", row.knowledge_version_id)) ?? []),
-        ...(evidenceByTarget.get(evidenceKey("knowledge_source", row.knowledge_source_id)) ?? []),
-      ];
-      return mapKnowledgeBlockSearchResult(row, evidenceReferences);
-    });
+    return hydrateKnowledgeBlockSearchRows(blockResult.rows);
   }
 
   async upsertCompiledNote(input: {
@@ -842,6 +971,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
       );
 
       const savedBlocks: KnowledgeBlock[] = [];
+      const structuredTopicIds = topicIdsFrom(input.structuredData);
       for (const block of input.blocks) {
         const blockResult = await transactionQuery<KnowledgeBlockRow>(
           `
@@ -867,7 +997,21 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
             block.metadata ?? {},
           ],
         );
-        savedBlocks.push(mapKnowledgeBlock(blockResult.rows[0]));
+        const savedBlock = mapKnowledgeBlock(blockResult.rows[0]);
+        const blockTopicIds = topicIdsFrom(block.metadata).length
+          ? topicIdsFrom(block.metadata)
+          : structuredTopicIds;
+        for (const topicId of blockTopicIds) {
+          await transactionQuery(
+            `
+              insert into block_topics (block_id, topic_id, confidence, source)
+              values ($1, $2, 'high', 'user')
+              on conflict do nothing
+            `,
+            [savedBlock.id, topicId],
+          );
+        }
+        savedBlocks.push(savedBlock);
       }
 
       const updatedSource = mapKnowledgeSource(

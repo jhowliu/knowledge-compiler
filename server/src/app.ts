@@ -27,6 +27,7 @@ import type { RawSourceRepository } from "./repositories/rawSource.repository.js
 import { PostgresRawSourceRepository } from "./repositories/rawSource.repository.js";
 import type { TopicRepository } from "./repositories/topic.repository.js";
 import { PostgresTopicRepository } from "./repositories/topic.repository.js";
+import { createAskRoutes } from "./routes/ask.routes.js";
 import { createAgentRunRoutes } from "./routes/agentRun.routes.js";
 import { createDashboardRoutes } from "./routes/dashboard.routes.js";
 import { createNoteLinkRoutes } from "./routes/noteLink.routes.js";
@@ -45,6 +46,7 @@ import { RawNoteService } from "./services/rawNote.service.js";
 import { RawSourceService } from "./services/rawSource.service.js";
 import { TopicService } from "./services/topic.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { AskService, type AskAnswerer } from "./services/ask.service.js";
 import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 
 export type AppDependencies = {
@@ -59,6 +61,7 @@ export type AppDependencies = {
   agentToolReadRepository?: AgentToolReadRepository;
   topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
+  askAnswerer?: AskAnswerer;
   enablePhaseOneWorkflow?: boolean;
 };
 
@@ -116,6 +119,12 @@ export function createApp(dependencies: AppDependencies = {}) {
   const dashboardService = new DashboardService(knowledgeRepository);
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
+  const askService = new AskService(
+    knowledgeRepository,
+    noteLinkRepository,
+    undefined,
+    dependencies.askAnswerer,
+  );
   const agentRunQueueService = new AgentRunQueueService(
     agentRunRepository,
     knowledgeRepository,
@@ -151,6 +160,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.use("/topics", createTopicRoutes(topicService));
+  app.use(createAskRoutes(askService));
   app.use("/raw-notes", createRawNoteRoutes(rawNoteService));
   if (rawSourceService) {
     app.use("/sources", createRawSourceRoutes(rawSourceService));

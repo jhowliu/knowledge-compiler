@@ -19,7 +19,6 @@ const routeWikiIndexer = {
         knowledgeType: "general_coding_note" as const,
         problemNumber: null,
         problemTitle: null,
-        reviewMapName: null,
         decisionRules: [],
         commonTraps: [],
         patterns: ["Source-first Indexing"],

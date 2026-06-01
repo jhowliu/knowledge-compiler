@@ -15,7 +15,6 @@ import {
 import { MarkdownPreview } from '../../components/MarkdownPreview'
 import { loadKnowledgeTimelineForCompiledNote } from '../../lib/api'
 import { boardOptions, maxCanvasZoom, minCanvasZoom, relationOptions } from '../../lib/constants'
-import { reviewMapDetails } from '../../lib/knowledge'
 import type {
   BoardKey,
   CompiledNote,
@@ -31,7 +30,6 @@ function noteTypeLabel(noteType: string) {
 }
 
 function noteTone(noteType: string) {
-  if (noteType === 'review_map') return 'border-violet/40 bg-violet/10 text-violet'
   if (noteType === 'algorithm') return 'border-emerald-300 bg-emerald-50 text-emerald-800'
   if (noteType === 'mistake') return 'border-orange-300 bg-orange-50 text-orange-800'
   return 'border-gray-300 bg-white text-gray-700'
@@ -62,7 +60,6 @@ function noteKeywords(note: CompiledNote | undefined) {
 function mergeKnowledgeNotes(data: WorkspaceData) {
   const notes = new globalThis.Map<string, CompiledNote>()
   for (const note of data.compiledNotes) notes.set(note.id, note)
-  for (const note of data.reviewMaps) notes.set(note.id, note)
   return [...notes.values()]
 }
 
@@ -121,7 +118,7 @@ export function KnowledgeCanvas({
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
   const latestNodePositionsRef = useRef<Record<string, { x: number; y: number }>>({})
-  const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes, data.reviewMaps])
+  const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [linkSearch, setLinkSearch] = useState('')
@@ -163,11 +160,7 @@ export function KnowledgeCanvas({
     latestNodePositionsRef.current = persistedNodePositions
     setNodePositions(persistedNodePositions)
   }, [persistedNodePositions])
-  const selectedNote =
-    notes.find((note) => note.id === selectedNoteId) ??
-    data.reviewMaps[0] ??
-    notes[0] ??
-    null
+  const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null
 
   useEffect(() => {
     let cancelled = false
@@ -197,7 +190,6 @@ export function KnowledgeCanvas({
     }
   }, [selectedNote?.id])
 
-  const selectedDetails = reviewMapDetails(selectedNote ?? undefined)
   const selectedKeywords = noteKeywords(selectedNote ?? undefined)
   const selectedNoteLinks = selectedNote
     ? data.noteLinks.filter(
@@ -228,20 +220,15 @@ export function KnowledgeCanvas({
     .map((note) => {
       const noteText = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
       const titleMatch = selectedNote ? noteText.includes(selectedNote.title.toLowerCase()) : false
-      const algorithmMatch = selectedDetails.linkedAlgorithms.some((algorithm) =>
-        noteText.includes(algorithm.toLowerCase()),
-      )
       const keywordMatches = selectedKeywords.filter((keyword) => noteText.includes(keyword)).length
       return {
         note,
-        score: (titleMatch ? 4 : 0) + (algorithmMatch ? 3 : 0) + keywordMatches,
+        score: (titleMatch ? 4 : 0) + keywordMatches,
         reason: titleMatch
           ? 'Backlink by title mention'
-          : algorithmMatch
-            ? 'Shares review-map algorithm'
-            : keywordMatches > 1
-              ? 'Shares indexed concepts'
-              : 'Nearby compiled note',
+          : keywordMatches > 1
+            ? 'Shares indexed concepts'
+            : 'Nearby compiled note',
       }
     })
     .filter((match) => match.score > 0)
@@ -287,7 +274,6 @@ export function KnowledgeCanvas({
       const haystack = `${note.title ?? ''} ${note.bodyMarkdown}`.toLowerCase()
       return (
         (selectedNote ? haystack.includes(selectedNote.title.toLowerCase()) : false) ||
-        selectedDetails.linkedAlgorithms.some((algorithm) => haystack.includes(algorithm.toLowerCase())) ||
         selectedKeywords.some((keyword) => haystack.includes(keyword))
       )
     })

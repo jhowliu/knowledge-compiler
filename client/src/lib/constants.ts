@@ -8,7 +8,6 @@ export const maxCanvasZoom = 1.65
 export const boardOptions: Array<{ key: BoardKey; label: string }> = [
   { key: 'default', label: 'Default' },
   { key: 'algorithms', label: 'Algorithms' },
-  { key: 'review-maps', label: 'Review maps' },
 ]
 
 export const relationOptions = [
@@ -28,5 +27,4 @@ export const emptyWorkspaceData: WorkspaceData = {
   noteLinks: [],
   noteCardPositions: [],
   agentRuns: [],
-  reviewMaps: [],
 }

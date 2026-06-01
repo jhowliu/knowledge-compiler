@@ -7,14 +7,15 @@ import {
   Eye,
   FileText,
   Folder,
-  GitBranch,
   Inbox,
-  Library,
+  Map as MapIcon,
+  Moon,
   PanelRight,
   PencilLine,
   Plus,
   Save,
   Sparkles,
+  Sun,
   Trash2,
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
@@ -26,6 +27,7 @@ import type {
   RawSource,
   RawSourceRole,
   SourceProject,
+  ThemeMode,
 } from '../../types/domain'
 
 type SourceLifecycle = {
@@ -160,6 +162,7 @@ export function RawNoteEditorPage({
   isSubmitting,
   notice,
   error,
+  themeMode,
   titleInputRef,
   onTitleChange,
   onBodyChange,
@@ -178,6 +181,7 @@ export function RawNoteEditorPage({
   onMoveSource,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
+  onThemeToggle,
 }: {
   indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
@@ -193,6 +197,7 @@ export function RawNoteEditorPage({
   isSubmitting: boolean
   notice: string | null
   error: string | null
+  themeMode: ThemeMode
   titleInputRef: React.RefObject<HTMLInputElement | null>
   onTitleChange: (value: string) => void
   onBodyChange: (value: string) => void
@@ -211,6 +216,7 @@ export function RawNoteEditorPage({
   onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
+  onThemeToggle: () => void
 }) {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all')
@@ -300,16 +306,62 @@ export function RawNoteEditorPage({
     Boolean(selectedRawSource) &&
     Boolean(moveProjectId) &&
     (selectedRawSource?.projectId !== moveProjectId || (selectedRawSource?.folderId ?? '') !== moveFolderId)
+  const isDark = themeMode === 'dark'
+  const appNavClass = (isActive: boolean) =>
+    `flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] ${
+      isActive
+        ? isDark
+          ? 'bg-[#2A2A2A] font-semibold text-white'
+          : 'bg-slate-100 font-semibold text-ink'
+        : isDark
+          ? 'text-gray-300 hover:bg-[#2A2A2A]'
+          : 'text-gray-600 hover:bg-slate-50 hover:text-ink'
+    }`
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[156px_240px_minmax(0,1fr)] bg-canvas text-ink">
-      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white px-3 py-4">
-        <div className="mb-4 px-2">
+    <section className="grid min-h-0 flex-1 grid-cols-[252px_240px_minmax(0,1fr)] bg-canvas text-ink">
+      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white px-[18px] py-6">
+        <div className="space-y-1">
+          <p className="text-lg font-bold leading-5 text-ink">Interview Knowledge</p>
+          <p className="text-lg font-bold leading-5 text-ink">Compiler</p>
+        </div>
+
+        <button
+          className="mt-[18px] flex h-11 items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white"
+          onClick={onNewNote}
+          type="button"
+        >
+          <Plus size={18} />
+          Capture source
+        </button>
+
+        <nav className="mt-[18px] space-y-1.5">
+          <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">WORKSPACE</p>
+          <button className={appNavClass(false)} onClick={onOpenKnowledgeMap} type="button">
+            <MapIcon size={16} />
+            Notes network
+          </button>
+          <button className={appNavClass(true)} type="button">
+            <PencilLine size={16} className="text-gray-400" />
+            Sources
+          </button>
+          <button className={appNavClass(false)} onClick={onOpenReviewQueue} type="button">
+            <Sparkles size={16} className="text-gray-400" />
+            Update proposals
+            {pendingCount > 0 ? (
+              <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
+                {pendingCount}
+              </span>
+            ) : null}
+          </button>
+        </nav>
+
+        <div className="mt-[18px] px-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Workspace</p>
           <h1 className="mt-1 text-lg font-extrabold text-ink">Knowledge sources</h1>
         </div>
 
-        <div className="space-y-1">
+        <div className="mt-4 space-y-1">
           <NavButton
             active={selectedProjectId === 'all'}
             count={rawNotes.length}
@@ -516,13 +568,7 @@ export function RawNoteEditorPage({
           />
         </div>
 
-        <div className="mt-5 space-y-1">
-          <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Open</p>
-          <NavButton icon={Library} label="Knowledge" onClick={onOpenKnowledgeMap} />
-          <NavButton count={pendingCount} icon={GitBranch} label="Review Queue" onClick={onOpenReviewQueue} />
-        </div>
-
-        <div className="mt-auto rounded-lg border border-gray-200 bg-slate-50 p-3">
+        <div className="mt-5 rounded-lg border border-gray-200 bg-slate-50 p-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Index status</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>
@@ -537,6 +583,15 @@ export function RawNoteEditorPage({
             </div>
           </div>
         </div>
+
+        <button
+          className="mt-auto flex h-10 items-center justify-between rounded-lg border border-gray-200 bg-slate-50 px-3 text-left text-[13px] font-bold text-ink"
+          onClick={onThemeToggle}
+          type="button"
+        >
+          <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
+          {isDark ? <Moon size={16} /> : <Sun size={16} />}
+        </button>
       </aside>
 
       <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white">

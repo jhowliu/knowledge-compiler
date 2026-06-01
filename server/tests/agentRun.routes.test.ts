@@ -21,8 +21,8 @@ describe("agent run routes", () => {
     });
     await knowledgeRepository.upsertCompiledNote({
       domain: "coding",
-      noteType: "review_map",
-      title: "Shortest path review map",
+      noteType: "knowledge_note",
+      title: "Shortest path decision guide",
       bodyMarkdown: "Use BFS for unweighted shortest path and Dijkstra for positive weights.",
       structuredData: {},
     });

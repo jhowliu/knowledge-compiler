@@ -6,7 +6,7 @@ export type ExtractedConcept = {
   confidence: Confidence;
 };
 
-export type ReviewMapDecisionRule = {
+export type DecisionRule = {
   signal: string;
   recommendation: string;
   confidence: Confidence;
@@ -14,11 +14,10 @@ export type ReviewMapDecisionRule = {
 
 export type CodingExtraction = {
   domain: "coding";
-  knowledgeType: "problem_reflection" | "review_map" | "general_coding_note";
+  knowledgeType: "problem_reflection" | "general_coding_note";
   problemNumber: string | null;
   problemTitle: string | null;
-  reviewMapName: string | null;
-  decisionRules: ReviewMapDecisionRule[];
+  decisionRules: DecisionRule[];
   commonTraps: string[];
   patterns: string[];
   algorithms: string[];

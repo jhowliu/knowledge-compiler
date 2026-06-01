@@ -168,10 +168,10 @@
 - Editable source organization validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test created a project and folder, moved the selected source there, confirmed project/folder counts and current-location state updated, and found no console errors or horizontal overflow.
 - Source organization rename validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test verified a renamed project/folder render in Sources with counts intact, rename fields reflect the saved names, and no console errors appear.
 - Empty source organization delete validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test deleted an empty folder and project from Sources, confirmed non-empty delete controls stay disabled, and found no console errors.
+- Sources sidebar consolidation and Review Maps removal validation: `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` pass. Sources now uses one combined app/source sidebar, the Review Maps page/API/workspace board/fetch path are removed, old `review_map` rows are normalized to `knowledge_note`, and browser smoke test confirmed `/review-maps` returns 404 with no unexpected UI overflow.
 
 ## Next Target
 - After #54 merges, move the next focus to auth/user scoping or richer search filters.
-- Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

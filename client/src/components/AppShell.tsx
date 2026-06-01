@@ -2,7 +2,6 @@ import type React from 'react'
 import {
   Download,
   Filter,
-  Library,
   Map,
   Moon,
   PencilLine,
@@ -31,10 +30,8 @@ export function LeftNavigation({
   activeView,
   themeMode,
   pendingCount,
-  reviewMapCount,
   onCaptureClick,
   onKnowledgeMapClick,
-  onReviewMapsClick,
   onRawNotesClick,
   onUpdateProposalsClick,
   onThemeToggle,
@@ -42,10 +39,8 @@ export function LeftNavigation({
   activeView: ActiveView
   themeMode: ThemeMode
   pendingCount: number
-  reviewMapCount: number
   onCaptureClick: () => void
   onKnowledgeMapClick: () => void
-  onReviewMapsClick: () => void
   onRawNotesClick: () => void
   onUpdateProposalsClick: () => void
   onThemeToggle: () => void
@@ -93,15 +88,6 @@ export function LeftNavigation({
         >
           <Map size={16} />
           Notes network
-        </button>
-        <button
-          className={navItemClass(activeView === 'review_maps')}
-          onClick={onReviewMapsClick}
-          type="button"
-        >
-          <Library size={16} className="text-gray-400" />
-          Review maps
-          <span className="ml-auto text-[11px] font-bold text-gray-400">{reviewMapCount}</span>
         </button>
         <button
           className={navItemClass(activeView === 'raw_note_editor')}

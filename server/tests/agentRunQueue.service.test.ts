@@ -18,7 +18,6 @@ const llmWikiIndexer = {
         knowledgeType: "general_coding_note" as const,
         problemNumber: null,
         problemTitle: null,
-        reviewMapName: null,
         decisionRules: [],
         commonTraps: ["Forgetting bounded state in graph search"],
         patterns: [
@@ -97,7 +96,6 @@ describe("agent run queue service", () => {
       knowledgeType: "general_coding_note",
       problemNumber: null,
       problemTitle: null,
-      reviewMapName: null,
       decisionRules: [],
       commonTraps: [],
       patterns: ["Binary Search on Answer"],
@@ -156,8 +154,8 @@ describe("agent run queue service", () => {
     });
     await knowledgeRepository.upsertCompiledNote({
       domain: "coding",
-      noteType: "review_map",
-      title: "Shortest path decision map",
+      noteType: "knowledge_note",
+      title: "Shortest path decision guide",
       bodyMarkdown: "Choose BFS for unweighted shortest path and Dijkstra for positive weights.",
       structuredData: {},
     });

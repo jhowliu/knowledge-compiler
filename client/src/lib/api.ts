@@ -58,7 +58,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteLinks,
     noteCardPositions,
     agentRuns,
-    reviewMaps,
   ] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
@@ -71,7 +70,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
         `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
       ),
       requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
-      requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
     ])
 
   return {
@@ -83,7 +81,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteLinks: noteLinks.noteLinks,
     noteCardPositions: noteCardPositions.noteCardPositions,
     agentRuns: agentRuns.agentRuns,
-    reviewMaps: reviewMaps.reviewMaps,
   }
 }
 

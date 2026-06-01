@@ -11,10 +11,6 @@ export class DashboardService {
     return this.knowledgeRepository.listCompiledNotes(50);
   }
 
-  async listReviewMaps() {
-    return this.knowledgeRepository.listReviewMaps(25);
-  }
-
   async search(query: string, options: { includeArchived?: boolean; limit?: number } = {}) {
     return this.knowledgeRetrievalService.search({
       query,

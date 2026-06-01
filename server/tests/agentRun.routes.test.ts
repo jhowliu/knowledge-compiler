@@ -81,36 +81,44 @@ describe("agent run routes", () => {
   });
 
   test("enqueues compile_raw_note and fails without LLM configuration", async () => {
+    const originalOpenAIKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
-    const agentRunRepository = new InMemoryAgentRunRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
-    const proposalRepository = new InMemoryProposalRepository();
-    const rawNote = await rawNoteRepository.create({
-      title: "K stops shortest path",
-      bodyMarkdown: "Dijkstra needs extra state for k stops: dist[n][k+2].",
-    });
-    const app = createApp({
-      agentRunRepository,
-      rawNoteRepository,
-      proposalRepository,
-      knowledgeRepository: new InMemoryKnowledgeRepository(),
-      noteLinkRepository: new InMemoryNoteLinkRepository(),
-    });
+    try {
+      const agentRunRepository = new InMemoryAgentRunRepository();
+      const rawNoteRepository = new InMemoryRawNoteRepository();
+      const proposalRepository = new InMemoryProposalRepository();
+      const rawNote = await rawNoteRepository.create({
+        title: "K stops shortest path",
+        bodyMarkdown: "Dijkstra needs extra state for k stops: dist[n][k+2].",
+      });
+      const app = createApp({
+        agentRunRepository,
+        rawNoteRepository,
+        proposalRepository,
+        knowledgeRepository: new InMemoryKnowledgeRepository(),
+        noteLinkRepository: new InMemoryNoteLinkRepository(),
+      });
 
-    const response = await request(app)
-      .post("/agent-runs")
-      .send({ runType: "compile_raw_note", input: { rawNoteId: rawNote.id } });
+      const response = await request(app)
+        .post("/agent-runs")
+        .send({ runType: "compile_raw_note", input: { rawNoteId: rawNote.id } });
 
-    expect(response.status).toBe(202);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(response.status).toBe(202);
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(proposalRepository.proposals).toHaveLength(0);
-    expect(agentRunRepository.agentRuns[0]).toMatchObject({
-      runType: "compile_raw_note",
-      status: "failed",
-      error: "OPENAI_API_KEY is required for LLM wiki indexing",
-    });
-    consoleError.mockRestore();
+      expect(proposalRepository.proposals).toHaveLength(0);
+      expect(agentRunRepository.agentRuns[0]).toMatchObject({
+        runType: "compile_raw_note",
+        status: "failed",
+        error: "OPENAI_API_KEY is required for LLM wiki indexing",
+      });
+    } finally {
+      if (originalOpenAIKey) {
+        process.env.OPENAI_API_KEY = originalOpenAIKey;
+      }
+      consoleError.mockRestore();
+    }
   });
 
   test("retries a failed agent run with the original input and retry lineage", async () => {

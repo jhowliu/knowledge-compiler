@@ -123,7 +123,7 @@ function outputText(response: unknown) {
 
 export class WikiIndexerService {
   async extract(source: WikiIndexingSource): Promise<WikiIndexingResult> {
-    if (!env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
@@ -202,6 +202,7 @@ export class WikiIndexerService {
   }
 
   private async extractWithOpenAI(source: WikiIndexingSource): Promise<CodingExtraction> {
+    const openAiApiKey = process.env.OPENAI_API_KEY;
     const chunkContext = source.chunks.length
       ? source.chunks
           .map((chunk) => {
@@ -214,7 +215,7 @@ export class WikiIndexerService {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: env.OPENAI_WIKI_INDEX_MODEL,

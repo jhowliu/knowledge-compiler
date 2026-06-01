@@ -173,6 +173,7 @@
 - Sidebar domains cleanup validation: removed the hard-coded Domains section from the global sidebar. There was no dedicated Domains API behind that section; backend `domain` fields remain as knowledge metadata. `npm run typecheck`, `npm run build`, and browser smoke confirm the domain labels are gone with no console errors.
 - Sources tree sidebar validation: moved the Source Inbox list into the left Sources sidebar as a collapsible project/folder tree. Opening a top-level project collapses the All Sources note list, folders toggle their own nested notes, and the separate middle inbox column is removed. `npm run typecheck`, `npm run build`, and browser smoke pass with no console errors or horizontal overflow.
 - Graph board tab cleanup validation: removed the Default/Algorithms board tabs and simplified the client to a single graph layout saved under `boardKey=default`. `npm run typecheck`, `npm run build`, and browser smoke pass; the graph header still renders, board labels are gone, and note-card positions still load from the default board.
+- OpenAI env loading fix validation: root `.env` had a real `OPENAI_API_KEY`, while `server/.env` had an empty `OPENAI_API_KEY=` entry that overwrote it. Env loading now ignores blank values when applying later env files, so the server sees the real key. `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass; a masked env check confirmed `hasOpenAIKey: true`.
 
 ## Next Target
 - After #54 merges, move the next focus to auth/user scoping or richer search filters.

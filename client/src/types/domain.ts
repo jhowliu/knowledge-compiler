@@ -87,6 +87,12 @@ export type ProposalItem = {
   payload: Record<string, unknown>
   rationale: string | null
   status: ProposalStatus
+  sourceSpans: unknown
+  conflictDetected: boolean
+  conflictSummary: string | null
+  conflictResolution: 'update' | 'keep_both' | 'needs_user_decision' | null
+  evalVerdict: 'pass' | 'warn' | 'fail' | null
+  incompleteReasoning: boolean
 }
 
 export type Proposal = {
@@ -238,6 +244,26 @@ export type AgentRunEvent = {
 export type AgentRunDetail = {
   agentRun: AgentRun | null
   events: AgentRunEvent[]
+  extractionEval?: ExtractionEval | null
+}
+
+export type EvalWarning = {
+  type: string
+  message: string
+  severity: string
+  affected_item_index: number | null
+}
+
+export type ExtractionEval = {
+  id: string
+  agentRunId: string
+  sourceId: string
+  verdict: 'pass' | 'warn' | 'fail'
+  coverageScore: number | null
+  groundingScore: number | null
+  warnings: EvalWarning[] | unknown
+  rawJudgeOutput: unknown
+  createdAt: string
 }
 
 export type RawNoteIndexingTrace = {

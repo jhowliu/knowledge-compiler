@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
+import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
 import type { AgentRunQueueService } from "../services/agentRunQueue.service.js";
 import type { PhaseOneWorkflowService } from "../services/phaseOneWorkflow.service.js";
 import { requireStringParam } from "./requestParams.js";
@@ -9,6 +10,7 @@ export class AgentRunController {
     private readonly phaseOneWorkflowService: PhaseOneWorkflowService,
     private readonly agentRunRepository: AgentRunRepository,
     private readonly agentRunQueueService: AgentRunQueueService,
+    private readonly extractionEvalRepository: ExtractionEvalRepository,
   ) {}
 
   list = async (_request: Request, response: Response, next: NextFunction) => {
@@ -54,6 +56,17 @@ export class AgentRunController {
       const agentRun = await this.agentRunRepository.getById(id);
       const events = await this.agentRunRepository.listEvents(id);
       response.json({ agentRun, events });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  evalResult = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const id = requireStringParam(request, "id");
+      response.json({
+        extractionEval: await this.extractionEvalRepository.getByAgentRunId(id),
+      });
     } catch (error) {
       next(error);
     }

@@ -143,7 +143,16 @@ export async function loadRawNoteIndexingTrace(rawNoteId: string) {
 }
 
 export async function loadAgentRunDetail(agentRunId: string) {
-  return requestJson<AgentRunDetail>(`/agent-runs/${agentRunId}`)
+  const [detail, evalResult] = await Promise.all([
+    requestJson<AgentRunDetail>(`/agent-runs/${agentRunId}`),
+    requestJson<{ extractionEval: AgentRunDetail['extractionEval'] }>(
+      `/agent-runs/${agentRunId}/eval-result`,
+    ),
+  ])
+  return {
+    ...detail,
+    extractionEval: evalResult.extractionEval,
+  }
 }
 
 export async function loadKnowledgeTimelineForCompiledNote(compiledNoteId: string) {

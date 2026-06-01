@@ -68,6 +68,7 @@
 - Started issue #50 implementation on `codex/editable-source-organization`: added source project/folder creation routes, source move route, and Sources UI controls for creating projects/folders and moving the selected source without re-chunking.
 - Started issue #52 implementation on `codex/source-organization-rename`: added source project/folder rename routes and inline Sources rail rename controls while keeping source counts and selected filters stable.
 - Started issue #54 implementation on `codex/delete-empty-source-organization`: added empty source project/folder delete routes, conflict guards, and compact disabled delete controls in the Sources rail.
+- Started issue #56 implementation on `codex/knowledge-search-filters`: added domain/type/source-role filters to `/search`, wired compact Knowledge Search panel filters, and made the toolbar Filter button open the search panel.
 
 ## Decisions
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -168,9 +169,10 @@
 - Editable source organization validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test created a project and folder, moved the selected source there, confirmed project/folder counts and current-location state updated, and found no console errors or horizontal overflow.
 - Source organization rename validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test verified a renamed project/folder render in Sources with counts intact, rename fields reflect the saved names, and no console errors appear.
 - Empty source organization delete validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test deleted an empty folder and project from Sources, confirmed non-empty delete controls stay disabled, and found no console errors.
+- Knowledge search filter validation: `npm run typecheck`, `npm run build`, and `npm run test --workspace=server` pass. Browser smoke test opened Knowledge Search from the toolbar Filter button, changed domain/type/source-role filters, and found no console errors.
 
 ## Next Target
-- After #54 merges, move the next focus to auth/user scoping or richer search filters.
+- After #56 merges, move the next focus to auth/user scoping or source upload/import polish.
 - Add review-map editing affordances later if review maps remain a first-class knowledge view.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.

@@ -155,6 +155,12 @@ export type KnowledgeSearchResult = {
   evidenceReferences: KnowledgeEvidenceReference[]
 }
 
+export type KnowledgeSearchFilters = {
+  domain: string
+  knowledgeType: string
+  sourceRole: 'all' | RawSourceRole
+}
+
 export type KnowledgeTimelineVersion = {
   id: string
   knowledgeSourceId: string

@@ -26,11 +26,18 @@ export class DashboardController {
       const query = typeof request.query.q === "string" ? request.query.q : "";
       const includeArchived = request.query.includeArchived === "true";
       const limit = typeof request.query.limit === "string" ? Number(request.query.limit) : undefined;
+      const domain = typeof request.query.domain === "string" ? request.query.domain.trim() : "";
+      const knowledgeType =
+        typeof request.query.knowledgeType === "string" ? request.query.knowledgeType.trim() : "";
+      const sourceRole = typeof request.query.sourceRole === "string" ? request.query.sourceRole.trim() : "";
       response.json({
         results: query
           ? await this.dashboardService.search(query, {
               includeArchived,
               limit: Number.isFinite(limit) ? limit : undefined,
+              domain: domain || null,
+              knowledgeType: knowledgeType || null,
+              sourceRole: sourceRole || null,
             })
           : [],
       });

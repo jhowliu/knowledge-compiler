@@ -1,7 +1,29 @@
 import { Archive, FileText, Link2, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { loadKnowledgeSourceTimeline } from '../../lib/api'
-import type { KnowledgeSearchResult, KnowledgeSourceTimeline } from '../../types/domain'
+import type { KnowledgeSearchFilters, KnowledgeSearchResult, KnowledgeSourceTimeline } from '../../types/domain'
+
+const domainOptions = [
+  { label: 'All domains', value: 'all' },
+  { label: 'Coding', value: 'coding' },
+  { label: 'Research', value: 'research' },
+  { label: 'General', value: 'general' },
+]
+
+const knowledgeTypeOptions = [
+  { label: 'All types', value: 'all' },
+  { label: 'Knowledge note', value: 'knowledge_note' },
+  { label: 'Paper note', value: 'paper_note' },
+  { label: 'Coding note', value: 'general_coding_note' },
+  { label: 'Problem note', value: 'problem_note' },
+  { label: 'Review map', value: 'review_map' },
+]
+
+const sourceRoleOptions = [
+  { label: 'All sources', value: 'all' },
+  { label: 'Personal notes', value: 'personal_note' },
+  { label: 'References', value: 'reference' },
+] satisfies Array<{ label: string; value: KnowledgeSearchFilters['sourceRole'] }>
 
 function compactText(value: string, maxLength = 260) {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -26,10 +48,12 @@ function scoreLabel(rank: number) {
 
 export function KnowledgeSearchPanel({
   error,
+  filters,
   includeArchived,
   isLoading,
   isOpen,
   onClose,
+  onFiltersChange,
   onIncludeArchivedChange,
   onQueryChange,
   onSubmit,
@@ -37,10 +61,12 @@ export function KnowledgeSearchPanel({
   results,
 }: {
   error: string | null
+  filters: KnowledgeSearchFilters
   includeArchived: boolean
   isLoading: boolean
   isOpen: boolean
   onClose: () => void
+  onFiltersChange: (filters: KnowledgeSearchFilters) => void
   onIncludeArchivedChange: (value: boolean) => void
   onQueryChange: (value: string) => void
   onSubmit: () => void
@@ -109,42 +135,87 @@ export function KnowledgeSearchPanel({
   return (
     <div className="fixed inset-0 z-40 bg-ink/30 px-6 py-8">
       <section className="mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-lg border border-gray-300 bg-white shadow-card">
-        <header className="flex items-center gap-3 border-b border-gray-200 px-5 py-4">
-          <form
-            className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
-            onSubmit={(event) => {
-              event.preventDefault()
-              onSubmit()
-            }}
-          >
-            <Search size={16} />
-            <input
-              aria-label="Search approved knowledge"
-              autoFocus
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search approved knowledge..."
-              type="search"
-              value={query}
-            />
-          </form>
-          <label className="flex h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-xs font-bold text-gray-600">
-            <input
-              checked={includeArchived}
-              className="h-4 w-4 accent-violet"
-              onChange={(event) => onIncludeArchivedChange(event.target.checked)}
-              type="checkbox"
-            />
-            Archived
-          </label>
-          <button
-            aria-label="Close search"
-            className="grid h-11 w-11 place-items-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={18} />
-          </button>
+        <header className="space-y-3 border-b border-gray-200 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <form
+              className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onSubmit()
+              }}
+            >
+              <Search size={16} />
+              <input
+                aria-label="Search approved knowledge"
+                autoFocus
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search approved knowledge..."
+                type="search"
+                value={query}
+              />
+            </form>
+            <label className="flex h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-xs font-bold text-gray-600">
+              <input
+                checked={includeArchived}
+                className="h-4 w-4 accent-violet"
+                onChange={(event) => onIncludeArchivedChange(event.target.checked)}
+                type="checkbox"
+              />
+              Archived
+            </label>
+            <button
+              aria-label="Close search"
+              className="grid h-11 w-11 place-items-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+              onClick={onClose}
+              type="button"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              aria-label="Filter search by domain"
+              className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-xs font-bold text-ink outline-none focus:border-violet"
+              onChange={(event) => onFiltersChange({ ...filters, domain: event.target.value })}
+              value={filters.domain}
+            >
+              {domainOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter search by knowledge type"
+              className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-xs font-bold text-ink outline-none focus:border-violet"
+              onChange={(event) => onFiltersChange({ ...filters, knowledgeType: event.target.value })}
+              value={filters.knowledgeType}
+            >
+              {knowledgeTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter search by source role"
+              className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-xs font-bold text-ink outline-none focus:border-violet"
+              onChange={(event) =>
+                onFiltersChange({
+                  ...filters,
+                  sourceRole: event.target.value as KnowledgeSearchFilters['sourceRole'],
+                })
+              }
+              value={filters.sourceRole}
+            >
+              {sourceRoleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px]">

@@ -4,6 +4,7 @@ import type {
   AgentRunDetail,
   BoardKey,
   CompiledNote,
+  KnowledgeSearchFilters,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
   NoteCardPosition,
@@ -112,10 +113,25 @@ export async function loadKnowledgeSourceTimeline(knowledgeSourceId: string) {
   return result.timeline
 }
 
-export async function searchKnowledgeBlocks(query: string, includeArchived: boolean) {
+export async function searchKnowledgeBlocks(
+  query: string,
+  options: {
+    includeArchived: boolean
+    filters: KnowledgeSearchFilters
+  },
+) {
   const params = new URLSearchParams({ q: query })
-  if (includeArchived) {
+  if (options.includeArchived) {
     params.set('includeArchived', 'true')
+  }
+  if (options.filters.domain !== 'all') {
+    params.set('domain', options.filters.domain)
+  }
+  if (options.filters.knowledgeType !== 'all') {
+    params.set('knowledgeType', options.filters.knowledgeType)
+  }
+  if (options.filters.sourceRole !== 'all') {
+    params.set('sourceRole', options.filters.sourceRole)
   }
 
   const result = await requestJson<{ results: KnowledgeSearchResult[] }>(

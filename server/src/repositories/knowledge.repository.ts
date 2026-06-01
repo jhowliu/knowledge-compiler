@@ -406,6 +406,9 @@ export interface KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    domain?: string | null;
+    knowledgeType?: string | null;
+    sourceRole?: string | null;
   }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
@@ -586,6 +589,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    domain?: string | null;
+    knowledgeType?: string | null;
+    sourceRole?: string | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
     const blockResult = await query<KnowledgeBlockSearchRow>(
       `
@@ -612,11 +618,52 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         cross join query
         where knowledge_sources.status = 'active'
           and ($2::boolean or knowledge_blocks.status = 'active')
+          and ($4::text is null or knowledge_sources.domain = $4)
+          and ($5::text is null or knowledge_sources.knowledge_type = $5)
+          and (
+            $6::text is null
+            or exists (
+              select 1
+              from evidence_links role_evidence
+              left join raw_source_chunks role_chunks
+                on role_evidence.source_type = 'raw_source_chunk'
+                and role_chunks.id = role_evidence.source_id
+              left join raw_sources chunk_sources
+                on chunk_sources.id = role_chunks.raw_source_id
+              left join raw_sources direct_sources
+                on role_evidence.source_type = 'raw_source'
+                and direct_sources.id = role_evidence.source_id
+              left join raw_notes direct_notes
+                on role_evidence.source_type = 'raw_note'
+                and direct_notes.id = role_evidence.source_id
+              left join raw_sources note_sources
+                on note_sources.id = direct_notes.raw_source_id
+              where role_evidence.approval_status = 'approved'
+                and (
+                  (role_evidence.target_type = 'knowledge_block' and role_evidence.target_id = knowledge_blocks.id)
+                  or (role_evidence.target_type = 'knowledge_version' and role_evidence.target_id = knowledge_versions.id)
+                  or (role_evidence.target_type = 'knowledge_source' and role_evidence.target_id = knowledge_sources.id)
+                )
+                and coalesce(
+                  chunk_sources.source_role,
+                  direct_sources.source_role,
+                  note_sources.source_role,
+                  direct_notes.source_role
+                ) = $6
+            )
+          )
           and knowledge_blocks.search_vector @@ query.ts_query
         order by rank desc, knowledge_blocks.updated_at desc
         limit $3
       `,
-      [input.query, input.includeArchived ?? false, input.limit],
+      [
+        input.query,
+        input.includeArchived ?? false,
+        input.limit,
+        input.domain ?? null,
+        input.knowledgeType ?? null,
+        input.sourceRole ?? null,
+      ],
     );
 
     if (blockResult.rows.length === 0) {

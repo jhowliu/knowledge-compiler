@@ -22,6 +22,7 @@ import type {
   AgentRun,
   AgentRunDetail,
   BoardKey,
+  KnowledgeSearchFilters,
   KnowledgeSearchResult,
   NoteCardPosition,
   Proposal,
@@ -56,6 +57,11 @@ function App() {
   const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([])
+  const [searchFilters, setSearchFilters] = useState<KnowledgeSearchFilters>({
+    domain: 'all',
+    knowledgeType: 'all',
+    sourceRole: 'all',
+  })
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
@@ -127,7 +133,11 @@ function App() {
     setIsAgentRunDetailLoading(false)
   }
 
-  async function runKnowledgeSearch(nextQuery = searchQuery, includeArchived = includeArchivedSearch) {
+  async function runKnowledgeSearch(
+    nextQuery = searchQuery,
+    includeArchived = includeArchivedSearch,
+    filters = searchFilters,
+  ) {
     const trimmedQuery = nextQuery.trim()
     setIsSearchOpen(true)
     setSearchError(null)
@@ -139,7 +149,7 @@ function App() {
 
     setIsSearchLoading(true)
     try {
-      setSearchResults(await searchKnowledgeBlocks(trimmedQuery, includeArchived))
+      setSearchResults(await searchKnowledgeBlocks(trimmedQuery, { includeArchived, filters }))
     } catch (nextError) {
       setSearchError(nextError instanceof Error ? nextError.message : 'Unable to search knowledge')
       setSearchResults([])
@@ -151,7 +161,14 @@ function App() {
   function updateIncludeArchivedSearch(value: boolean) {
     setIncludeArchivedSearch(value)
     if (isSearchOpen && searchQuery.trim()) {
-      void runKnowledgeSearch(searchQuery, value)
+      void runKnowledgeSearch(searchQuery, value, searchFilters)
+    }
+  }
+
+  function updateSearchFilters(value: KnowledgeSearchFilters) {
+    setSearchFilters(value)
+    if (isSearchOpen && searchQuery.trim()) {
+      void runKnowledgeSearch(searchQuery, includeArchivedSearch, value)
     }
   }
 
@@ -721,6 +738,7 @@ function App() {
               noteCount={workspaceData.rawSources.length || workspaceData.rawNotes.length}
               onReindexLinks={() => void startReindexLinksRun()}
               onSearchQueryChange={setSearchQuery}
+              onSearchOpen={() => setIsSearchOpen(true)}
               onSearchSubmit={() => void runKnowledgeSearch()}
               searchQuery={searchQuery}
             />
@@ -823,10 +841,12 @@ function App() {
       ) : null}
       <KnowledgeSearchPanel
         error={searchError}
+        filters={searchFilters}
         includeArchived={includeArchivedSearch}
         isLoading={isSearchLoading}
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
+        onFiltersChange={updateSearchFilters}
         onIncludeArchivedChange={updateIncludeArchivedSearch}
         onQueryChange={setSearchQuery}
         onSubmit={() => void runKnowledgeSearch()}

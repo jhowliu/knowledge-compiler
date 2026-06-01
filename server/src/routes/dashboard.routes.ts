@@ -7,7 +7,6 @@ export function createDashboardRoutes(dashboardService: DashboardService) {
   const controller = new DashboardController(dashboardService);
 
   router.get("/compiled-notes", controller.compiledNotes);
-  router.get("/review-maps", controller.reviewMaps);
   router.get("/search", controller.search);
   router.get("/knowledge-sources/:id/timeline", controller.knowledgeSourceTimeline);
   router.get("/compiled-notes/:id/timeline", controller.compiledNoteTimeline);

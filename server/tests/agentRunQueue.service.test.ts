@@ -18,7 +18,6 @@ const llmWikiIndexer = {
         knowledgeType: "general_coding_note" as const,
         problemNumber: null,
         problemTitle: null,
-        reviewMapName: null,
         decisionRules: [],
         commonTraps: ["Forgetting bounded state in graph search"],
         patterns: [
@@ -97,7 +96,6 @@ describe("agent run queue service", () => {
       knowledgeType: "general_coding_note",
       problemNumber: null,
       problemTitle: null,
-      reviewMapName: null,
       decisionRules: [],
       commonTraps: [],
       patterns: ["Binary Search on Answer"],
@@ -156,8 +154,8 @@ describe("agent run queue service", () => {
     });
     await knowledgeRepository.upsertCompiledNote({
       domain: "coding",
-      noteType: "review_map",
-      title: "Shortest path decision map",
+      noteType: "knowledge_note",
+      title: "Shortest path decision guide",
       bodyMarkdown: "Choose BFS for unweighted shortest path and Dijkstra for positive weights.",
       structuredData: {},
     });
@@ -345,34 +343,42 @@ describe("agent run queue service", () => {
   });
 
   test("fails compile_raw_note instead of falling back when LLM indexing is unavailable", async () => {
-    const agentRunRepository = new InMemoryAgentRunRepository();
-    const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
-    const proposalRepository = new InMemoryProposalRepository();
-    const service = new AgentRunQueueService(
-      agentRunRepository,
-      knowledgeRepository,
-      noteLinkRepository,
-      rawNoteRepository,
-      proposalRepository,
-    );
-    const rawNote = await rawNoteRepository.create({
-      title: "Not shortest path",
-      bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
-    });
+    const originalOpenAIKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const agentRunRepository = new InMemoryAgentRunRepository();
+      const knowledgeRepository = new InMemoryKnowledgeRepository();
+      const noteLinkRepository = new InMemoryNoteLinkRepository();
+      const rawNoteRepository = new InMemoryRawNoteRepository();
+      const proposalRepository = new InMemoryProposalRepository();
+      const service = new AgentRunQueueService(
+        agentRunRepository,
+        knowledgeRepository,
+        noteLinkRepository,
+        rawNoteRepository,
+        proposalRepository,
+      );
+      const rawNote = await rawNoteRepository.create({
+        title: "Not shortest path",
+        bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
+      });
 
-    const agentRun = await service.enqueue({
-      runType: "compile_raw_note",
-      input: { rawNoteId: rawNote.id },
-    });
+      const agentRun = await service.enqueue({
+        runType: "compile_raw_note",
+        input: { rawNoteId: rawNote.id },
+      });
 
-    await expect(service.process(agentRun.id)).rejects.toThrow("OPENAI_API_KEY is required");
+      await expect(service.process(agentRun.id)).rejects.toThrow("OPENAI_API_KEY is required");
 
-    const failedRun = await agentRunRepository.getById(agentRun.id);
-    expect(failedRun?.status).toBe("failed");
-    expect(proposalRepository.proposals).toHaveLength(0);
-    expect(rawNoteRepository.notes[0].extractedData).toEqual({});
-    expect(agentRunRepository.events.map((event) => event.eventType)).toContain("run_failed");
+      const failedRun = await agentRunRepository.getById(agentRun.id);
+      expect(failedRun?.status).toBe("failed");
+      expect(proposalRepository.proposals).toHaveLength(0);
+      expect(rawNoteRepository.notes[0].extractedData).toEqual({});
+      expect(agentRunRepository.events.map((event) => event.eventType)).toContain("run_failed");
+    } finally {
+      if (originalOpenAIKey) {
+        process.env.OPENAI_API_KEY = originalOpenAIKey;
+      }
+    }
   });
 });

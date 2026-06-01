@@ -38,7 +38,6 @@ const extractionSchema = {
     "knowledgeType",
     "problemNumber",
     "problemTitle",
-    "reviewMapName",
     "decisionRules",
     "commonTraps",
     "patterns",
@@ -55,11 +54,10 @@ const extractionSchema = {
     domain: { type: "string", enum: ["coding"] },
     knowledgeType: {
       type: "string",
-      enum: ["problem_reflection", "review_map", "general_coding_note"],
+      enum: ["problem_reflection", "general_coding_note"],
     },
     problemNumber: { type: ["string", "null"] },
     problemTitle: { type: ["string", "null"] },
-    reviewMapName: { type: ["string", "null"] },
     decisionRules: {
       type: "array",
       items: {
@@ -125,7 +123,7 @@ function outputText(response: unknown) {
 
 export class WikiIndexerService {
   async extract(source: WikiIndexingSource): Promise<WikiIndexingResult> {
-    if (!env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
@@ -171,7 +169,6 @@ export class WikiIndexerService {
               originalKnowledgeType: extraction.knowledgeType,
               problemNumber: extraction.problemNumber,
               problemTitle: extraction.problemTitle,
-              reviewMapName: extraction.reviewMapName,
               decisionRules: extraction.decisionRules,
               commonTraps: extraction.commonTraps,
               patterns: extraction.patterns,
@@ -205,6 +202,7 @@ export class WikiIndexerService {
   }
 
   private async extractWithOpenAI(source: WikiIndexingSource): Promise<CodingExtraction> {
+    const openAiApiKey = process.env.OPENAI_API_KEY;
     const chunkContext = source.chunks.length
       ? source.chunks
           .map((chunk) => {
@@ -217,7 +215,7 @@ export class WikiIndexerService {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: env.OPENAI_WIKI_INDEX_MODEL,
@@ -261,9 +259,6 @@ export class WikiIndexerService {
 }
 
 function knowledgeTypeFor(extraction: CodingExtraction) {
-  if (extraction.knowledgeType === "review_map") {
-    return "review_map";
-  }
   if (extraction.knowledgeType === "problem_reflection") {
     return "problem_note";
   }
@@ -277,9 +272,6 @@ function knowledgeTypeFor(extraction: CodingExtraction) {
 }
 
 function knowledgeTitle(source: Pick<RawNote, "title">, extraction: CodingExtraction) {
-  if (extraction.reviewMapName) {
-    return extraction.reviewMapName;
-  }
   if (extraction.problemNumber && extraction.problemTitle) {
     return `${extraction.problemNumber}. ${extraction.problemTitle}`;
   }

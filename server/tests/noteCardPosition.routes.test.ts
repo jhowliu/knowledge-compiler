@@ -71,29 +71,29 @@ describe("note card position routes", () => {
       .send({ boardKey: "default", x: 20, y: 30 });
     await request(app)
       .put("/note-card-positions/11111111-1111-4111-8111-111111111111")
-      .send({ boardKey: "review-maps", x: 64, y: 42 });
+      .send({ boardKey: "algorithms", x: 64, y: 42 });
 
-    const reviewMapResponse = await request(app).get("/note-card-positions?boardKey=review-maps");
+    const algorithmsResponse = await request(app).get("/note-card-positions?boardKey=algorithms");
 
-    expect(reviewMapResponse.status).toBe(200);
-    expect(reviewMapResponse.body.noteCardPositions).toHaveLength(1);
-    expect(reviewMapResponse.body.noteCardPositions[0]).toMatchObject({
-      boardKey: "review-maps",
+    expect(algorithmsResponse.status).toBe(200);
+    expect(algorithmsResponse.body.noteCardPositions).toHaveLength(1);
+    expect(algorithmsResponse.body.noteCardPositions[0]).toMatchObject({
+      boardKey: "algorithms",
       x: 64,
       y: 42,
     });
 
-    const resetResponse = await request(app).delete("/note-card-positions?boardKey=review-maps");
+    const resetResponse = await request(app).delete("/note-card-positions?boardKey=algorithms");
 
     expect(resetResponse.status).toBe(200);
-    expect(resetResponse.body.result).toMatchObject({ boardKey: "review-maps", deletedCount: 1 });
+    expect(resetResponse.body.result).toMatchObject({ boardKey: "algorithms", deletedCount: 1 });
 
     const defaultResponse = await request(app).get("/note-card-positions");
     expect(defaultResponse.body.noteCardPositions).toHaveLength(1);
     expect(defaultResponse.body.noteCardPositions[0]).toMatchObject({ boardKey: "default" });
 
-    const emptyReviewMapResponse = await request(app).get("/note-card-positions?boardKey=review-maps");
-    expect(emptyReviewMapResponse.body.noteCardPositions).toHaveLength(0);
+    const emptyAlgorithmsResponse = await request(app).get("/note-card-positions?boardKey=algorithms");
+    expect(emptyAlgorithmsResponse.body.noteCardPositions).toHaveLength(0);
   });
 
   test("rejects positions outside the canvas bounds", async () => {

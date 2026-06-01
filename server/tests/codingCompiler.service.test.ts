@@ -53,7 +53,7 @@ describe("CodingCompilerService", () => {
     expect(proposal.items.some((item) => item.actionType === "upsert_readiness")).toBe(false);
   });
 
-  test("keeps algorithm decision guides as review maps", () => {
+  test("keeps algorithm decision guides as general knowledge", () => {
     const service = new CodingCompilerService();
     const rawNote = {
       id: "raw-note-2",
@@ -78,8 +78,7 @@ describe("CodingCompilerService", () => {
     const extraction = service.extract(rawNote);
     const proposal = service.draftProposal(rawNote, extraction, []);
 
-    expect(extraction.knowledgeType).toBe("review_map");
-    expect(extraction.reviewMapName).toBe("Shortest Path Decision Guide");
+    expect(extraction.knowledgeType).toBe("general_coding_note");
     expect(extraction.decisionRules).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ signal: "Weight = 1", recommendation: "BFS" }),
@@ -87,12 +86,12 @@ describe("CodingCompilerService", () => {
       ]),
     );
     expect(extraction.mistakes).toHaveLength(0);
-    expect(proposal.items[0].payload.noteType).toBe("review_map");
+    expect(proposal.items[0].payload.noteType).toBe("knowledge_note");
     expect(proposal.items.some((item) => item.actionType === "create_mistake")).toBe(false);
     expect(
       proposal.items.some(
         (item) => item.actionType === "upsert_compiled_note" && item.payload.noteType === "algorithm",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

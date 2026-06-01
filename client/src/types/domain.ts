@@ -1,15 +1,8 @@
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
-export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'review_maps' | 'update_proposals'
+export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals'
 export type ThemeMode = 'light' | 'dark'
-export type BoardKey = 'default' | 'algorithms' | 'review-maps'
 export type RawSourceRole = 'reference' | 'personal_note'
-
-export type DecisionRule = {
-  signal: string
-  recommendation: string
-  confidence: string
-}
 
 export type RawNote = {
   id: string
@@ -254,7 +247,6 @@ export type WorkspaceData = {
   noteLinks: NoteLink[]
   noteCardPositions: NoteCardPosition[]
   agentRuns: AgentRun[]
-  reviewMaps: CompiledNote[]
 }
 
 export type RelatedNoteMatch = {

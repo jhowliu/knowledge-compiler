@@ -2,7 +2,6 @@ import type React from 'react'
 import {
   Download,
   Filter,
-  Library,
   Map,
   Moon,
   PencilLine,
@@ -31,10 +30,8 @@ export function LeftNavigation({
   activeView,
   themeMode,
   pendingCount,
-  reviewMapCount,
   onCaptureClick,
   onKnowledgeMapClick,
-  onReviewMapsClick,
   onRawNotesClick,
   onUpdateProposalsClick,
   onThemeToggle,
@@ -42,10 +39,8 @@ export function LeftNavigation({
   activeView: ActiveView
   themeMode: ThemeMode
   pendingCount: number
-  reviewMapCount: number
   onCaptureClick: () => void
   onKnowledgeMapClick: () => void
-  onReviewMapsClick: () => void
   onRawNotesClick: () => void
   onUpdateProposalsClick: () => void
   onThemeToggle: () => void
@@ -95,15 +90,6 @@ export function LeftNavigation({
           Notes network
         </button>
         <button
-          className={navItemClass(activeView === 'review_maps')}
-          onClick={onReviewMapsClick}
-          type="button"
-        >
-          <Library size={16} className="text-gray-400" />
-          Review maps
-          <span className="ml-auto text-[11px] font-bold text-gray-400">{reviewMapCount}</span>
-        </button>
-        <button
           className={navItemClass(activeView === 'raw_note_editor')}
           onClick={onRawNotesClick}
           type="button"
@@ -124,25 +110,6 @@ export function LeftNavigation({
             </span>
           ) : null}
         </button>
-      </nav>
-
-      <nav className="space-y-1.5">
-        <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">DOMAINS</p>
-        {[
-          ['Coding / LeetCode', 'bg-violet'],
-          ['System design', 'bg-emerald-500'],
-          ['Behavioral stories', 'bg-amber-500'],
-        ].map(([label, color]) => (
-          <a
-            className={`flex h-8 items-center gap-2 px-2.5 text-[13px] ${
-              isDark ? 'text-gray-300' : 'text-gray-600'
-            }`}
-            key={label}
-          >
-            <span className={`h-2 w-2 rounded-full ${color}`} />
-            {label}
-          </a>
-        ))}
       </nav>
 
       <button

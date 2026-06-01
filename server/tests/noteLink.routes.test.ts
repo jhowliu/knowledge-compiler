@@ -19,7 +19,7 @@ describe("note link routes", () => {
         targetNoteId: "22222222-2222-4222-8222-222222222222",
         relationType: "prerequisite",
         confidence: "high",
-        rationale: "BFS should be understood before shortest path review maps.",
+        rationale: "BFS should be understood before shortest path decision guides.",
       });
 
     expect(response.status).toBe(201);

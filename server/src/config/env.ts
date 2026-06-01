@@ -1,14 +1,29 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "dotenv";
+import { parse } from "dotenv";
 import { z } from "zod";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverEnvPath = path.resolve(__dirname, "../../.env");
 const rootEnvPath = path.resolve(__dirname, "../../../.env");
 
-config({ path: rootEnvPath, override: true, quiet: true });
-config({ path: serverEnvPath, override: true, quiet: true });
+function loadEnvFile(filePath: string) {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const parsedEnv = parse(readFileSync(filePath));
+  for (const [key, value] of Object.entries(parsedEnv)) {
+    if (value === "") {
+      continue;
+    }
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(rootEnvPath);
+loadEnvFile(serverEnvPath);
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),

@@ -1,8 +1,7 @@
-import { apiBaseUrl } from './constants'
+import { apiBaseUrl, graphBoardKey } from './constants'
 import type {
   AgentRun,
   AgentRunDetail,
-  BoardKey,
   CompiledNote,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
@@ -48,7 +47,22 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   }
 }
 
-export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
+const workspaceDataRequests = new Map<string, Promise<WorkspaceData>>()
+
+export async function loadWorkspaceData(): Promise<WorkspaceData> {
+  const inFlightRequest = workspaceDataRequests.get(graphBoardKey)
+  if (inFlightRequest) {
+    return inFlightRequest
+  }
+
+  const request = loadWorkspaceDataWithoutCache().finally(() => {
+    workspaceDataRequests.delete(graphBoardKey)
+  })
+  workspaceDataRequests.set(graphBoardKey, request)
+  return request
+}
+
+async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
   const [
     rawNotes,
     rawSources,
@@ -58,7 +72,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteLinks,
     noteCardPositions,
     agentRuns,
-    reviewMaps,
   ] =
     await Promise.all([
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
@@ -68,10 +81,9 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
       requestJson<{ noteCardPositions: NoteCardPosition[] }>(
-        `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
+        `/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`,
       ),
       requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
-      requestJson<{ reviewMaps: CompiledNote[] }>('/review-maps'),
     ])
 
   return {
@@ -83,7 +95,6 @@ export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceDa
     noteLinks: noteLinks.noteLinks,
     noteCardPositions: noteCardPositions.noteCardPositions,
     agentRuns: agentRuns.agentRuns,
-    reviewMaps: reviewMaps.reviewMaps,
   }
 }
 

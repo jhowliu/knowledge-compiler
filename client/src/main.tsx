@@ -6,7 +6,6 @@ import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
 import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
-import { ReviewMapsPage } from './features/review-maps/ReviewMapsPage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
   loadAgentRunDetail,
@@ -16,12 +15,11 @@ import {
   requestVoid,
   searchKnowledgeBlocks,
 } from './lib/api'
-import { boardOptions, emptyWorkspaceData } from './lib/constants'
+import { emptyWorkspaceData, graphBoardKey } from './lib/constants'
 import type {
   ActiveView,
   AgentRun,
   AgentRunDetail,
-  BoardKey,
   KnowledgeSearchResult,
   NoteCardPosition,
   Proposal,
@@ -39,12 +37,6 @@ function App() {
     const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
     return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
   })
-  const [activeBoardKey, setActiveBoardKey] = useState<BoardKey>(() => {
-    const savedBoardKey = window.localStorage.getItem('knowledgeCompilerBoardKey')
-    return boardOptions.some((board) => board.key === savedBoardKey)
-      ? (savedBoardKey as BoardKey)
-      : 'default'
-  })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [sourceRole, setSourceRole] = useState<RawSourceRole>('personal_note')
@@ -61,20 +53,10 @@ function App() {
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [includeArchivedSearch, setIncludeArchivedSearch] = useState(false)
   const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
-  const [selectedReviewMapId, setSelectedReviewMapId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-
-  const selectedProposal = useMemo(() => {
-    return (
-      workspaceData.proposals.find((proposal) => proposal.id === selectedProposalId) ??
-      workspaceData.proposals.find((proposal) => proposal.status === 'pending') ??
-      workspaceData.proposals[0] ??
-      null
-    )
-  }, [selectedProposalId, workspaceData.proposals])
 
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const latestAgentRun = workspaceData.agentRuns[0] ?? null
@@ -85,7 +67,7 @@ function App() {
   async function refresh() {
     setIsLoading(true)
     try {
-      const nextData = await loadWorkspaceData(activeBoardKey)
+      const nextData = await loadWorkspaceData()
       setWorkspaceData(nextData)
       setError(null)
       return nextData
@@ -163,36 +145,17 @@ function App() {
 
   useEffect(() => {
     void refresh()
-  }, [activeBoardKey])
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
   }, [themeMode])
 
   useEffect(() => {
-    window.localStorage.setItem('knowledgeCompilerBoardKey', activeBoardKey)
-  }, [activeBoardKey])
-
-  useEffect(() => {
     if (activeView === 'raw_note_editor') {
       titleInputRef.current?.focus()
     }
   }, [activeView])
-
-  useEffect(() => {
-    if (!selectedReviewMapId && workspaceData.reviewMaps.length > 0) {
-      setSelectedReviewMapId(workspaceData.reviewMaps[0].id)
-      return
-    }
-
-    if (
-      selectedReviewMapId &&
-      workspaceData.reviewMaps.length > 0 &&
-      !workspaceData.reviewMaps.some((reviewMap) => reviewMap.id === selectedReviewMapId)
-    ) {
-      setSelectedReviewMapId(workspaceData.reviewMaps[0].id)
-    }
-  }, [selectedReviewMapId, workspaceData.reviewMaps])
 
   function rawNotePayload() {
     return {
@@ -363,12 +326,6 @@ function App() {
 
   function openRawNotesView() {
     setActiveView('raw_note_editor')
-    setNotice(null)
-    setError(null)
-  }
-
-  function openReviewMapsView() {
-    setActiveView('review_maps')
     setNotice(null)
     setError(null)
   }
@@ -618,7 +575,7 @@ function App() {
         `/note-card-positions/${noteId}`,
         {
           method: 'PUT',
-          body: JSON.stringify({ ...position, boardKey: activeBoardKey }),
+          body: JSON.stringify({ ...position, boardKey: graphBoardKey }),
         },
       )
       setWorkspaceData((current) => ({
@@ -640,7 +597,7 @@ function App() {
 
   async function resetBoardLayout() {
     try {
-      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(activeBoardKey)}`, {
+      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`, {
         method: 'DELETE',
       })
       setWorkspaceData((current) => ({ ...current, noteCardPositions: [] }))
@@ -699,18 +656,18 @@ function App() {
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
     >
-      <LeftNavigation
-        activeView={activeView}
-        onCaptureClick={openNewRawNoteEditor}
-        onKnowledgeMapClick={() => setActiveView('knowledge_map')}
-        onRawNotesClick={openRawNotesView}
-        onReviewMapsClick={openReviewMapsView}
-        onUpdateProposalsClick={openUpdateProposalsView}
-        onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
-        pendingCount={pendingCount}
-        reviewMapCount={workspaceData.reviewMaps.length}
-        themeMode={themeMode}
-      />
+      {activeView === 'raw_note_editor' ? null : (
+        <LeftNavigation
+          activeView={activeView}
+          onCaptureClick={openNewRawNoteEditor}
+          onKnowledgeMapClick={() => setActiveView('knowledge_map')}
+          onRawNotesClick={openRawNotesView}
+          onUpdateProposalsClick={openUpdateProposalsView}
+          onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
+          pendingCount={pendingCount}
+          themeMode={themeMode}
+        />
+      )}
       <section className="flex min-w-0 flex-1 flex-col">
         {activeView === 'knowledge_map' ? (
           <>
@@ -736,9 +693,7 @@ function App() {
             ) : null}
             <div className="flex min-h-0 flex-1">
               <KnowledgeCanvas
-                activeBoardKey={activeBoardKey}
                 data={workspaceData}
-                onBoardChange={setActiveBoardKey}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
@@ -749,16 +704,9 @@ function App() {
               />
             </div>
           </>
-        ) : activeView === 'review_maps' ? (
-          <ReviewMapsPage
-            compiledNotes={workspaceData.compiledNotes}
-            onSelectReviewMap={setSelectedReviewMapId}
-            rawNotes={workspaceData.rawNotes}
-            reviewMaps={workspaceData.reviewMaps}
-            selectedReviewMapId={selectedReviewMapId}
-          />
         ) : activeView === 'update_proposals' ? (
           <ReviewQueuePage
+            compiledNotes={workspaceData.compiledNotes}
             error={error}
             isSubmitting={isSubmitting || isLoading}
             noteLinks={workspaceData.noteLinks}
@@ -772,7 +720,7 @@ function App() {
             proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
-            selectedProposalId={selectedProposal?.id ?? null}
+            selectedProposalId={selectedProposalId}
           />
         ) : (
           <RawNoteEditorPage
@@ -793,6 +741,7 @@ function App() {
             onNewNote={openNewRawNoteEditor}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
+            onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
             onRenameFolder={(projectId, folderId, name) => void renameSourceFolder(projectId, folderId, name)}
             onRenameProject={(projectId, name) => void renameSourceProject(projectId, name)}
             onSave={() => void saveSelectedRawNote()}
@@ -806,6 +755,7 @@ function App() {
             sourceProjects={workspaceData.sourceOrganization.projects}
             selectedRawNoteId={selectedRawNoteId}
             sourceRole={sourceRole}
+            themeMode={themeMode}
             title={title}
             titleInputRef={titleInputRef}
           />

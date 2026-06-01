@@ -84,24 +84,24 @@ describe("ProposalService", () => {
       rawNoteId: "raw-note-1",
       draft: {
         detectedDomain: "coding",
-        detectedKnowledgeType: "review_map",
+        detectedKnowledgeType: "knowledge_note",
         impactLevel: 4,
         confidence: "high",
-        rationale: "Detected review map.",
+        rationale: "Detected decision guide.",
         items: [
           {
             actionType: "upsert_compiled_note",
             targetType: "compiled_note",
             payload: {
               domain: "coding",
-              noteType: "review_map",
+              noteType: "knowledge_note",
               title: "Shortest Path Decision Guide",
               bodyMarkdown: "Weight = 1 -> BFS",
               structuredData: {
                 concepts: [{ name: "BFS", conceptType: "algorithm" }],
               },
             },
-            rationale: "Create review map.",
+            rationale: "Create knowledge note.",
           },
         ],
       },

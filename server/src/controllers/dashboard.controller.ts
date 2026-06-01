@@ -13,14 +13,6 @@ export class DashboardController {
     }
   };
 
-  reviewMaps = async (_request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({ reviewMaps: await this.dashboardService.listReviewMaps() });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   search = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const query = typeof request.query.q === "string" ? request.query.q : "";

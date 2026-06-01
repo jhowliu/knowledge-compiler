@@ -79,6 +79,8 @@ describe("raw source routes", () => {
     const response = await request(app).post("/sources").send({
       sourceRole: "reference",
       sourceType: "paper",
+      subtype: "research_paper",
+      topicIds: ["00000000-0000-4000-8000-000000000101"],
       title: "Attention Is All You Need",
       bodyMarkdown: "# Transformer\n\nSelf-attention replaces recurrence.",
     });
@@ -89,12 +91,55 @@ describe("raw source routes", () => {
       folderId: null,
       sourceRole: "reference",
       sourceType: "paper",
+      subtype: "research_paper",
+      topicIds: ["00000000-0000-4000-8000-000000000101"],
       title: "Attention Is All You Need",
     });
     expect(response.body.rawSource.chunks).toHaveLength(1);
     expect(response.body.rawSource.chunks[0]).toMatchObject({
       chunkIndex: 0,
       heading: "Transformer",
+    });
+  });
+
+  test("PATCH /sources/:id updates subtype and topic ids", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const createResponse = await request(app).post("/sources").send({
+      sourceRole: "personal_note",
+      sourceType: "manual",
+      subtype: "journal_entry",
+      topicIds: ["00000000-0000-4000-8000-000000000101"],
+      title: "Daily note",
+      bodyMarkdown: "Original source body.",
+    });
+
+    const response = await request(app)
+      .patch(`/sources/${createResponse.body.rawSource.id}`)
+      .send({
+        sourceRole: "personal_note",
+        sourceType: "manual",
+        subtype: "book_note",
+        topicIds: [
+          "00000000-0000-4000-8000-000000000102",
+          "00000000-0000-4000-8000-000000000103",
+        ],
+        title: "Updated note",
+        bodyMarkdown: "Updated source body.",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rawSource).toMatchObject({
+      id: createResponse.body.rawSource.id,
+      subtype: "book_note",
+      topicIds: [
+        "00000000-0000-4000-8000-000000000102",
+        "00000000-0000-4000-8000-000000000103",
+      ],
+      title: "Updated note",
     });
   });
 

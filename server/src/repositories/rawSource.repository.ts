@@ -23,6 +23,7 @@ type RawSourceRow = {
   project_id: string | null;
   folder_id: string | null;
   domain: string | null;
+  subtype: string | null;
   source_type: string;
   source_role: RawSourceRole;
   title: string | null;
@@ -31,6 +32,7 @@ type RawSourceRow = {
   extracted_data: unknown;
   created_at: Date;
   updated_at: Date;
+  topic_ids?: string[];
 };
 
 type RawSourceChunkRow = {
@@ -86,7 +88,8 @@ export interface RawSourceRepository {
     input: UpdateRawSourceInput,
     chunks: CreateRawSourceChunkInput[],
   ): Promise<RawSourceWithChunks | null>;
-  updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawSourceWithChunks>;
+  updateTopics(id: string, topicIds: string[]): Promise<RawSourceWithChunks | null>;
+  updateExtraction(id: string, extractedData: unknown): Promise<RawSourceWithChunks>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -97,8 +100,10 @@ function mapRawSource(row: RawSourceRow): RawSource {
     projectId: row.project_id,
     folderId: row.folder_id,
     domain: row.domain,
+    subtype: row.subtype,
     sourceType: row.source_type,
     sourceRole: row.source_role,
+    topicIds: row.topic_ids ?? [],
     title: row.title,
     bodyMarkdown: row.body_markdown,
     metadata: row.metadata,
@@ -161,7 +166,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
             user_id,
             project_id,
             folder_id,
-            domain,
+            subtype,
             source_type,
             source_role,
             title,
@@ -175,7 +180,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
           input.userId ?? null,
           projectId,
           input.folderId ?? null,
-          input.domain ?? null,
+          input.subtype ?? null,
           input.sourceType ?? "markdown",
           input.sourceRole ?? "personal_note",
           input.title ?? null,
@@ -183,8 +188,16 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
           input.metadata ?? {},
         ],
       );
-      const source = mapRawSource(sourceResult.rows[0]);
-      const savedChunks = await insertChunks(transactionQuery, source.id, chunks);
+      const sourceId = sourceResult.rows[0].id;
+      const topicIds = input.topicIds ?? [];
+      for (const topicId of topicIds) {
+        await transactionQuery(
+          "insert into source_topics (source_id, topic_id) values ($1, $2) on conflict do nothing",
+          [sourceId, topicId],
+        );
+      }
+      const source = { ...mapRawSource(sourceResult.rows[0]), topicIds };
+      const savedChunks = await insertChunks(transactionQuery, sourceId, chunks);
       return { ...source, chunks: savedChunks };
     });
   }
@@ -286,7 +299,20 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
   }
 
   async getById(id: string) {
-    const sourceResult = await query<RawSourceRow>("select * from raw_sources where id = $1", [id]);
+    const sourceResult = await query<RawSourceRow>(
+      `
+        select rs.*,
+          coalesce(
+            array_agg(st.topic_id::text) filter (where st.topic_id is not null),
+            array[]::text[]
+          ) as topic_ids
+        from raw_sources rs
+        left join source_topics st on st.source_id = rs.id
+        where rs.id = $1
+        group by rs.id
+      `,
+      [id],
+    );
     if (!sourceResult.rows[0]) {
       return null;
     }
@@ -300,9 +326,15 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
   async listRecent(limit: number) {
     const sourceResult = await query<RawSourceRow>(
       `
-        select *
-        from raw_sources
-        order by created_at desc
+        select rs.*,
+          coalesce(
+            array_agg(st.topic_id::text) filter (where st.topic_id is not null),
+            array[]::text[]
+          ) as topic_ids
+        from raw_sources rs
+        left join source_topics st on st.source_id = rs.id
+        group by rs.id
+        order by rs.created_at desc
         limit $1
       `,
       [limit],
@@ -398,6 +430,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
 
     return {
       ...mapRawSource(sourceResult.rows[0]),
+      topicIds: await fetchTopicIds(id),
       chunks: await listChunks(id),
     };
   }
@@ -424,7 +457,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
           update raw_sources
           set project_id = $2,
               folder_id = $3,
-              domain = $4,
+              subtype = $4,
               source_type = $5,
               source_role = $6,
               title = $7,
@@ -439,7 +472,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
           id,
           projectId,
           folderId,
-          input.domain ?? null,
+          Object.hasOwn(input, "subtype") ? (input.subtype ?? null) : current.subtype,
           input.sourceType ?? "markdown",
           input.sourceRole ?? "personal_note",
           input.title ?? null,
@@ -452,26 +485,70 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
         return null;
       }
 
+      let topicIds: string[];
+      if (input.topicIds !== undefined) {
+        await transactionQuery("delete from source_topics where source_id = $1", [id]);
+        for (const topicId of input.topicIds) {
+          await transactionQuery(
+            "insert into source_topics (source_id, topic_id) values ($1, $2) on conflict do nothing",
+            [id, topicId],
+          );
+        }
+        topicIds = input.topicIds;
+      } else {
+        const topicResult = await transactionQuery<{ topic_id: string }>(
+          "select topic_id::text from source_topics where source_id = $1",
+          [id],
+        );
+        topicIds = topicResult.rows.map((row) => row.topic_id);
+      }
+
       await transactionQuery("delete from raw_source_chunks where raw_source_id = $1", [id]);
       const savedChunks = await insertChunks(transactionQuery, id, chunks);
       return {
         ...mapRawSource(sourceResult.rows[0]),
+        topicIds,
         chunks: savedChunks,
       };
     });
   }
 
-  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+  async updateTopics(id: string, topicIds: string[]) {
+    return transaction(async (transactionQuery) => {
+      const sourceResult = await transactionQuery<RawSourceRow>(
+        "select * from raw_sources where id = $1",
+        [id],
+      );
+      if (!sourceResult.rows[0]) {
+        return null;
+      }
+
+      await transactionQuery("delete from source_topics where source_id = $1", [id]);
+      for (const topicId of topicIds) {
+        await transactionQuery(
+          "insert into source_topics (source_id, topic_id) values ($1, $2) on conflict do nothing",
+          [id, topicId],
+        );
+      }
+
+      return {
+        ...mapRawSource(sourceResult.rows[0]),
+        topicIds,
+        chunks: await listChunks(id),
+      };
+    });
+  }
+
+  async updateExtraction(id: string, extractedData: unknown) {
     const sourceResult = await query<RawSourceRow>(
       `
         update raw_sources
         set extracted_data = $2,
-            domain = coalesce($3, domain),
             updated_at = now()
         where id = $1
         returning *
       `,
-      [id, extractedData, domain],
+      [id, extractedData],
     );
 
     if (!sourceResult.rows[0]) {
@@ -480,6 +557,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
 
     return {
       ...mapRawSource(sourceResult.rows[0]),
+      topicIds: await fetchTopicIds(id),
       chunks: await listChunks(id),
     };
   }
@@ -488,6 +566,14 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
     const result = await query("delete from raw_sources where id = $1", [id]);
     return (result.rowCount ?? 0) > 0;
   }
+}
+
+async function fetchTopicIds(sourceId: string): Promise<string[]> {
+  const result = await query<{ topic_id: string }>(
+    "select topic_id::text from source_topics where source_id = $1",
+    [sourceId],
+  );
+  return result.rows.map((row) => row.topic_id);
 }
 
 async function listChunks(rawSourceId: string) {

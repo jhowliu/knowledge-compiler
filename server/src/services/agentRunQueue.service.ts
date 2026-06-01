@@ -272,7 +272,7 @@ export class AgentRunQueueService {
     const { extraction, provider } = await this.wikiIndexerService.extract(source);
     await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
     if (rawSource && this.rawSourceRepository) {
-      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction, extraction.domain);
+      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
     }
     await this.agentRunRepository.addEvent({
       agentRunId,

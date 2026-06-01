@@ -177,9 +177,10 @@
 - Agent Review Inbox modal validation: the Update Proposals page now shows only the inbox list by default; clicking a knowledge update opens a detail modal with source evidence, evidence chunks, approval actions, and a GitHub-style line diff using green `+` additions and red `-` removals when prior content is available. `npm run typecheck`, `npm run build`, and browser smoke pass with no console errors.
 - Agent Review listing validation: proposal updates now render as a compact row/list view instead of grid cards, while row click still opens the detail modal. `npm run typecheck`, `npm run build`, and browser smoke of the Done list/modal pass with no console errors.
 - Notes Graph cleanup validation: removed the bottom-left Notes / Approved links / Pending links stats overlay from the graph canvas. `npm run typecheck` and `npm run build` pass.
+- Phase A topics foundation validation: added topic/source-topic/block-topic migrations, nullable raw-source `subtype`, `extraction_evals`, Topics CRUD API, source topic assignment, and Sources UI topic picker with inline create/select/remove. `npm run typecheck`, `npm run test --workspace=server`, `npm run build`, and `npm run migrate --workspace=server` pass. Browser smoke on `http://localhost:5175/` verified Enter-to-create topic in the source editor with no console errors; the throwaway topic was deleted afterward.
 
 ## Next Target
-- After #54 merges, move the next focus to auth/user scoping or richer search filters.
+- After Phase A merges, continue with topic-aware agent compile context or richer link scoring.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

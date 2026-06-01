@@ -121,6 +121,14 @@ export class RawSourceService {
     return rawSource;
   }
 
+  async updateSourceTopics(id: string, topicIds: string[]) {
+    const rawSource = await this.rawSourceRepository.updateTopics(id, topicIds);
+    if (!rawSource) {
+      throw new AppError("Raw source not found", 404);
+    }
+    return rawSource;
+  }
+
   async moveRawSource(id: string, input: MoveRawSourceInput) {
     const rawSource = await this.rawSourceRepository.move(id, input);
     if (!rawSource) {
@@ -185,7 +193,6 @@ export class RawSourceService {
     return this.rawNoteRepository.create({
       userId: rawSource.userId,
       rawSourceId: rawSource.id,
-      domain: rawSource.domain,
       sourceType: rawSource.sourceType,
       sourceRole: rawSource.sourceRole,
       title: rawSource.title,

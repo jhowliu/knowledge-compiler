@@ -23,16 +23,20 @@ export type CreateRawNoteInput = {
   userId?: string | null;
   rawSourceId?: string | null;
   domain?: string | null;
+  subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
+  topicIds?: string[];
   title?: string | null;
   bodyMarkdown: string;
 };
 
 export type UpdateRawNoteInput = {
   domain?: string | null;
+  subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
+  topicIds?: string[];
   title?: string | null;
   bodyMarkdown: string;
 };

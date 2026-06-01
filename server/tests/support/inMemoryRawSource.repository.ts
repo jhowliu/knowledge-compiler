@@ -125,6 +125,28 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     );
   }
 
+  async deleteProject(projectId: string) {
+    const index = this.projects.findIndex((item) => item.id === projectId);
+    if (index === -1) {
+      return false;
+    }
+    this.projects.splice(index, 1);
+    return true;
+  }
+
+  async deleteFolder(projectId: string, folderId: string) {
+    const project = this.projects.find((item) => item.id === projectId);
+    if (!project) {
+      return false;
+    }
+    const index = project.folders.findIndex((item) => item.id === folderId);
+    if (index === -1) {
+      return false;
+    }
+    project.folders.splice(index, 1);
+    return true;
+  }
+
   async getById(id: string) {
     return this.sources.find((source) => source.id === id) ?? null;
   }

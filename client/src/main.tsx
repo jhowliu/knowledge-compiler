@@ -476,6 +476,30 @@ function App() {
     }
   }
 
+  async function deleteSourceProject(projectId: string) {
+    try {
+      await requestVoid(`/sources/projects/${projectId}`, { method: 'DELETE' })
+      setNotice('Project deleted.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to delete project')
+      setNotice(null)
+    }
+  }
+
+  async function deleteSourceFolder(projectId: string, folderId: string) {
+    try {
+      await requestVoid(`/sources/projects/${projectId}/folders/${folderId}`, { method: 'DELETE' })
+      setNotice('Folder deleted.')
+      setError(null)
+      await refresh()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to delete folder')
+      setNotice(null)
+    }
+  }
+
   async function moveRawSource(rawSourceId: string, input: { projectId: string; folderId: string | null }) {
     try {
       await requestJson(`/sources/${rawSourceId}/organization`, {
@@ -763,6 +787,8 @@ function App() {
             onCreateFolder={(projectId, name) => void createSourceFolder(projectId, name)}
             onCreateProject={(name) => void createSourceProject(name)}
             onDelete={() => void deleteSelectedRawNote()}
+            onDeleteFolder={(projectId, folderId) => void deleteSourceFolder(projectId, folderId)}
+            onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}

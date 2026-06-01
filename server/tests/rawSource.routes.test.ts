@@ -232,6 +232,103 @@ describe("raw source routes", () => {
     });
   });
 
+  test("DELETE /sources/projects/:projectId/folders/:folderId removes empty folders", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Research",
+    });
+    const folderResponse = await request(app)
+      .post(`/sources/projects/${projectResponse.body.sourceProject.id}/folders`)
+      .send({
+        name: "Empty folder",
+      });
+
+    const deleteResponse = await request(app).delete(
+      `/sources/projects/${projectResponse.body.sourceProject.id}/folders/${folderResponse.body.sourceFolder.id}`,
+    );
+    const organizationResponse = await request(app).get("/sources/organization");
+
+    expect(deleteResponse.status).toBe(204);
+    expect(organizationResponse.body.sourceOrganization.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: projectResponse.body.sourceProject.id,
+          folders: [],
+        }),
+      ]),
+    );
+  });
+
+  test("DELETE /sources/projects/:projectId removes empty custom projects", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Temporary project",
+    });
+
+    const deleteResponse = await request(app).delete(
+      `/sources/projects/${projectResponse.body.sourceProject.id}`,
+    );
+    const organizationResponse = await request(app).get("/sources/organization");
+
+    expect(deleteResponse.status).toBe(204);
+    expect(organizationResponse.body.sourceOrganization.projects).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: projectResponse.body.sourceProject.id,
+        }),
+      ]),
+    );
+  });
+
+  test("DELETE /sources projects and folders blocks non-empty or system nodes", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const app = createApp({
+      rawSourceRepository,
+      enablePhaseOneWorkflow: false,
+    });
+    const projectResponse = await request(app).post("/sources/projects").send({
+      name: "Research",
+    });
+    const folderResponse = await request(app)
+      .post(`/sources/projects/${projectResponse.body.sourceProject.id}/folders`)
+      .send({
+        name: "Papers",
+      });
+    await request(app).post("/sources").send({
+      projectId: projectResponse.body.sourceProject.id,
+      folderId: folderResponse.body.sourceFolder.id,
+      title: "Keep me",
+      bodyMarkdown: "This source keeps its folder and project non-empty.",
+    });
+
+    const nonEmptyFolderResponse = await request(app).delete(
+      `/sources/projects/${projectResponse.body.sourceProject.id}/folders/${folderResponse.body.sourceFolder.id}`,
+    );
+    const nonEmptyProjectResponse = await request(app).delete(
+      `/sources/projects/${projectResponse.body.sourceProject.id}`,
+    );
+    const defaultProjectResponse = await request(app).delete(
+      `/sources/projects/${rawSourceRepository.projects[0].id}`,
+    );
+
+    expect(nonEmptyFolderResponse.status).toBe(409);
+    expect(nonEmptyFolderResponse.body.error).toBe("Move sources before deleting this folder");
+    expect(nonEmptyProjectResponse.status).toBe(409);
+    expect(nonEmptyProjectResponse.body.error).toBe(
+      "Move sources and delete folders before deleting this project",
+    );
+    expect(defaultProjectResponse.status).toBe(409);
+    expect(defaultProjectResponse.body.error).toBe("Default source project cannot be deleted");
+  });
+
   test("PATCH /sources/:id/organization moves a source without re-chunking", async () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({

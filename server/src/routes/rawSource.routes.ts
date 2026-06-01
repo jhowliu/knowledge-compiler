@@ -20,6 +20,7 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
   router.get("/organization", controller.organization);
   router.post("/projects", validateBody(createSourceProjectSchema), controller.createProject);
   router.patch("/projects/:projectId", validateBody(renameSourceProjectSchema), controller.renameProject);
+  router.delete("/projects/:projectId", controller.deleteProject);
   router.post(
     "/projects/:projectId/folders",
     validateBody(createSourceFolderSchema),
@@ -30,6 +31,7 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
     validateBody(renameSourceFolderSchema),
     controller.renameFolder,
   );
+  router.delete("/projects/:projectId/folders/:folderId", controller.deleteFolder);
   router.post("/", validateBody(createRawSourceSchema), controller.create);
   router.get("/:id", controller.get);
   router.patch("/:id/organization", validateBody(moveRawSourceSchema), controller.move);

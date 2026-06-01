@@ -8,6 +8,8 @@ import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
+  applySourceTopics,
+  createTopic,
   loadAgentRunDetail,
   loadRawNoteIndexingTrace,
   loadWorkspaceData,
@@ -25,8 +27,10 @@ import type {
   Proposal,
   RawNote,
   RawNoteIndexingTrace,
+  RawSource,
   RawSourceRole,
   ThemeMode,
+  Topic,
   WorkspaceData,
 } from './types/domain'
 
@@ -40,6 +44,7 @@ function App() {
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [sourceRole, setSourceRole] = useState<RawSourceRole>('personal_note')
+  const [draftTopicIds, setDraftTopicIds] = useState<string[]>([])
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
@@ -162,6 +167,7 @@ function App() {
       title: title.trim() || null,
       sourceRole,
       sourceType: sourceRole === 'reference' ? 'paper' : 'manual',
+      topicIds: draftTopicIds,
       bodyMarkdown,
     }
   }
@@ -209,6 +215,7 @@ function App() {
       setTitle('')
       setBodyMarkdown('')
       setSourceRole('personal_note')
+      setDraftTopicIds([])
       setSelectedRawNoteId(null)
       setSelectedRawNoteTrace(null)
       setIsRawNoteDirty(false)
@@ -340,6 +347,7 @@ function App() {
     setTitle('')
     setBodyMarkdown('')
     setSourceRole('personal_note')
+    setDraftTopicIds([])
     setSelectedRawNoteId(null)
     setSelectedRawNoteTrace(null)
     setIsRawNoteDirty(false)
@@ -347,10 +355,14 @@ function App() {
   }
 
   function selectRawNote(rawNote: RawNote) {
+    const rawSource = rawNote.rawSourceId
+      ? workspaceData.rawSources.find((source) => source.id === rawNote.rawSourceId)
+      : null
     setSelectedRawNoteId(rawNote.id)
     setSelectedRawNoteTrace(null)
     setTitle(rawNote.title ?? '')
     setSourceRole(rawNote.sourceRole)
+    setDraftTopicIds(rawSource?.topicIds ?? [])
     setBodyMarkdown(rawNote.bodyMarkdown)
     setIsRawNoteDirty(false)
     setNotice(null)
@@ -370,6 +382,11 @@ function App() {
 
   function updateSourceRole(value: RawSourceRole) {
     setSourceRole(value)
+    setIsRawNoteDirty(true)
+  }
+
+  function updateDraftTopicIds(topicIds: string[]) {
+    setDraftTopicIds(topicIds)
     setIsRawNoteDirty(true)
   }
 
@@ -478,6 +495,35 @@ function App() {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to move source')
       setNotice(null)
+    }
+  }
+
+  async function addTopic(name: string): Promise<Topic | null> {
+    try {
+      const topic = await createTopic(name)
+      setNotice(`Topic "${name}" created.`)
+      setError(null)
+      await refresh()
+      return topic
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to create topic')
+      setNotice(null)
+      return null
+    }
+  }
+
+  async function applyTopicsToSource(rawSourceId: string, topicIds: string[]): Promise<RawSource | null> {
+    try {
+      const rawSource = await applySourceTopics(rawSourceId, topicIds)
+      setDraftTopicIds(rawSource.topicIds)
+      setNotice('Topics updated.')
+      setError(null)
+      await refresh()
+      return rawSource
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to update topics')
+      setNotice(null)
+      return null
     }
   }
 
@@ -731,9 +777,11 @@ function App() {
             isDirty={isRawNoteDirty}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
+            onApplyTopics={(rawSourceId, topicIds) => void applyTopicsToSource(rawSourceId, topicIds)}
             onBodyChange={updateDraftBody}
             onCreateFolder={(projectId, name) => void createSourceFolder(projectId, name)}
             onCreateProject={(name) => void createSourceProject(name)}
+            onCreateTopic={(name) => addTopic(name)}
             onDelete={() => void deleteSelectedRawNote()}
             onDeleteFolder={(projectId, folderId) => void deleteSourceFolder(projectId, folderId)}
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
@@ -749,6 +797,7 @@ function App() {
             onSourceRoleChange={updateSourceRole}
             onSubmit={submitRawNote}
             onTitleChange={updateDraftTitle}
+            onTopicIdsChange={updateDraftTopicIds}
             proposals={workspaceData.proposals}
             rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
@@ -758,6 +807,8 @@ function App() {
             themeMode={themeMode}
             title={title}
             titleInputRef={titleInputRef}
+            topicIds={draftTopicIds}
+            topics={workspaceData.topics}
           />
         )}
       </section>

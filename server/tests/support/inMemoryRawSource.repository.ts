@@ -38,8 +38,10 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
       projectId: input.projectId ?? this.projects[0].id,
       folderId: input.folderId ?? null,
       domain: input.domain ?? null,
+      subtype: input.subtype ?? null,
       sourceType: input.sourceType ?? "markdown",
       sourceRole: input.sourceRole ?? "personal_note",
+      topicIds: input.topicIds ?? [],
       title: input.title ?? null,
       bodyMarkdown: input.bodyMarkdown,
       metadata: input.metadata ?? {},
@@ -58,6 +60,15 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
       })),
     };
     this.sources.unshift(source);
+    return source;
+  }
+
+  async updateTopics(id: string, topicIds: string[]) {
+    const source = await this.getById(id);
+    if (!source) {
+      return null;
+    }
+    source.topicIds = topicIds;
     return source;
   }
 
@@ -197,8 +208,10 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     source.projectId = input.projectId ?? source.projectId ?? "default-project";
     source.folderId = Object.hasOwn(input, "folderId") ? input.folderId ?? null : source.folderId;
     source.domain = input.domain ?? null;
+    source.subtype = Object.hasOwn(input, "subtype") ? (input.subtype ?? null) : source.subtype;
     source.sourceType = input.sourceType ?? "markdown";
     source.sourceRole = input.sourceRole ?? "personal_note";
+    source.topicIds = input.topicIds ?? source.topicIds;
     source.title = input.title ?? null;
     source.bodyMarkdown = input.bodyMarkdown;
     source.metadata = input.metadata ?? {};
@@ -217,14 +230,13 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     return source;
   }
 
-  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+  async updateExtraction(id: string, extractedData: unknown) {
     const source = await this.getById(id);
     if (!source) {
       throw new Error("Raw source not found");
     }
 
     source.extractedData = extractedData;
-    source.domain = domain ?? source.domain;
     source.updatedAt = new Date("2026-05-24T01:00:00.000Z");
     return source;
   }

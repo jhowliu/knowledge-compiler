@@ -15,6 +15,8 @@ import type { RawNoteRepository } from "./repositories/rawNote.repository.js";
 import { PostgresRawNoteRepository } from "./repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "./repositories/rawSource.repository.js";
 import { PostgresRawSourceRepository } from "./repositories/rawSource.repository.js";
+import type { TopicRepository } from "./repositories/topic.repository.js";
+import { PostgresTopicRepository } from "./repositories/topic.repository.js";
 import { createAgentRunRoutes } from "./routes/agentRun.routes.js";
 import { createDashboardRoutes } from "./routes/dashboard.routes.js";
 import { createNoteLinkRoutes } from "./routes/noteLink.routes.js";
@@ -22,6 +24,7 @@ import { createNoteCardPositionRoutes } from "./routes/noteCardPosition.routes.j
 import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawNoteRoutes } from "./routes/rawNote.routes.js";
 import { createRawSourceRoutes } from "./routes/rawSource.routes.js";
+import { createTopicRoutes } from "./routes/topic.routes.js";
 import { AgentRunQueueService } from "./services/agentRunQueue.service.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import { NoteLinkService } from "./services/noteLink.service.js";
@@ -30,6 +33,7 @@ import { PhaseOneWorkflowService } from "./services/phaseOneWorkflow.service.js"
 import { ProposalService } from "./services/proposal.service.js";
 import { RawNoteService } from "./services/rawNote.service.js";
 import { RawSourceService } from "./services/rawSource.service.js";
+import { TopicService } from "./services/topic.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 
@@ -41,6 +45,7 @@ export type AppDependencies = {
   noteCardPositionRepository?: NoteCardPositionRepository;
   proposalRepository?: ProposalRepository;
   agentRunRepository?: AgentRunRepository;
+  topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
   enablePhaseOneWorkflow?: boolean;
 };
@@ -54,6 +59,8 @@ export function createApp(dependencies: AppDependencies = {}) {
         ? null
         : new PostgresRawSourceRepository()
       : dependencies.rawSourceRepository;
+  const topicRepository = dependencies.topicRepository ?? new PostgresTopicRepository();
+  const topicService = new TopicService(topicRepository);
   const knowledgeRepository = dependencies.knowledgeRepository ?? new PostgresKnowledgeRepository();
   const noteLinkRepository = dependencies.noteLinkRepository ?? new PostgresNoteLinkRepository();
   const noteCardPositionRepository =
@@ -109,6 +116,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     response.json({ ok: true });
   });
 
+  app.use("/topics", createTopicRoutes(topicService));
   app.use("/raw-notes", createRawNoteRoutes(rawNoteService));
   if (rawSourceService) {
     app.use("/sources", createRawSourceRoutes(rawSourceService));

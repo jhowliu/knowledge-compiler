@@ -16,7 +16,9 @@ import {
   Save,
   Sparkles,
   Sun,
+  Tag,
   Trash2,
+  X,
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
 import type {
@@ -28,6 +30,7 @@ import type {
   RawSourceRole,
   SourceProject,
   ThemeMode,
+  Topic,
 } from '../../types/domain'
 
 type SourceLifecycle = {
@@ -184,13 +187,16 @@ function SourceSidebarItem({
   note,
   onSelect,
   source,
+  topics,
 }: {
   isSelected: boolean
   lifecycle: SourceLifecycle
   note: RawNote
   onSelect: () => void
   source: RawSource | null
+  topics: Topic[]
 }) {
+  const sourceTopics = topics.filter((topic) => source?.topicIds.includes(topic.id))
   return (
     <button
       className={`ml-6 w-[calc(100%-1.5rem)] rounded-md border px-2.5 py-2 text-left transition ${
@@ -216,6 +222,15 @@ function SourceSidebarItem({
             <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}>
               {lifecycle.label}
             </span>
+            {sourceTopics.map((topic) => (
+              <span
+                className="rounded-full border border-violet/30 bg-violet/10 px-1.5 py-0.5 text-[9px] font-bold text-violet"
+                key={topic.id}
+                style={topic.color ? { borderColor: `${topic.color}40`, backgroundColor: `${topic.color}18`, color: topic.color } : undefined}
+              >
+                {topic.name}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -236,12 +251,14 @@ export function RawNoteEditorPage({
   rawNotes,
   rawSources,
   sourceProjects,
+  topics,
   proposals,
   agentRuns,
   selectedRawNoteId,
   isDirty,
   title,
   sourceRole,
+  topicIds,
   bodyMarkdown,
   isSubmitting,
   notice,
@@ -251,6 +268,7 @@ export function RawNoteEditorPage({
   onTitleChange,
   onBodyChange,
   onSourceRoleChange,
+  onTopicIdsChange,
   onNewNote,
   onSelectRawNote,
   onSave,
@@ -263,6 +281,8 @@ export function RawNoteEditorPage({
   onDeleteProject,
   onDeleteFolder,
   onMoveSource,
+  onApplyTopics,
+  onCreateTopic,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
   onThemeToggle,
@@ -271,12 +291,14 @@ export function RawNoteEditorPage({
   rawNotes: RawNote[]
   rawSources: RawSource[]
   sourceProjects: SourceProject[]
+  topics: Topic[]
   proposals: Proposal[]
   agentRuns: AgentRun[]
   selectedRawNoteId: string | null
   isDirty: boolean
   title: string
   sourceRole: RawSourceRole
+  topicIds: string[]
   bodyMarkdown: string
   isSubmitting: boolean
   notice: string | null
@@ -286,6 +308,7 @@ export function RawNoteEditorPage({
   onTitleChange: (value: string) => void
   onBodyChange: (value: string) => void
   onSourceRoleChange: (value: RawSourceRole) => void
+  onTopicIdsChange: (topicIds: string[]) => void
   onNewNote: () => void
   onSelectRawNote: (note: RawNote) => void
   onSave: () => void
@@ -298,6 +321,8 @@ export function RawNoteEditorPage({
   onDeleteProject: (projectId: string) => void
   onDeleteFolder: (projectId: string, folderId: string) => void
   onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
+  onApplyTopics: (rawSourceId: string, topicIds: string[]) => void
+  onCreateTopic: (name: string) => Promise<Topic | null>
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
   onThemeToggle: () => void
@@ -314,6 +339,7 @@ export function RawNoteEditorPage({
   const [moveFolderId, setMoveFolderId] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [expandedSourceGroups, setExpandedSourceGroups] = useState<string[]>(['all'])
+  const [topicInput, setTopicInput] = useState('')
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
   const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
   const selectedRawSource = selectedRawNote?.rawSourceId
@@ -360,6 +386,10 @@ export function RawNoteEditorPage({
   }, [selectedRawSource?.folderId, selectedRawSource?.projectId, sourceProjects])
 
   useEffect(() => {
+    setTopicInput('')
+  }, [selectedRawSource?.id])
+
+  useEffect(() => {
     setRenameProjectName(selectedProject?.name ?? '')
   }, [selectedProject?.id, selectedProject?.name])
 
@@ -404,6 +434,16 @@ export function RawNoteEditorPage({
     )
 
   const activeProposal = indexingTrace?.proposals[0] ?? null
+  const pendingTopicsChanged =
+    selectedRawSource !== null &&
+    JSON.stringify([...topicIds].sort()) !==
+      JSON.stringify([...(selectedRawSource?.topicIds ?? [])].sort())
+  const filteredTopics = topics.filter((topic) =>
+    topicInput.trim() ? topic.name.toLowerCase().includes(topicInput.toLowerCase()) : true,
+  )
+  const canCreateNewTopic =
+    topicInput.trim().length > 0 &&
+    !topics.some((topic) => topic.name.toLowerCase() === topicInput.trim().toLowerCase())
   const canMoveSource =
     Boolean(selectedRawSource) &&
     Boolean(moveProjectId) &&
@@ -513,6 +553,7 @@ export function RawNoteEditorPage({
                     note={note}
                     onSelect={() => onSelectRawNote(note)}
                     source={source}
+                    topics={topics}
                   />
                 ))
               ) : (
@@ -572,6 +613,7 @@ export function RawNoteEditorPage({
                               note={note}
                               onSelect={() => onSelectRawNote(note)}
                               source={source}
+                              topics={topics}
                             />
                           ))
                         ) : (
@@ -612,6 +654,7 @@ export function RawNoteEditorPage({
                                     note={note}
                                     onSelect={() => onSelectRawNote(note)}
                                     source={source}
+                                    topics={topics}
                                   />
                                 ))
                               ) : (
@@ -1049,6 +1092,114 @@ export function RawNoteEditorPage({
           <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
             <p className="text-[12px] font-extrabold text-ink">Source metadata</p>
             <div className="mt-3 space-y-2 text-xs leading-5 text-gray-600">
+              <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Tag size={11} className="text-gray-500" />
+                  <p className="text-[11px] font-bold uppercase text-gray-500">Topics</p>
+                </div>
+                {topicIds.length > 0 ? (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {topicIds.map((topicId) => {
+                      const topic = topics.find((t) => t.id === topicId)
+                      if (!topic) return null
+                      return (
+                        <span
+                          className="flex items-center gap-1 rounded-full border border-violet/30 bg-violet/10 py-0.5 pl-2 pr-1 text-[10px] font-bold text-violet"
+                          key={topicId}
+                          style={topic.color ? { borderColor: `${topic.color}40`, backgroundColor: `${topic.color}18`, color: topic.color } : undefined}
+                        >
+                          {topic.name}
+                          <button
+                            className="grid h-3.5 w-3.5 place-items-center rounded-full hover:bg-black/10"
+                            onClick={() => onTopicIdsChange(topicIds.filter((id) => id !== topicId))}
+                            type="button"
+                          >
+                            <X size={9} />
+                          </button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                ) : null}
+                <input
+                  aria-label="Search or create topic"
+                  className="h-7 w-full rounded-md border border-gray-200 bg-slate-50 px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400 focus:border-violet/40 focus:bg-white"
+                  onChange={(event) => setTopicInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || !canCreateNewTopic) return
+                    event.preventDefault()
+                    const trimmed = topicInput.trim()
+                    void (async () => {
+                      const newTopic = await onCreateTopic(trimmed)
+                      if (newTopic) {
+                        onTopicIdsChange([...topicIds, newTopic.id])
+                      }
+                      setTopicInput('')
+                    })()
+                  }}
+                  placeholder="Search or create..."
+                  value={topicInput}
+                />
+                {topicInput.trim() ? (
+                  <div className="mt-1 max-h-28 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
+                    {filteredTopics
+                      .filter((topic) => !topicIds.includes(topic.id))
+                      .map((topic) => (
+                        <button
+                          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs font-semibold text-ink hover:bg-slate-50"
+                          key={topic.id}
+                          onClick={() => {
+                            onTopicIdsChange([...topicIds, topic.id])
+                            setTopicInput('')
+                          }}
+                          type="button"
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full bg-violet"
+                            style={topic.color ? { backgroundColor: topic.color } : undefined}
+                          />
+                          {topic.name}
+                        </button>
+                      ))}
+                    {canCreateNewTopic ? (
+                      <button
+                        className="flex w-full items-center gap-2 border-t border-gray-100 px-2 py-1.5 text-left text-xs font-semibold text-violet hover:bg-slate-50"
+                        onClick={async () => {
+                          const trimmed = topicInput.trim()
+                          const newTopic = await onCreateTopic(trimmed)
+                          if (newTopic) {
+                            onTopicIdsChange([...topicIds, newTopic.id])
+                          }
+                          setTopicInput('')
+                        }}
+                        type="button"
+                      >
+                        <Plus size={12} />
+                        Create "{topicInput.trim()}"
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {selectedRawSource ? (
+                  <button
+                    className={`mt-2 h-7 w-full rounded-md px-2 text-xs font-extrabold ${
+                      pendingTopicsChanged
+                        ? 'bg-ink text-white'
+                        : 'border border-gray-200 bg-slate-100 text-gray-500'
+                    }`}
+                    disabled={isSubmitting || !pendingTopicsChanged}
+                    onClick={() => onApplyTopics(selectedRawSource.id, topicIds)}
+                    type="button"
+                  >
+                    {pendingTopicsChanged ? 'Apply topics' : 'Topics up to date'}
+                  </button>
+                ) : (
+                  <p className="mt-2 text-[11px] leading-5 text-gray-500">
+                    Topics will be saved with this source.
+                  </p>
+                )}
+              </div>
+
               {selectedRawSource ? (
                 <div className="rounded-md border border-gray-200 bg-white p-3">
                   <p className="mb-2 text-[11px] font-bold uppercase text-gray-500">Location</p>
@@ -1102,6 +1253,7 @@ export function RawNoteEditorPage({
                   </div>
                 </div>
               ) : null}
+
               <p>
                 <span className="font-bold text-gray-500">Role:</span>{' '}
                 {roleLabel(sourceRole)}

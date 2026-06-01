@@ -24,9 +24,10 @@ export class RawNoteService {
       ? await this.rawSourceRepository.create(
           {
             userId: input.userId,
-            domain: input.domain,
+            subtype: input.subtype,
             sourceType: input.sourceType ?? "markdown",
             sourceRole,
+            topicIds: input.topicIds,
             title: input.title,
             bodyMarkdown: input.bodyMarkdown,
             metadata: { createdVia: "raw_notes" },
@@ -71,9 +72,10 @@ export class RawNoteService {
       await this.rawSourceRepository.update(
         existingRawNote.rawSourceId,
         {
-          domain: input.domain,
+          subtype: input.subtype,
           sourceType: input.sourceType ?? existingRawNote.sourceType,
           sourceRole,
+          topicIds: input.topicIds,
           title: input.title,
           bodyMarkdown: input.bodyMarkdown,
           metadata: { updatedVia: "raw_notes" },

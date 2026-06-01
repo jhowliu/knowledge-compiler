@@ -8,8 +8,10 @@ export type RawSource = {
   projectId: string | null;
   folderId: string | null;
   domain: string | null;
+  subtype: string | null;
   sourceType: string;
   sourceRole: RawSourceRole;
+  topicIds: string[];
   title: string | null;
   bodyMarkdown: string;
   metadata: Record<string, unknown>;
@@ -38,8 +40,10 @@ export type CreateRawSourceInput = {
   projectId?: string | null;
   folderId?: string | null;
   domain?: string | null;
+  subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
+  topicIds?: string[];
   title?: string | null;
   bodyMarkdown: string;
   metadata?: Record<string, unknown>;
@@ -49,8 +53,10 @@ export type UpdateRawSourceInput = {
   projectId?: string | null;
   folderId?: string | null;
   domain?: string | null;
+  subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
+  topicIds?: string[];
   title?: string | null;
   bodyMarkdown: string;
   metadata?: Record<string, unknown>;

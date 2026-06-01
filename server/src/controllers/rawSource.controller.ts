@@ -121,6 +121,19 @@ export class RawSourceController {
     }
   };
 
+  updateTopics = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.json({
+        rawSource: await this.rawSourceService.updateSourceTopics(
+          requireStringParam(request, "id"),
+          request.body.topicIds,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   move = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.json({

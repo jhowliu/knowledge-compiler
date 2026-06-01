@@ -1,3 +1,11 @@
+export type Topic = {
+  id: string
+  userId: string | null
+  name: string
+  color: string | null
+  createdAt: string
+}
+
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals'
@@ -32,8 +40,10 @@ export type RawSource = {
   projectId: string | null
   folderId: string | null
   domain: string | null
+  subtype: string | null
   sourceType: string
   sourceRole: RawSourceRole
+  topicIds: string[]
   title: string | null
   bodyMarkdown: string
   metadata: Record<string, unknown>
@@ -242,6 +252,7 @@ export type WorkspaceData = {
   rawNotes: RawNote[]
   rawSources: RawSource[]
   sourceOrganization: SourceOrganization
+  topics: Topic[]
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
   noteLinks: NoteLink[]

@@ -12,6 +12,7 @@ import type {
   RawNoteIndexingTrace,
   RawSource,
   SourceOrganization,
+  Topic,
   WorkspaceData,
 } from '../types/domain'
 
@@ -67,6 +68,7 @@ async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
     rawNotes,
     rawSources,
     sourceOrganization,
+    topics,
     proposals,
     compiledNotes,
     noteLinks,
@@ -77,6 +79,7 @@ async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
       requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ rawSources: RawSource[] }>('/sources'),
       requestJson<{ sourceOrganization: SourceOrganization }>('/sources/organization'),
+      requestJson<{ topics: Topic[] }>('/topics'),
       requestJson<{ proposals: Proposal[] }>('/update-proposals'),
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
@@ -90,12 +93,46 @@ async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
     rawNotes: rawNotes.rawNotes,
     rawSources: rawSources.rawSources,
     sourceOrganization: sourceOrganization.sourceOrganization,
+    topics: topics.topics,
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
     noteLinks: noteLinks.noteLinks,
     noteCardPositions: noteCardPositions.noteCardPositions,
     agentRuns: agentRuns.agentRuns,
   }
+}
+
+export async function listTopics() {
+  const result = await requestJson<{ topics: Topic[] }>('/topics')
+  return result.topics
+}
+
+export async function createTopic(name: string, color?: string | null) {
+  const result = await requestJson<{ topic: Topic }>('/topics', {
+    method: 'POST',
+    body: JSON.stringify({ name, color }),
+  })
+  return result.topic
+}
+
+export async function updateTopic(id: string, updates: { name?: string; color?: string | null }) {
+  const result = await requestJson<{ topic: Topic }>(`/topics/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+  return result.topic
+}
+
+export async function deleteTopic(id: string) {
+  await requestVoid(`/topics/${id}`, { method: 'DELETE' })
+}
+
+export async function applySourceTopics(sourceId: string, topicIds: string[]) {
+  const result = await requestJson<{ rawSource: RawSource }>(`/sources/${sourceId}/topics`, {
+    method: 'PATCH',
+    body: JSON.stringify({ topicIds }),
+  })
+  return result.rawSource
 }
 
 export async function loadRawNoteIndexingTrace(rawNoteId: string) {

@@ -7,9 +7,10 @@ export const createRawSourceSchema = z.object({
   userId: z.string().uuid().nullable().optional(),
   projectId: z.string().uuid().nullable().optional(),
   folderId: z.string().uuid().nullable().optional(),
-  domain: z.string().min(1).nullable().optional(),
+  subtype: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),
+  topicIds: z.array(z.string().uuid()).optional(),
   title: z.string().min(1).nullable().optional(),
   bodyMarkdown: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -18,12 +19,17 @@ export const createRawSourceSchema = z.object({
 export const updateRawSourceSchema = z.object({
   projectId: z.string().uuid().nullable().optional(),
   folderId: z.string().uuid().nullable().optional(),
-  domain: z.string().min(1).nullable().optional(),
+  subtype: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),
+  topicIds: z.array(z.string().uuid()).optional(),
   title: z.string().min(1).nullable().optional(),
   bodyMarkdown: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const updateSourceTopicsSchema = z.object({
+  topicIds: z.array(z.string().uuid()),
 });
 
 export const createSourceProjectSchema = z.object({

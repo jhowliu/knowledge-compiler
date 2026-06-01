@@ -168,7 +168,12 @@ export function createApp(dependencies: AppDependencies = {}) {
   if (phaseOneWorkflowService) {
     app.use(
       "/agent-runs",
-      createAgentRunRoutes(phaseOneWorkflowService, agentRunRepository, agentRunQueueService),
+      createAgentRunRoutes(
+        phaseOneWorkflowService,
+        agentRunRepository,
+        agentRunQueueService,
+        extractionEvalRepository,
+      ),
     );
   }
   app.use("/update-proposals", createProposalRoutes(proposalService));

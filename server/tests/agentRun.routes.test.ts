@@ -6,6 +6,7 @@ import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.reposit
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
+import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 
 describe("agent run routes", () => {
   test("enqueues a reindex_links run and lists recent agent activity", async () => {
@@ -176,5 +177,58 @@ describe("agent run routes", () => {
 
     expect(response.status).toBe(400);
     expect(agentRunRepository.agentRuns).toHaveLength(1);
+  });
+
+  test("GET /agent-runs/:id/eval-result returns extraction eval for the run", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+    const agentRun = await agentRunRepository.enqueue({
+      runType: "compile_raw_note",
+      input: { rawNoteId: "raw-note-1" },
+    });
+    await extractionEvalRepository.create({
+      agentRunId: agentRun.id,
+      sourceId: "raw-source-1",
+      verdict: "warn",
+      coverageScore: 0.75,
+      groundingScore: 0.5,
+      warnings: [
+        {
+          type: "ungrounded",
+          message: "One item needs evidence.",
+          severity: "high",
+          affected_item_index: 0,
+        },
+      ],
+      rawJudgeOutput: {
+        summary: "Proposal needs review before approval.",
+      },
+    });
+    const app = createApp({
+      agentRunRepository,
+      extractionEvalRepository,
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+    });
+
+    const response = await request(app).get(`/agent-runs/${agentRun.id}/eval-result`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.extractionEval).toMatchObject({
+      agentRunId: agentRun.id,
+      sourceId: "raw-source-1",
+      verdict: "warn",
+      coverageScore: 0.75,
+      groundingScore: 0.5,
+      warnings: [
+        expect.objectContaining({
+          type: "ungrounded",
+          message: "One item needs evidence.",
+        }),
+      ],
+      rawJudgeOutput: {
+        summary: "Proposal needs review before approval.",
+      },
+    });
   });
 });

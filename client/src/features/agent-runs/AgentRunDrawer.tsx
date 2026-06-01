@@ -35,6 +35,14 @@ export function AgentRunDrawer({
   const generatedLinks = agentRun
     ? data.noteLinks.filter((link) => link.createdByAgentRunId === agentRun.id)
     : []
+  const extractionEval = detail?.extractionEval ?? null
+  const evalWarnings = Array.isArray(extractionEval?.warnings)
+    ? extractionEval.warnings.filter(isRecord)
+    : []
+  const judgeSummary = isRecord(extractionEval?.rawJudgeOutput) &&
+    typeof extractionEval.rawJudgeOutput.summary === 'string'
+    ? extractionEval.rawJudgeOutput.summary
+    : null
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
@@ -172,6 +180,74 @@ export function AgentRunDrawer({
                 ) : (
                   <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
                     This run did not report a proposal id.
+                  </p>
+                )}
+              </section>
+
+              <section className="mb-6">
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Eval result</h3>
+                {extractionEval ? (
+                  <article className="rounded-lg border border-[#303030] bg-[#202020] p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-[13px] font-extrabold text-white">Judge verdict</p>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        extractionEval.verdict === 'pass'
+                          ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200'
+                          : extractionEval.verdict === 'warn'
+                            ? 'border-amber-800 bg-amber-950/40 text-amber-200'
+                            : 'border-red-800 bg-red-950/40 text-red-200'
+                      }`}>
+                        {extractionEval.verdict}
+                      </span>
+                    </div>
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-md border border-[#303030] bg-[#181818] p-2">
+                        <p className="text-[10px] font-bold uppercase text-gray-500">Coverage</p>
+                        <p className="mt-1 text-xs font-extrabold text-gray-100">
+                          {extractionEval.coverageScore === null
+                            ? 'Unknown'
+                            : `${Math.round(extractionEval.coverageScore * 100)}%`}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-[#303030] bg-[#181818] p-2">
+                        <p className="text-[10px] font-bold uppercase text-gray-500">Grounding</p>
+                        <p className="mt-1 text-xs font-extrabold text-gray-100">
+                          {extractionEval.groundingScore === null
+                            ? 'Unknown'
+                            : `${Math.round(extractionEval.groundingScore * 100)}%`}
+                        </p>
+                      </div>
+                    </div>
+                    {judgeSummary ? (
+                      <p className="mb-3 rounded-md border border-[#303030] bg-[#181818] p-2 text-xs leading-5 text-gray-300">
+                        {judgeSummary}
+                      </p>
+                    ) : null}
+                    {evalWarnings.length ? (
+                      <ul className="space-y-2">
+                        {evalWarnings.map((warning, index) => (
+                          <li className="rounded-md border border-[#303030] bg-[#181818] p-2 text-xs leading-5 text-gray-300" key={index}>
+                            <span className="font-bold uppercase text-amber-200">
+                              {typeof warning.type === 'string' ? warning.type.replaceAll('_', ' ') : 'warning'}
+                            </span>
+                            {typeof warning.affected_item_index === 'number' ? (
+                              <span className="text-gray-500"> · item {warning.affected_item_index + 1}</span>
+                            ) : null}
+                            <span className="block">
+                              {typeof warning.message === 'string'
+                                ? warning.message
+                                : compactJson(warning)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs leading-5 text-gray-500">No eval warnings recorded.</p>
+                    )}
+                  </article>
+                ) : (
+                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
+                    No eval result is attached to this run.
                   </p>
                 )}
               </section>

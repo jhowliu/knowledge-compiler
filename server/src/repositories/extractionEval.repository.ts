@@ -37,6 +37,7 @@ export interface ExtractionEvalRepository {
     warnings: unknown;
     rawJudgeOutput: unknown;
   }): Promise<ExtractionEval>;
+  getByAgentRunId(agentRunId: string): Promise<ExtractionEval | null>;
 }
 
 export class NoopExtractionEvalRepository implements ExtractionEvalRepository {
@@ -60,6 +61,10 @@ export class NoopExtractionEvalRepository implements ExtractionEvalRepository {
       rawJudgeOutput: input.rawJudgeOutput,
       createdAt: new Date(),
     };
+  }
+
+  async getByAgentRunId(): Promise<ExtractionEval | null> {
+    return null;
   }
 }
 
@@ -98,5 +103,20 @@ export class PostgresExtractionEvalRepository implements ExtractionEvalRepositor
       ],
     );
     return mapExtractionEval(result.rows[0]);
+  }
+
+  async getByAgentRunId(agentRunId: string) {
+    const result = await query<ExtractionEvalRow>(
+      `
+        select *
+        from extraction_evals
+        where agent_run_id = $1
+        order by created_at desc
+        limit 1
+      `,
+      [agentRunId],
+    );
+
+    return result.rows[0] ? mapExtractionEval(result.rows[0]) : null;
   }
 }

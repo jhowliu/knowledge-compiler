@@ -27,4 +27,8 @@ export class InMemoryExtractionEvalRepository implements ExtractionEvalRepositor
     this.extractionEvals.push(extractionEval);
     return extractionEval;
   }
+
+  async getByAgentRunId(agentRunId: string) {
+    return [...this.extractionEvals].reverse().find((evalResult) => evalResult.agentRunId === agentRunId) ?? null;
+  }
 }

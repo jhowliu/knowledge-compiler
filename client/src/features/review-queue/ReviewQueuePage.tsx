@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
   Check,
+  CheckCircle2,
   ChevronDown,
   FileText,
   GitBranch,
@@ -27,6 +29,57 @@ function statusClass(status: string) {
   if (status === 'approved') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
   if (status === 'rejected') return 'border-red-200 bg-red-50 text-red-700'
   return 'border-violet/30 bg-violet/10 text-violet'
+}
+
+function conflictResolutionLabel(resolution: ProposalItem['conflictResolution']) {
+  if (resolution === 'update') {
+    return {
+      className: 'border-sky-200 bg-sky-50 text-sky-700',
+      label: 'Will update existing block',
+    }
+  }
+  if (resolution === 'keep_both') {
+    return {
+      className: 'border-gray-200 bg-gray-50 text-gray-600',
+      label: 'Will create alongside existing block',
+    }
+  }
+  if (resolution === 'needs_user_decision') {
+    return {
+      className: 'border-amber-200 bg-amber-50 text-amber-800',
+      label: 'Needs your decision',
+    }
+  }
+  return null
+}
+
+function evalBadge(item: ProposalItem) {
+  if (item.evalVerdict === 'pass') {
+    return {
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      icon: CheckCircle2,
+      label: 'Eval pass',
+    }
+  }
+  if (item.evalVerdict === 'warn') {
+    return {
+      className: 'border-amber-200 bg-amber-50 text-amber-800',
+      icon: AlertTriangle,
+      label: 'Eval warn',
+    }
+  }
+  if (item.evalVerdict === 'fail') {
+    return {
+      className: 'border-red-200 bg-red-50 text-red-700',
+      icon: AlertTriangle,
+      label: 'Eval fail',
+    }
+  }
+  return null
+}
+
+function itemRequiresAcknowledgement(item: ProposalItem) {
+  return item.conflictResolution === 'needs_user_decision' || item.evalVerdict === 'fail'
 }
 
 function sourceTitle(rawNote: RawNote | undefined, rawSource: RawSource | undefined) {
@@ -135,6 +188,87 @@ function MetadataPill({ children }: { children: ReactNode }) {
     <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
       {children}
     </span>
+  )
+}
+
+function ProposalItemBadges({ item }: { item: ProposalItem }) {
+  const resolution = conflictResolutionLabel(item.conflictResolution)
+  const verdict = evalBadge(item)
+  const VerdictIcon = verdict?.icon
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {item.conflictDetected ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">
+          <AlertTriangle size={12} />
+          Conflict detected
+        </span>
+      ) : null}
+      {resolution ? (
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${resolution.className}`}>
+          {resolution.label}
+        </span>
+      ) : null}
+      {verdict && VerdictIcon ? (
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${verdict.className}`}>
+          <VerdictIcon size={12} />
+          {verdict.label}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function ProposalItemWarnings({ item }: { item: ProposalItem }) {
+  const shouldShowEvalDetails = item.evalVerdict === 'warn' || item.evalVerdict === 'fail'
+  const shouldShowConflictDetails = item.conflictDetected && item.conflictSummary
+
+  if (!shouldShowEvalDetails && !shouldShowConflictDetails && !item.incompleteReasoning) {
+    return null
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {shouldShowConflictDetails ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">
+            Conflict summary
+          </p>
+          <p className="mt-1 text-xs leading-5 text-amber-900">{item.conflictSummary}</p>
+        </div>
+      ) : null}
+      {shouldShowEvalDetails ? (
+        <div className={`rounded-lg border p-3 ${
+          item.evalVerdict === 'fail'
+            ? 'border-red-200 bg-red-50'
+            : 'border-amber-200 bg-amber-50'
+        }`}>
+          <p className={`text-[11px] font-bold uppercase tracking-wide ${
+            item.evalVerdict === 'fail' ? 'text-red-700' : 'text-amber-800'
+          }`}>
+            Eval judge
+          </p>
+          <ul className={`mt-1 list-disc space-y-1 pl-4 text-xs leading-5 ${
+            item.evalVerdict === 'fail' ? 'text-red-800' : 'text-amber-900'
+          }`}>
+            <li>
+              Verdict: <span className="font-bold uppercase">{item.evalVerdict}</span>
+            </li>
+            {item.evalVerdict === 'fail' ? (
+              <li>This item requires explicit acknowledgement before applying.</li>
+            ) : (
+              <li>Review the generated content and source evidence before applying.</li>
+            )}
+            {item.incompleteReasoning ? <li>The agent marked this reasoning as incomplete.</li> : null}
+          </ul>
+        </div>
+      ) : null}
+      {item.incompleteReasoning && !shouldShowEvalDetails ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+          The agent marked this reasoning as incomplete.
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -294,8 +428,10 @@ function KnowledgeUpdateCard({
         <MetadataPill>{knowledgeType}</MetadataPill>
         {domain ? <MetadataPill>{domain}</MetadataPill> : null}
       </div>
+      <ProposalItemBadges item={item} />
+      <ProposalItemWarnings item={item} />
       {item.rationale ? (
-        <p className="mb-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
+        <p className="mb-3 mt-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
       ) : null}
       {body ? (
         <KnowledgeDiff afterMarkdown={body} beforeMarkdown={before} />
@@ -355,6 +491,21 @@ function ReviewDetailModal({
   const sourceChunks = sourceRawSource?.chunks ?? []
   const selectedKnowledgeItems = knowledgeItems(proposal)
   const selectedLinkItems = linkItems(proposal)
+  const gatedItems = proposal.items.filter(itemRequiresAcknowledgement)
+  const [acknowledgedItemIds, setAcknowledgedItemIds] = useState<string[]>([])
+  const allRequiredItemsAcknowledged = gatedItems.every((item) => acknowledgedItemIds.includes(item.id))
+
+  useEffect(() => {
+    setAcknowledgedItemIds([])
+  }, [proposal.id])
+
+  function toggleAcknowledgement(itemId: string) {
+    setAcknowledgedItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId],
+    )
+  }
 
   return (
     <div
@@ -386,7 +537,11 @@ function ReviewDetailModal({
               </button>
               <button
                 className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-50 sm:flex-none"
-                disabled={isSubmitting || proposal.status !== 'pending'}
+                disabled={
+                  isSubmitting ||
+                  proposal.status !== 'pending' ||
+                  (gatedItems.length > 0 && !allRequiredItemsAcknowledged)
+                }
                 onClick={() => onApproveProposal(proposal.id)}
                 type="button"
               >
@@ -451,6 +606,40 @@ function ReviewDetailModal({
                   This proposal does not contain a knowledge note update.
                 </p>
               )}
+              {gatedItems.length ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-extrabold text-amber-900">
+                    Explicit acknowledgement required
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-amber-900">
+                    Items with unresolved conflicts or failed eval verdicts are not safe for automatic apply.
+                    Review each item below before applying this proposal.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {gatedItems.map((item) => (
+                      <label
+                        className="flex items-start gap-2 rounded-md border border-amber-200 bg-white/70 p-3 text-xs leading-5 text-amber-950"
+                        key={item.id}
+                      >
+                        <input
+                          checked={acknowledgedItemIds.includes(item.id)}
+                          className="mt-1"
+                          onChange={() => toggleAcknowledgement(item.id)}
+                          type="checkbox"
+                        />
+                        <span>
+                          {item.evalVerdict === 'fail'
+                            ? 'I have reviewed the eval warnings and accept this proposal'
+                            : 'I have read the conflict summary and understand the implications'}
+                          <span className="mt-1 block font-bold text-amber-900">
+                            {payloadLabel(item.payload)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <section className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
@@ -526,13 +715,17 @@ function ReviewDetailModal({
                       {item.rationale ? (
                         <p className="mb-3 text-sm leading-6 text-gray-600">{item.rationale}</p>
                       ) : null}
+                      <ProposalItemBadges item={item} />
+                      <ProposalItemWarnings item={item} />
                       {payloadText(item.payload, 'bodyMarkdown') ? (
-                        <KnowledgeDiff
-                          afterMarkdown={payloadText(item.payload, 'bodyMarkdown')}
-                          beforeMarkdown={existingCompiledNoteFor(item, compiledNotes)?.bodyMarkdown ?? ''}
-                        />
+                        <div className="mt-3">
+                          <KnowledgeDiff
+                            afterMarkdown={payloadText(item.payload, 'bodyMarkdown')}
+                            beforeMarkdown={existingCompiledNoteFor(item, compiledNotes)?.bodyMarkdown ?? ''}
+                          />
+                        </div>
                       ) : (
-                        <p className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
+                        <p className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
                           {payloadText(item.payload, 'rationale', 'This update will be applied after approval.')}
                         </p>
                       )}
@@ -799,6 +992,9 @@ export function ReviewQueuePage({
                   ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId)
                   : undefined
                 const rawSource = proposalRawSource(proposal, source, rawSources)
+                const hasConflict = proposal.items.some((item) => item.conflictDetected)
+                const hasFailedEval = proposal.items.some((item) => item.evalVerdict === 'fail')
+                const hasWarnEval = proposal.items.some((item) => item.evalVerdict === 'warn')
                 return (
                   <button
                     className={`grid w-full gap-3 border-b border-gray-100 px-4 py-3 text-left transition last:border-b-0 lg:grid-cols-[minmax(220px,1.4fr)_minmax(160px,1fr)_150px_110px] lg:items-center ${
@@ -836,6 +1032,20 @@ export function ReviewQueuePage({
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
                         {rawSource?.chunks.length ?? 0} chunks
                       </span>
+                      {hasConflict ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                          Conflict
+                        </span>
+                      ) : null}
+                      {hasFailedEval ? (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase text-red-700">
+                          Eval fail
+                        </span>
+                      ) : hasWarnEval ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                          Eval warn
+                        </span>
+                      ) : null}
                     </div>
                     <div className="flex items-center justify-between gap-2 lg:justify-start">
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(proposal.status)}`}>

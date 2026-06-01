@@ -787,7 +787,13 @@ export function ReviewQueuePage({
               <EmptyState activeTab={activeTab} />
             )
           ) : activeList.length ? (
-            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              <div className="grid grid-cols-[minmax(220px,1.4fr)_minmax(160px,1fr)_150px_110px] gap-4 border-b border-gray-200 bg-slate-50 px-4 py-3 text-[11px] font-extrabold uppercase tracking-wide text-gray-500 max-lg:hidden">
+                <span>Source</span>
+                <span>Summary</span>
+                <span>Type</span>
+                <span>Status</span>
+              </div>
               {activeList.map((proposal) => {
                 const source = proposal.rawNoteId
                   ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId)
@@ -795,35 +801,35 @@ export function ReviewQueuePage({
                 const rawSource = proposalRawSource(proposal, source, rawSources)
                 return (
                   <button
-                    className={`min-h-[168px] w-full rounded-lg border p-4 text-left transition ${
+                    className={`grid w-full gap-3 border-b border-gray-100 px-4 py-3 text-left transition last:border-b-0 lg:grid-cols-[minmax(220px,1.4fr)_minmax(160px,1fr)_150px_110px] lg:items-center ${
                       proposal.id === selectedProposalId
-                        ? 'border-violet bg-violet/10'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-slate-50'
+                        ? 'bg-violet/10'
+                        : 'bg-white hover:bg-slate-50'
                     }`}
                     key={proposal.id}
                     onClick={() => openProposal(proposal.id)}
                     type="button"
                   >
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 text-base font-extrabold text-ink">
-                          {sourceTitle(source, rawSource)}
-                        </p>
-                        <p className="mt-1 text-xs font-bold text-gray-500">
-                          {new Date(proposal.createdAt).toLocaleDateString([], {
-                            day: 'numeric',
-                            month: 'short',
-                          })}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(proposal.status)}`}>
-                        {proposal.status}
-                      </span>
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-sm font-extrabold text-ink">
+                        {sourceTitle(source, rawSource)}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-gray-500">
+                        {new Date(proposal.createdAt).toLocaleDateString([], {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </p>
                     </div>
-                    <p className="line-clamp-1 text-xs font-bold text-gray-500">
-                      {summarizeProposal(proposal) || `${proposal.items.length} updates`}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-xs font-extrabold text-gray-600">
+                        {summarizeProposal(proposal) || `${proposal.items.length} updates`}
+                      </p>
+                      <p className="mt-1 line-clamp-1 text-xs leading-5 text-gray-500">
+                        {proposal.rationale ?? 'Agent found incremental knowledge updates.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
                         {sourceRoleLabel(rawSource?.sourceRole ?? source?.sourceRole)}
                       </span>
@@ -831,9 +837,12 @@ export function ReviewQueuePage({
                         {rawSource?.chunks.length ?? 0} chunks
                       </span>
                     </div>
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-500">
-                      {proposal.rationale ?? 'Agent found incremental knowledge updates.'}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 lg:justify-start">
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass(proposal.status)}`}>
+                        {proposal.status}
+                      </span>
+                      <span className="text-xs font-bold text-gray-400 lg:hidden">Open</span>
+                    </div>
                   </button>
                 )
               })}

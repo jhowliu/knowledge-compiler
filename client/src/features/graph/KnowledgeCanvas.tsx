@@ -616,19 +616,6 @@ export function KnowledgeCanvas({
             </div>
           )}
         </div>
-
-        <div className="absolute bottom-6 left-7 z-10 flex gap-2">
-          {[
-            ['Notes', notes.length],
-            ['Approved links', data.noteLinks.filter((link) => link.status === 'approved').length],
-            ['Pending links', data.noteLinks.filter((link) => link.status === 'pending').length],
-          ].map(([label, value]) => (
-            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm" key={label}>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-              <p className="mt-0.5 text-lg font-extrabold text-ink">{value}</p>
-            </div>
-          ))}
-        </div>
       </main>
 
       <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#303030] bg-[#1B1B1B] text-white">

@@ -175,6 +175,8 @@
 - Graph board tab cleanup validation: removed the Default/Algorithms board tabs and simplified the client to a single graph layout saved under `boardKey=default`. `npm run typecheck`, `npm run build`, and browser smoke pass; the graph header still renders, board labels are gone, and note-card positions still load from the default board.
 - OpenAI env loading fix validation: root `.env` had a real `OPENAI_API_KEY`, while `server/.env` had an empty `OPENAI_API_KEY=` entry that overwrote it. Env loading now ignores blank values when applying later env files, so the server sees the real key. `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass; a masked env check confirmed `hasOpenAIKey: true`.
 - Agent Review Inbox modal validation: the Update Proposals page now shows only the inbox list by default; clicking a knowledge update opens a detail modal with source evidence, evidence chunks, approval actions, and a GitHub-style line diff using green `+` additions and red `-` removals when prior content is available. `npm run typecheck`, `npm run build`, and browser smoke pass with no console errors.
+- Agent Review listing validation: proposal updates now render as a compact row/list view instead of grid cards, while row click still opens the detail modal. `npm run typecheck`, `npm run build`, and browser smoke of the Done list/modal pass with no console errors.
+- Notes Graph cleanup validation: removed the bottom-left Notes / Approved links / Pending links stats overlay from the graph canvas. `npm run typecheck` and `npm run build` pass.
 
 ## Next Target
 - After #54 merges, move the next focus to auth/user scoping or richer search filters.

@@ -9,6 +9,7 @@ import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { RawSourceWithChunks } from "../domain/rawSource.js";
 import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "./wikiIndexer.service.js";
+import { legacyConceptType, linkableConceptNames } from "../domain/compiler.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -288,7 +289,7 @@ export class AgentRunQueueService {
       const savedConcept = await this.knowledgeRepository.upsertConcept({
         userId: rawNote.userId,
         name: concept.name,
-        conceptType: concept.conceptType,
+        conceptType: legacyConceptType(concept),
       });
       await this.knowledgeRepository.indexConcept({
         userId: rawNote.userId,
@@ -307,16 +308,18 @@ export class AgentRunQueueService {
       payload: {
         provider,
         conceptCount: extraction.concepts.length,
-        patterns: extraction.patterns,
-        algorithms: extraction.algorithms,
+        linkableConceptCount: linkableConceptNames(extraction.concepts).length,
       },
     });
 
-    const relatedNotes = await this.knowledgeRepository.searchRelated({
-      query: source.bodyMarkdown,
-      conceptNames: extraction.concepts.map((concept) => concept.name),
-      limit: 8,
-    });
+    const relatedConceptNames = linkableConceptNames(extraction.concepts);
+    const relatedNotes = relatedConceptNames.length
+      ? await this.knowledgeRepository.searchRelated({
+          query: source.bodyMarkdown,
+          conceptNames: relatedConceptNames,
+          limit: 8,
+        })
+      : [];
     await this.agentRunRepository.addEvent({
       agentRunId,
       eventType: "related_knowledge_found",

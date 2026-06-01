@@ -177,9 +177,10 @@
 - Agent Review Inbox modal validation: the Update Proposals page now shows only the inbox list by default; clicking a knowledge update opens a detail modal with source evidence, evidence chunks, approval actions, and a GitHub-style line diff using green `+` additions and red `-` removals when prior content is available. `npm run typecheck`, `npm run build`, and browser smoke pass with no console errors.
 - Agent Review listing validation: proposal updates now render as a compact row/list view instead of grid cards, while row click still opens the detail modal. `npm run typecheck`, `npm run build`, and browser smoke of the Done list/modal pass with no console errors.
 - Notes Graph cleanup validation: removed the bottom-left Notes / Approved links / Pending links stats overlay from the graph canvas. `npm run typecheck` and `npm run build` pass.
+- General knowledge facets validation: LLM wiki indexing now emits `summary`, `concepts`, `claims`, `methods`, `examples`, and `constraints` instead of coding-specific fields; generic concepts such as `array` are still indexed but no longer create related-note suggestions. `npm run typecheck`, `npm run test --workspace=server`, and `npm run build` pass.
 
 ## Next Target
-- After #54 merges, move the next focus to auth/user scoping or richer search filters.
+- After #59 merges, continue with richer link scoring or the next UI cleanup ticket.
 - Replace the deterministic fallback compiler with a fuller OpenAI Agents SDK-backed compiler when `OPENAI_API_KEY` is available.
 - Add auth and user scoping before multi-user use.
 - Add richer search filters and prevent current raw note from appearing in its own related-note list.

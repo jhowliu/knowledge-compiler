@@ -1,6 +1,6 @@
 import { AgentRunQueueService } from "../src/services/agentRunQueue.service.js";
 import { WikiIndexerService, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
-import type { CodingExtraction } from "../src/domain/compiler.js";
+import type { KnowledgeExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
@@ -14,42 +14,53 @@ const llmWikiIndexer = {
     return {
       provider: "openai" as const,
       extraction: {
-        domain: "coding" as const,
-        knowledgeType: "general_coding_note" as const,
-        problemNumber: null,
-        problemTitle: null,
-        decisionRules: [],
-        commonTraps: ["Forgetting bounded state in graph search"],
-        patterns: [
-          "Shortest Path With State",
-          "Constrained Shortest Path",
-          "K Stops / Edge Budget",
-        ],
-        algorithms: ["Dijkstra", "Priority Queue"],
-        recognitionSignals: ["k stops", "edge budget", "dist[node][state]"],
-        keyInsights: ["Track remaining stops as part of the distance state."],
-        mistakes: ["Used plain Dijkstra without the stop dimension."],
-        implementationDetails: ["Use dist[n][k+2] and heap tuples of cost, node, stops."],
-        reviewActions: ["Practice constrained shortest path variants."],
+        domain: "coding",
+        knowledgeType: "algorithm",
+        title: "Dijkstra With State",
+        summary: "Track bounded graph state such as stops alongside distance.",
         concepts: [
           {
             name: "Constrained Shortest Path",
-            conceptType: "pattern",
+            type: "method",
+            specificity: "specific",
             confidence: "high" as const,
           },
           {
             name: "Dijkstra With State",
-            conceptType: "implementation_schema",
+            type: "method",
+            specificity: "specific",
             confidence: "high" as const,
           },
         ],
+        claims: [
+          {
+            text: "Track remaining stops as part of the distance state.",
+            confidence: "high" as const,
+            evidenceChunkIds: [],
+          },
+        ],
+        methods: [
+          {
+            name: "Dijkstra With State",
+            purpose: "Handle shortest paths with an additional edge or stop constraint.",
+            steps: ["Use dist[n][k+2]", "Store heap tuples as cost, node, stops."],
+            conditions: ["A shortest-path objective has a bounded state dimension."],
+          },
+        ],
+        examples: [],
+        constraints: [
+          {
+            text: "Plain Dijkstra is insufficient when the state limit changes reachability.",
+            appliesTo: "shortest path variants",
+          },
+        ],
         confidence: "high" as const,
-      },
+      } satisfies KnowledgeExtraction,
     };
   },
   draftProposal(
     source: WikiIndexingSource,
-    extraction: CodingExtraction,
+    extraction: KnowledgeExtraction,
     relatedNotes: SearchResult[],
   ) {
     return {
@@ -64,9 +75,9 @@ const llmWikiIndexer = {
           targetType: "knowledge_source",
           payload: {
             domain: extraction.domain,
-            knowledgeType: "algorithm",
-            title: "Dijkstra With State",
-            bodyMarkdown: extraction.keyInsights.join("\n"),
+            knowledgeType: extraction.knowledgeType,
+            title: extraction.title ?? "Dijkstra With State",
+            bodyMarkdown: extraction.summary,
             structuredData: { concepts: extraction.concepts },
           },
           rationale: "LLM proposed a compiled note.",
@@ -91,21 +102,36 @@ describe("agent run queue service", () => {
       rawNoteId: "raw-note-1",
       chunks: [],
     };
-    const extraction: CodingExtraction = {
+    const extraction: KnowledgeExtraction = {
       domain: "coding",
-      knowledgeType: "general_coding_note",
-      problemNumber: null,
-      problemTitle: null,
-      decisionRules: [],
-      commonTraps: [],
-      patterns: ["Binary Search on Answer"],
-      algorithms: ["Binary Search"],
-      recognitionSignals: ["monotonic feasibility"],
-      keyInsights: ["Search the answer space when feasibility is monotonic."],
-      mistakes: ["Do not label this as shortest path."],
-      implementationDetails: ["Write a feasible(x) predicate."],
-      reviewActions: ["Practice monotonic predicate problems."],
-      concepts: [{ name: "Binary Search on Answer", conceptType: "pattern", confidence: "high" }],
+      knowledgeType: "algorithm",
+      title: "Binary Search",
+      summary: "Search the answer space when feasibility is monotonic.",
+      concepts: [
+        {
+          name: "Binary Search on Answer",
+          type: "method",
+          specificity: "specific",
+          confidence: "high",
+        },
+      ],
+      claims: [
+        {
+          text: "A monotonic feasibility predicate allows binary search over answers.",
+          confidence: "high",
+          evidenceChunkIds: [],
+        },
+      ],
+      methods: [
+        {
+          name: "Binary Search on Answer",
+          purpose: "Find an optimal answer through monotonic feasibility.",
+          steps: ["Write a feasible(x) predicate."],
+          conditions: ["The predicate is monotonic."],
+        },
+      ],
+      examples: [],
+      constraints: [],
       confidence: "high",
     };
 
@@ -230,19 +256,21 @@ describe("agent run queue service", () => {
     expect(completedRun?.output).toMatchObject({
       rawNoteId: rawNote.id,
       provider: "openai",
-      detectedKnowledgeType: "general_coding_note",
+      detectedKnowledgeType: "algorithm",
     });
     expect(proposalRepository.proposals).toHaveLength(1);
     expect(proposalRepository.proposals[0].items.map((item) => item.actionType)).toEqual([
       "upsert_knowledge",
     ]);
     expect(rawNoteRepository.notes[0].extractedData).toMatchObject({
-      patterns: expect.arrayContaining([
-        "Shortest Path With State",
-        "Constrained Shortest Path",
-        "K Stops / Edge Budget",
+      summary: "Track bounded graph state such as stops alongside distance.",
+      concepts: expect.arrayContaining([
+        expect.objectContaining({ name: "Constrained Shortest Path", type: "method" }),
+        expect.objectContaining({ name: "Dijkstra With State", type: "method" }),
       ]),
-      algorithms: expect.arrayContaining(["Dijkstra", "Priority Queue"]),
+      methods: expect.arrayContaining([
+        expect.objectContaining({ name: "Dijkstra With State" }),
+      ]),
     });
     expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(
       expect.arrayContaining([
@@ -334,7 +362,9 @@ describe("agent run queue service", () => {
       title: "K stops source",
     });
     expect(rawSourceRepository.sources[0].extractedData).toMatchObject({
-      patterns: expect.arrayContaining(["Constrained Shortest Path"]),
+      concepts: expect.arrayContaining([
+        expect.objectContaining({ name: "Constrained Shortest Path" }),
+      ]),
     });
     expect(proposalRepository.proposals).toHaveLength(1);
     expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(

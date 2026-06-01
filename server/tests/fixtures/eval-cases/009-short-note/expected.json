@@ -1,0 +1,8 @@
+{
+  "min_concepts": 1,
+  "required_concepts": ["evidence"],
+  "forbidden_hallucinations": ["Postgres", "OpenAI"],
+  "should_conflict": false,
+  "min_coverage_score": 0.7,
+  "min_grounding_score": 0.8
+}

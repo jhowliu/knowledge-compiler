@@ -2,6 +2,11 @@ import type { CompiledNote, Confidence, ProposalItem, ProposalWithItems } from "
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
+import {
+  embedKnowledgeBlock,
+  NoopEmbeddingService,
+  type EmbeddingService,
+} from "./embedding.service.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -30,6 +35,7 @@ export class ProposalService {
     private readonly proposalRepository: ProposalRepository,
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly noteLinkRepository: NoteLinkRepository,
+    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
   ) {}
 
   async listRecentProposals() {
@@ -123,6 +129,7 @@ export class ProposalService {
         changeSummary: item.rationale ?? proposal.rationale,
         blocks: chunkKnowledgeMarkdown(compiledNote.bodyMarkdown),
       });
+      await this.embedSnapshotBlocks(knowledgeSnapshot.blocks);
 
       await this.knowledgeRepository.createEvidenceLink({
         userId: proposal.userId,
@@ -212,6 +219,15 @@ export class ProposalService {
 
     if (["create_mistake", "create_review_task", "upsert_readiness"].includes(item.actionType)) {
       return;
+    }
+  }
+
+  private async embedSnapshotBlocks(blocks: { id: string; heading?: string | null; bodyMarkdown: string }[]) {
+    for (const block of blocks) {
+      const embedding = await embedKnowledgeBlock(this.embeddingService, block);
+      if (embedding) {
+        await this.knowledgeRepository.updateKnowledgeBlockEmbedding(block.id, embedding);
+      }
     }
   }
 

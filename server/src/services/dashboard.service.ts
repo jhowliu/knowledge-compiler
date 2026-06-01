@@ -1,10 +1,15 @@
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
+import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 
 export class DashboardService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
-    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(knowledgeRepository),
+    embeddingService: EmbeddingService = new NoopEmbeddingService(),
+    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(
+      knowledgeRepository,
+      embeddingService,
+    ),
   ) {}
 
   async listCompiledNotes() {

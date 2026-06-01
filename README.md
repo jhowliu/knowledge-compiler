@@ -54,6 +54,25 @@ The client runs on `http://localhost:5173`.
 
 The API runs on `http://localhost:4000`.
 
+## Embeddings And Eval
+
+Phase E adds optional `pgvector` search over approved `knowledge_blocks`.
+Install the Postgres `vector` extension in the local database image if you want semantic search; without it, search continues to use full-text and concept ranking.
+
+Backfill active blocks after enabling `pgvector`:
+
+```bash
+npm run backfill:embeddings --workspace=server
+```
+
+Run the offline golden eval set:
+
+```bash
+npm run eval --workspace=server
+```
+
+To add an eval case, create a folder under `server/tests/fixtures/eval-cases/` with `source.md`, `expected.json`, and optional `meta.json` / `existing-block.md`. Keep `expected.json` focused on required concepts, forbidden hallucinations, conflict expectation, and minimum coverage/grounding scores.
+
 ## Server Architecture
 
 The server follows a clean architecture-style folder split:

@@ -1,6 +1,10 @@
 # Recap
 
 ## Summary
+- Started Phase E on `codex/phase-e-embeddings-evals`.
+- Added optional pgvector support for approved `knowledge_blocks`: migration `015_knowledge_block_embeddings.sql`, OpenAI embedding service, approval-time block embedding writes, vector-aware RRF search, and `npm run backfill:embeddings --workspace=server`.
+- Added a 10-case offline golden eval fixture set plus `npm run eval --workspace=server` for prompt/indexing regression checks.
+- Wired `/search` and `/ask` through the same embedding-aware `KnowledgeRetrievalService`, so both use FTS + concept ranking + vector similarity when embeddings are available.
 - Created `PRD.md` from the existing Interview Knowledge Compiler PRD.
 - Added Section 34, Technical Specification, covering the agreed React + Express + self-hosted Postgres direction.
 - Captured the no-ORM decision: use the `postgres` Node.js client with hand-written SQL and plain migrations.
@@ -125,12 +129,16 @@
 - Phase C `/ask` answers should use approved `knowledge_blocks` as the answer corpus. Raw source chunks appear only as citation evidence, and the answer generator is instructed to avoid outside knowledge and say when retrieved blocks are insufficient.
 - Ask retrieval uses FTS plus concept-index matches with reciprocal-rank style merging, then expands one hop through approved `note_links` using compiled-note backing IDs.
 - Phase D does not drop legacy `domain` columns yet: active repository, service, UI, and test code still reads/writes them. The drop-domain migration remains blocked until the app is fully topic-only.
+- Phase E embeddings are opportunistic: if `pgvector` or `OPENAI_API_KEY` is unavailable, approval/search continue with the existing non-vector paths instead of blocking local use.
+- Eval fixtures are intentionally checked in as lightweight source/expected pairs; the runner reports coverage/grounding and exits non-zero on expectation failures.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
 - Decide whether the agent runtime runs inside the Express API process initially or in a separate worker service.
 - Docker daemon status should be rechecked before relying on Docker Compose for local Postgres.
 - OpenAI API key is intentionally blank in local env files.
+- Phase E migration could not be applied locally because the configured database rejected `admin` password authentication before migrations ran.
+- The first eval runner reports regression delta as "no checked-in baseline yet"; add a stored baseline if automatic delta comparison is needed in CI.
 - The shell had a global `DATABASE_URL` pointing at `admin@localhost:5432/sourect`; server config now loads project env files with override to avoid accidental cross-project DB usage.
 - `AGENTS.md` exists locally and was used as convention guidance, but it has not been staged in this session.
 - Vite may choose `5174` when `5173` is occupied; server CORS now allows localhost/127.0.0.1 dev origins on any port.
@@ -190,9 +198,11 @@
 - Phase B validation: `npm run typecheck`, `npm run build`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run build --workspace=server`, and `npm run migrate --workspace=server` pass. Server tests now include the typed agent tool service path and source-span/conflict/eval proposal persistence.
 - Phase C validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. `npm run migrate --workspace=server` was attempted in the temporary worktree but could not connect because that worktree lacks the local database credentials; no new migration was added for Phase C.
 - Phase D validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. No migration was added in this slice.
+- Phase E validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run eval --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. `npm run migrate --workspace=server` was attempted but failed at database authentication for user `admin` before migrations ran.
 
 ## Next Target
-- After Phase D merges, finish topic-only domain cleanup before attempting the destructive domain-column migration.
+- After Phase E merges, run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.
+- Finish topic-only domain cleanup before attempting the destructive domain-column migration.
 - Add a frontend ask panel and manual QA with real OpenAI answers/citations.
 - Continue with topic-aware agent compile context and richer link scoring.
 - Replace the heuristic eval judge with a fuller OpenAI Agents SDK-backed judge when the runtime contract is stable.

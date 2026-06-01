@@ -183,6 +183,47 @@ describe("ProposalService", () => {
     expect(knowledge.knowledgeBlocks.map((block) => block.status)).toEqual(["archived", "active"]);
   });
 
+  test("stores embeddings for approved knowledge blocks when embedding service is available", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks, {
+      async embedText(text) {
+        expect(text).toContain("Vector search");
+        return [1, 0, 0];
+      },
+    });
+
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-embedding",
+      draft: {
+        detectedDomain: "research",
+        detectedKnowledgeType: "paper_note",
+        impactLevel: 2,
+        confidence: "high",
+        rationale: "Embedding smoke proposal.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "research",
+              knowledgeType: "paper_note",
+              title: "Vector search",
+              bodyMarkdown: "Vector search helps semantic retrieval.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Create approved knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.embeddings.get("knowledge-block-1")).toEqual([1, 0, 0]);
+  });
+
   test("approves generalized knowledge updates and creates pending link suggestions", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();

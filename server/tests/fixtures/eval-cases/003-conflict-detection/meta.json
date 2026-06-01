@@ -1,0 +1,5 @@
+{
+  "description": "Conflict case where source contradicts an older retrieval rule",
+  "topics": ["rag", "conflict"],
+  "difficulty": "medium"
+}

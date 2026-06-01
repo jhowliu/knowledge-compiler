@@ -38,6 +38,11 @@ import { createRawSourceRoutes } from "./routes/rawSource.routes.js";
 import { createTopicRoutes } from "./routes/topic.routes.js";
 import { AgentRunQueueService } from "./services/agentRunQueue.service.js";
 import { DashboardService } from "./services/dashboard.service.js";
+import {
+  NoopEmbeddingService,
+  OpenAIEmbeddingService,
+  type EmbeddingService,
+} from "./services/embedding.service.js";
 import { NoteLinkService } from "./services/noteLink.service.js";
 import { NoteCardPositionService } from "./services/noteCardPosition.service.js";
 import { PhaseOneWorkflowService } from "./services/phaseOneWorkflow.service.js";
@@ -62,6 +67,7 @@ export type AppDependencies = {
   topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
   askAnswerer?: AskAnswerer;
+  embeddingService?: EmbeddingService;
   enablePhaseOneWorkflow?: boolean;
 };
 
@@ -102,6 +108,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     (usingDefaultRepositories
       ? new PostgresAgentToolReadRepository()
       : new NoopAgentToolReadRepository());
+  const embeddingService =
+    dependencies.embeddingService ??
+    (usingDefaultRepositories ? new OpenAIEmbeddingService() : new NoopEmbeddingService());
   const enablePhaseOneWorkflow = dependencies.enablePhaseOneWorkflow ?? true;
   const phaseOneWorkflowService = enablePhaseOneWorkflow
     ? new PhaseOneWorkflowService(
@@ -115,13 +124,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     proposalRepository,
     knowledgeRepository,
     noteLinkRepository,
+    embeddingService,
   );
-  const dashboardService = new DashboardService(knowledgeRepository);
+  const dashboardService = new DashboardService(knowledgeRepository, embeddingService);
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
   const askService = new AskService(
     knowledgeRepository,
     noteLinkRepository,
+    embeddingService,
     undefined,
     dependencies.askAnswerer,
   );

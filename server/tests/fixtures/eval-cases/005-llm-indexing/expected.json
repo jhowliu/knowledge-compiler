@@ -1,0 +1,8 @@
+{
+  "min_concepts": 3,
+  "required_concepts": ["concepts", "source spans", "proposed knowledge updates"],
+  "forbidden_hallucinations": ["flashcards", "daily streak"],
+  "should_conflict": false,
+  "min_coverage_score": 0.7,
+  "min_grounding_score": 0.8
+}

@@ -139,6 +139,90 @@ function NavButton({
   )
 }
 
+function SourceGroupButton({
+  active,
+  count,
+  depth = 0,
+  expanded,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active?: boolean
+  count?: number
+  depth?: number
+  expanded: boolean
+  icon: typeof Inbox
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] font-semibold ${
+        active ? 'bg-slate-100 text-ink' : 'text-gray-600 hover:bg-slate-50 hover:text-ink'
+      }`}
+      onClick={onClick}
+      style={{ paddingLeft: `${8 + depth * 14}px` }}
+      type="button"
+    >
+      <ChevronDown
+        className={`shrink-0 transition ${expanded ? 'rotate-0' : '-rotate-90'}`}
+        size={13}
+      />
+      <Icon size={15} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {typeof count === 'number' ? (
+        <span className="text-[11px] font-bold text-gray-400">{count}</span>
+      ) : null}
+    </button>
+  )
+}
+
+function SourceSidebarItem({
+  isSelected,
+  lifecycle,
+  note,
+  onSelect,
+  source,
+}: {
+  isSelected: boolean
+  lifecycle: SourceLifecycle
+  note: RawNote
+  onSelect: () => void
+  source: RawSource | null
+}) {
+  return (
+    <button
+      className={`ml-6 w-[calc(100%-1.5rem)] rounded-md border px-2.5 py-2 text-left transition ${
+        isSelected
+          ? 'border-violet bg-violet/10'
+          : 'border-transparent hover:border-gray-200 hover:bg-slate-50'
+      }`}
+      onClick={onSelect}
+      type="button"
+    >
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-500">
+          {note.sourceRole === 'reference' ? <BookOpen size={13} /> : <FileText size={13} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-extrabold leading-5 text-ink">
+            {sourceTitle(note, source)}
+          </p>
+          <div className="mt-1 flex min-w-0 flex-wrap gap-1">
+            <span className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500">
+              {formatDate(source?.updatedAt ?? note.createdAt)}
+            </span>
+            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}>
+              {lifecycle.label}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 function SmallPill({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
@@ -229,6 +313,7 @@ export function RawNoteEditorPage({
   const [moveProjectId, setMoveProjectId] = useState('')
   const [moveFolderId, setMoveFolderId] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [expandedSourceGroups, setExpandedSourceGroups] = useState<string[]>(['all'])
   const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
   const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
   const selectedRawSource = selectedRawNote?.rawSourceId
@@ -290,16 +375,33 @@ export function RawNoteEditorPage({
     })
   }, [agentRuns, proposals, rawNotes, sourceById])
 
-  const filteredRows = sourceRows.filter(({ lifecycle, note, source }) => {
-    const matchesProject = selectedProjectId === 'all' || source?.projectId === selectedProjectId
-    const matchesFolder =
-      selectedFolderFilter === 'all' ||
-      (selectedFolderFilter === 'uncategorized' && !source?.folderId) ||
-      source?.folderId === selectedFolderFilter
-    const matchesRole = roleFilter === 'all' || note.sourceRole === roleFilter
-    const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
-    return matchesProject && matchesFolder && matchesRole && matchesLifecycle
-  })
+  const filterVisibleRows = (rows: typeof sourceRows) =>
+    rows.filter(({ lifecycle, note }) => {
+      const matchesRole = roleFilter === 'all' || note.sourceRole === roleFilter
+      const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
+      return matchesRole && matchesLifecycle
+    })
+  const sourceGroupIsExpanded = (key: string) => expandedSourceGroups.includes(key)
+  const toggleSourceGroup = (key: string) => {
+    setExpandedSourceGroups((groups) =>
+      groups.includes(key) ? groups.filter((group) => group !== key) : [...groups, key],
+    )
+  }
+  const toggleTopSourceGroup = (key: string) => {
+    setExpandedSourceGroups((groups) => {
+      const topLevelGroups = new Set(['all', ...sourceProjects.map((project) => `project:${project.id}`)])
+      const withoutTopLevel = groups.filter((group) => !topLevelGroups.has(group))
+      return groups.includes(key) ? withoutTopLevel : [...withoutTopLevel, key]
+    })
+  }
+  const rowsForProject = (projectId: string) =>
+    filterVisibleRows(sourceRows.filter(({ source }) => source?.projectId === projectId))
+  const rowsForFolder = (folderId: string) =>
+    filterVisibleRows(sourceRows.filter(({ source }) => source?.folderId === folderId))
+  const rowsForUncategorized = (projectId: string) =>
+    filterVisibleRows(
+      sourceRows.filter(({ source }) => source?.projectId === projectId && !source.folderId),
+    )
 
   const activeProposal = indexingTrace?.proposals[0] ?? null
   const canMoveSource =
@@ -319,8 +421,8 @@ export function RawNoteEditorPage({
     }`
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[252px_240px_minmax(0,1fr)] bg-canvas text-ink">
-      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white px-[18px] py-6">
+    <section className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] bg-canvas text-ink">
+      <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-gray-200 bg-white px-[18px] py-6">
         <div className="space-y-1">
           <p className="text-lg font-bold leading-5 text-ink">Interview Knowledge</p>
           <p className="text-lg font-bold leading-5 text-ink">Compiler</p>
@@ -361,30 +463,179 @@ export function RawNoteEditorPage({
           <h1 className="mt-1 text-lg font-extrabold text-ink">Knowledge sources</h1>
         </div>
 
-        <div className="mt-4 space-y-1">
-          <NavButton
+        <div className="mt-4 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              aria-label="Filter sources by role"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+              value={roleFilter}
+            >
+              <option value="all">All roles</option>
+              <option value="personal_note">Personal</option>
+              <option value="reference">Reference</option>
+            </select>
+            <select
+              aria-label="Filter sources by status"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
+              value={lifecycleFilter}
+            >
+              <option value="all">All states</option>
+              <option value="idle">Captured</option>
+              <option value="active">Indexing</option>
+              <option value="pending">Needs approval</option>
+              <option value="done">Applied</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <SourceGroupButton
             active={selectedProjectId === 'all'}
-            count={rawNotes.length}
+            count={filterVisibleRows(sourceRows).length}
+            expanded={sourceGroupIsExpanded('all')}
             icon={Inbox}
             label="All sources"
             onClick={() => {
               setSelectedProjectId('all')
               setSelectedFolderFilter('all')
+              toggleTopSourceGroup('all')
             }}
           />
-          {sourceProjects.map((project) => (
-            <NavButton
-              active={selectedProjectId === project.id && selectedFolderFilter === 'all'}
-              count={projectSourceCount(project, rawSources.filter((source) => source.projectId === project.id).length)}
-              icon={Folder}
-              key={project.id}
-              label={project.name}
-              onClick={() => {
-                setSelectedProjectId(project.id)
-                setSelectedFolderFilter('all')
-              }}
-            />
-          ))}
+          {sourceGroupIsExpanded('all') ? (
+            <div className="space-y-1">
+              {filterVisibleRows(sourceRows).length ? (
+                filterVisibleRows(sourceRows).map(({ lifecycle, note, source }) => (
+                  <SourceSidebarItem
+                    isSelected={note.id === selectedRawNoteId}
+                    key={note.id}
+                    lifecycle={lifecycle}
+                    note={note}
+                    onSelect={() => onSelectRawNote(note)}
+                    source={source}
+                  />
+                ))
+              ) : (
+                <p className="ml-6 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
+                  No sources match these filters.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {sourceProjects.map((project) => {
+            const projectKey = `project:${project.id}`
+            const uncategorizedKey = `uncategorized:${project.id}`
+            const projectRows = rowsForProject(project.id)
+            const uncategorizedRows = rowsForUncategorized(project.id)
+
+            return (
+              <div className="space-y-1" key={project.id}>
+                <SourceGroupButton
+                  active={selectedProjectId === project.id && selectedFolderFilter === 'all'}
+                  count={projectSourceCount(
+                    project,
+                    rawSources.filter((source) => source.projectId === project.id).length,
+                  )}
+                  expanded={sourceGroupIsExpanded(projectKey)}
+                  icon={Folder}
+                  label={project.name}
+                  onClick={() => {
+                    setSelectedProjectId(project.id)
+                    setSelectedFolderFilter('all')
+                    toggleTopSourceGroup(projectKey)
+                  }}
+                />
+                {sourceGroupIsExpanded(projectKey) ? (
+                  <div className="space-y-1">
+                    <SourceGroupButton
+                      active={selectedProjectId === project.id && selectedFolderFilter === 'uncategorized'}
+                      count={project.uncategorizedSourceCount}
+                      depth={1}
+                      expanded={sourceGroupIsExpanded(uncategorizedKey)}
+                      icon={Inbox}
+                      label="Uncategorized"
+                      onClick={() => {
+                        setSelectedProjectId(project.id)
+                        setSelectedFolderFilter('uncategorized')
+                        toggleSourceGroup(uncategorizedKey)
+                      }}
+                    />
+                    {sourceGroupIsExpanded(uncategorizedKey) ? (
+                      <div className="space-y-1">
+                        {uncategorizedRows.length ? (
+                          uncategorizedRows.map(({ lifecycle, note, source }) => (
+                            <SourceSidebarItem
+                              isSelected={note.id === selectedRawNoteId}
+                              key={note.id}
+                              lifecycle={lifecycle}
+                              note={note}
+                              onSelect={() => onSelectRawNote(note)}
+                              source={source}
+                            />
+                          ))
+                        ) : (
+                          <p className="ml-10 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
+                            No uncategorized sources.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {project.folders.map((folder) => {
+                      const folderKey = `folder:${folder.id}`
+                      const folderRows = rowsForFolder(folder.id)
+
+                      return (
+                        <div className="space-y-1" key={folder.id}>
+                          <SourceGroupButton
+                            active={selectedProjectId === project.id && selectedFolderFilter === folder.id}
+                            count={folder.sourceCount}
+                            depth={1}
+                            expanded={sourceGroupIsExpanded(folderKey)}
+                            icon={Folder}
+                            label={folder.name}
+                            onClick={() => {
+                              setSelectedProjectId(project.id)
+                              setSelectedFolderFilter(folder.id)
+                              toggleSourceGroup(folderKey)
+                            }}
+                          />
+                          {sourceGroupIsExpanded(folderKey) ? (
+                            <div className="space-y-1">
+                              {folderRows.length ? (
+                                folderRows.map(({ lifecycle, note, source }) => (
+                                  <SourceSidebarItem
+                                    isSelected={note.id === selectedRawNoteId}
+                                    key={note.id}
+                                    lifecycle={lifecycle}
+                                    note={note}
+                                    onSelect={() => onSelectRawNote(note)}
+                                    source={source}
+                                  />
+                                ))
+                              ) : (
+                                <p className="ml-10 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
+                                  No sources in this folder.
+                                </p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+
+                    {!projectRows.length ? (
+                      <p className="ml-6 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
+                        No sources match these filters.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+
           <form
             className="mt-2 flex gap-1.5"
             onSubmit={(event) => {
@@ -415,10 +666,10 @@ export function RawNoteEditorPage({
         </div>
 
         {selectedProject ? (
-          <div className="mt-5 space-y-1">
-            <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Folders</p>
+          <div className="mt-5 space-y-2 rounded-lg border border-gray-200 bg-slate-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Project settings</p>
             <form
-              className="mb-2 flex gap-1.5"
+              className="flex gap-1.5"
               onSubmit={(event) => {
                 event.preventDefault()
                 const trimmedName = renameProjectName.trim()
@@ -461,26 +712,10 @@ export function RawNoteEditorPage({
                 <Trash2 size={13} />
               </button>
             </form>
-            <NavButton
-              active={selectedFolderFilter === 'uncategorized'}
-              count={selectedProject.uncategorizedSourceCount}
-              icon={Inbox}
-              label="Uncategorized"
-              onClick={() => setSelectedFolderFilter('uncategorized')}
-            />
-            {selectedProject.folders.map((folder) => (
-              <NavButton
-                active={selectedFolderFilter === folder.id}
-                count={folder.sourceCount}
-                icon={Folder}
-                key={folder.id}
-                label={folder.name}
-                onClick={() => setSelectedFolderFilter(folder.id)}
-              />
-            ))}
+
             {selectedFolder ? (
               <form
-                className="mt-2 flex gap-1.5"
+                className="flex gap-1.5"
                 onSubmit={(event) => {
                   event.preventDefault()
                   const trimmedName = renameFolderName.trim()
@@ -520,8 +755,9 @@ export function RawNoteEditorPage({
                 </button>
               </form>
             ) : null}
+
             <form
-              className="mt-2 flex gap-1.5"
+              className="flex gap-1.5"
               onSubmit={(event) => {
                 event.preventDefault()
                 const trimmedName = newFolderName.trim()
@@ -550,24 +786,6 @@ export function RawNoteEditorPage({
           </div>
         ) : null}
 
-        <div className="mt-5 space-y-1">
-          <p className="px-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Types</p>
-          <NavButton
-            active={roleFilter === 'personal_note'}
-            count={rawNotes.filter((note) => note.sourceRole === 'personal_note').length}
-            icon={PencilLine}
-            label="Personal notes"
-            onClick={() => setRoleFilter(roleFilter === 'personal_note' ? 'all' : 'personal_note')}
-          />
-          <NavButton
-            active={roleFilter === 'reference'}
-            count={rawNotes.filter((note) => note.sourceRole === 'reference').length}
-            icon={BookOpen}
-            label="References"
-            onClick={() => setRoleFilter(roleFilter === 'reference' ? 'all' : 'reference')}
-          />
-        </div>
-
         <div className="mt-5 rounded-lg border border-gray-200 bg-slate-50 p-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Index status</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -592,94 +810,6 @@ export function RawNoteEditorPage({
           <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
           {isDark ? <Moon size={16} /> : <Sun size={16} />}
         </button>
-      </aside>
-
-      <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-4 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Source inbox</p>
-              <p className="text-sm font-extrabold text-ink">{filteredRows.length} visible</p>
-            </div>
-            <button
-              aria-label="New source"
-              className="grid h-9 w-9 place-items-center rounded-lg bg-ink text-white"
-              onClick={onNewNote}
-              type="button"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              aria-label="Filter sources by role"
-              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
-              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
-              value={roleFilter}
-            >
-              <option value="all">All roles</option>
-              <option value="personal_note">Personal</option>
-              <option value="reference">Reference</option>
-            </select>
-            <select
-              aria-label="Filter sources by status"
-              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
-              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
-              value={lifecycleFilter}
-            >
-              <option value="all">All states</option>
-              <option value="idle">Captured</option>
-              <option value="active">Indexing</option>
-              <option value="pending">Needs approval</option>
-              <option value="done">Applied</option>
-              <option value="failed">Failed</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {filteredRows.length ? (
-            filteredRows.map(({ lifecycle, note, source }) => (
-              <button
-                className={`w-full rounded-lg border p-3 text-left transition ${
-                  note.id === selectedRawNoteId
-                    ? 'border-violet bg-violet/10'
-                    : 'border-transparent hover:border-gray-200 hover:bg-slate-50'
-                }`}
-                key={note.id}
-                onClick={() => onSelectRawNote(note)}
-                type="button"
-              >
-                <div className="mb-2 flex items-start gap-2">
-                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-500">
-                    {note.sourceRole === 'reference' ? <BookOpen size={14} /> : <FileText size={14} />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-1 text-[13px] font-extrabold text-ink">
-                      {sourceTitle(note, source)}
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
-                      {formatDate(source?.updatedAt ?? note.createdAt)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  <SmallPill>{roleLabel(note.sourceRole)}</SmallPill>
-                  <SmallPill>{source?.chunks.length ?? 0} chunks</SmallPill>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}>
-                    {lifecycle.label}
-                  </span>
-                </div>
-                <p className="line-clamp-2 text-xs leading-5 text-gray-500">{note.bodyMarkdown}</p>
-              </button>
-            ))
-          ) : (
-            <div className="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-4 text-sm leading-6 text-gray-500">
-              No sources match these filters.
-            </div>
-          )}
-        </div>
       </aside>
 
       <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_232px]">

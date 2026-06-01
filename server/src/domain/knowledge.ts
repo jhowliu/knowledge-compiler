@@ -83,6 +83,7 @@ export type KnowledgeBlockSearchResult = {
   blockId: string;
   knowledgeSourceId: string;
   knowledgeVersionId: string;
+  compiledNoteId: string | null;
   title: string;
   domain: string;
   knowledgeType: string;

@@ -34,6 +34,7 @@ const envSchema = z.object({
   OPENAI_WIKI_INDEX_MODEL: z.string().default("gpt-5-mini"),
   INDEXER_MODEL: z.string().default("gpt-5-mini"),
   EVAL_JUDGE_MODEL: z.string().default("gpt-5-mini"),
+  ASK_MODEL: z.string().default("gpt-5-mini"),
 });
 
 export const env = envSchema.parse(process.env);

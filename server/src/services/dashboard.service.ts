@@ -11,11 +11,15 @@ export class DashboardService {
     return this.knowledgeRepository.listCompiledNotes(50);
   }
 
-  async search(query: string, options: { includeArchived?: boolean; limit?: number } = {}) {
+  async search(
+    query: string,
+    options: { includeArchived?: boolean; limit?: number; topicIds?: string[] } = {},
+  ) {
     return this.knowledgeRetrievalService.search({
       query,
       includeArchived: options.includeArchived,
       limit: options.limit ?? 20,
+      topicIds: options.topicIds,
     });
   }
 

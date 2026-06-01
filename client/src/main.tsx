@@ -15,12 +15,11 @@ import {
   requestVoid,
   searchKnowledgeBlocks,
 } from './lib/api'
-import { boardOptions, emptyWorkspaceData } from './lib/constants'
+import { emptyWorkspaceData, graphBoardKey } from './lib/constants'
 import type {
   ActiveView,
   AgentRun,
   AgentRunDetail,
-  BoardKey,
   KnowledgeSearchResult,
   NoteCardPosition,
   Proposal,
@@ -37,12 +36,6 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
     return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
-  })
-  const [activeBoardKey, setActiveBoardKey] = useState<BoardKey>(() => {
-    const savedBoardKey = window.localStorage.getItem('knowledgeCompilerBoardKey')
-    return boardOptions.some((board) => board.key === savedBoardKey)
-      ? (savedBoardKey as BoardKey)
-      : 'default'
   })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
@@ -83,7 +76,7 @@ function App() {
   async function refresh() {
     setIsLoading(true)
     try {
-      const nextData = await loadWorkspaceData(activeBoardKey)
+      const nextData = await loadWorkspaceData()
       setWorkspaceData(nextData)
       setError(null)
       return nextData
@@ -161,15 +154,11 @@ function App() {
 
   useEffect(() => {
     void refresh()
-  }, [activeBoardKey])
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
   }, [themeMode])
-
-  useEffect(() => {
-    window.localStorage.setItem('knowledgeCompilerBoardKey', activeBoardKey)
-  }, [activeBoardKey])
 
   useEffect(() => {
     if (activeView === 'raw_note_editor') {
@@ -595,7 +584,7 @@ function App() {
         `/note-card-positions/${noteId}`,
         {
           method: 'PUT',
-          body: JSON.stringify({ ...position, boardKey: activeBoardKey }),
+          body: JSON.stringify({ ...position, boardKey: graphBoardKey }),
         },
       )
       setWorkspaceData((current) => ({
@@ -617,7 +606,7 @@ function App() {
 
   async function resetBoardLayout() {
     try {
-      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(activeBoardKey)}`, {
+      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`, {
         method: 'DELETE',
       })
       setWorkspaceData((current) => ({ ...current, noteCardPositions: [] }))
@@ -713,9 +702,7 @@ function App() {
             ) : null}
             <div className="flex min-h-0 flex-1">
               <KnowledgeCanvas
-                activeBoardKey={activeBoardKey}
                 data={workspaceData}
-                onBoardChange={setActiveBoardKey}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}

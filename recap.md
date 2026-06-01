@@ -172,6 +172,7 @@
 - Workspace request de-dupe validation: added a single-flight cache around `loadWorkspaceData` so React dev `StrictMode` no longer causes duplicate initial workspace API calls. `npm run typecheck` and `npm run build` pass; browser fetch instrumentation on `http://localhost:5173/` confirmed each workspace endpoint is called once on reload.
 - Sidebar domains cleanup validation: removed the hard-coded Domains section from the global sidebar. There was no dedicated Domains API behind that section; backend `domain` fields remain as knowledge metadata. `npm run typecheck`, `npm run build`, and browser smoke confirm the domain labels are gone with no console errors.
 - Sources tree sidebar validation: moved the Source Inbox list into the left Sources sidebar as a collapsible project/folder tree. Opening a top-level project collapses the All Sources note list, folders toggle their own nested notes, and the separate middle inbox column is removed. `npm run typecheck`, `npm run build`, and browser smoke pass with no console errors or horizontal overflow.
+- Graph board tab cleanup validation: removed the Default/Algorithms board tabs and simplified the client to a single graph layout saved under `boardKey=default`. `npm run typecheck`, `npm run build`, and browser smoke pass; the graph header still renders, board labels are gone, and note-card positions still load from the default board.
 
 ## Next Target
 - After #54 merges, move the next focus to auth/user scoping or richer search filters.

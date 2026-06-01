@@ -2,7 +2,6 @@ export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
 export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals'
 export type ThemeMode = 'light' | 'dark'
-export type BoardKey = 'default' | 'algorithms'
 export type RawSourceRole = 'reference' | 'personal_note'
 
 export type RawNote = {

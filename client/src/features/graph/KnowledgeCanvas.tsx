@@ -14,9 +14,8 @@ import {
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
 import { loadKnowledgeTimelineForCompiledNote } from '../../lib/api'
-import { boardOptions, maxCanvasZoom, minCanvasZoom, relationOptions } from '../../lib/constants'
+import { maxCanvasZoom, minCanvasZoom, relationOptions } from '../../lib/constants'
 import type {
-  BoardKey,
   CompiledNote,
   KnowledgeSourceTimeline,
   NoteLink,
@@ -94,22 +93,18 @@ function uniqueRelatedMatches(matches: RelatedNoteMatch[]) {
 }
 
 export function KnowledgeCanvas({
-  activeBoardKey,
   data,
   onCreateNoteLink,
   onDecideNoteLink,
-  onBoardChange,
   onMoveNoteCard,
   onResetBoardLayout,
   onRemoveNoteLink,
   onSelectAgentRun,
   onUpdateNoteLink,
 }: {
-  activeBoardKey: BoardKey
   data: WorkspaceData
   onCreateNoteLink: (input: { sourceNoteId: string; targetNoteId: string; relationType: string }) => void
   onDecideNoteLink: (linkId: string, decision: 'approve' | 'reject') => void
-  onBoardChange: (boardKey: BoardKey) => void
   onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
   onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
@@ -465,22 +460,6 @@ export function KnowledgeCanvas({
           <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
             Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {boardOptions.map((board) => (
-              <button
-                className={`h-8 rounded-md border px-3 text-xs font-extrabold ${
-                  board.key === activeBoardKey
-                    ? 'border-violet bg-violet text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-ink'
-                }`}
-                key={board.key}
-                onClick={() => onBoardChange(board.key)}
-                type="button"
-              >
-                {board.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="absolute right-7 top-6 z-20 flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">

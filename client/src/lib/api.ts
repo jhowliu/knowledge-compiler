@@ -1,8 +1,7 @@
-import { apiBaseUrl } from './constants'
+import { apiBaseUrl, graphBoardKey } from './constants'
 import type {
   AgentRun,
   AgentRunDetail,
-  BoardKey,
   CompiledNote,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
@@ -48,22 +47,22 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   }
 }
 
-const workspaceDataRequests = new Map<BoardKey, Promise<WorkspaceData>>()
+const workspaceDataRequests = new Map<string, Promise<WorkspaceData>>()
 
-export async function loadWorkspaceData(boardKey: BoardKey): Promise<WorkspaceData> {
-  const inFlightRequest = workspaceDataRequests.get(boardKey)
+export async function loadWorkspaceData(): Promise<WorkspaceData> {
+  const inFlightRequest = workspaceDataRequests.get(graphBoardKey)
   if (inFlightRequest) {
     return inFlightRequest
   }
 
-  const request = loadWorkspaceDataWithoutCache(boardKey).finally(() => {
-    workspaceDataRequests.delete(boardKey)
+  const request = loadWorkspaceDataWithoutCache().finally(() => {
+    workspaceDataRequests.delete(graphBoardKey)
   })
-  workspaceDataRequests.set(boardKey, request)
+  workspaceDataRequests.set(graphBoardKey, request)
   return request
 }
 
-async function loadWorkspaceDataWithoutCache(boardKey: BoardKey): Promise<WorkspaceData> {
+async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
   const [
     rawNotes,
     rawSources,
@@ -82,7 +81,7 @@ async function loadWorkspaceDataWithoutCache(boardKey: BoardKey): Promise<Worksp
       requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
       requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
       requestJson<{ noteCardPositions: NoteCardPosition[] }>(
-        `/note-card-positions?boardKey=${encodeURIComponent(boardKey)}`,
+        `/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`,
       ),
       requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
     ])

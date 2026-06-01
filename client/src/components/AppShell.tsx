@@ -14,12 +14,21 @@ import {
 } from 'lucide-react'
 import type { ActiveView, ThemeMode } from '../types/domain'
 
-function IconButton({ label, children }: { label: string; children: React.ReactNode }) {
+function IconButton({
+  label,
+  children,
+  onClick,
+}: {
+  label: string
+  children: React.ReactNode
+  onClick?: () => void
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
+      onClick={onClick}
       className="grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
     >
       {children}
@@ -167,6 +176,7 @@ export function TopToolbar({
   isAgentRunning,
   noteCount,
   onReindexLinks,
+  onSearchOpen,
   onSearchQueryChange,
   onSearchSubmit,
   searchQuery,
@@ -176,6 +186,7 @@ export function TopToolbar({
   compiledCount: number
   isAgentRunning: boolean
   onReindexLinks: () => void
+  onSearchOpen: () => void
   onSearchQueryChange: (value: string) => void
   onSearchSubmit: () => void
   searchQuery: string
@@ -207,7 +218,7 @@ export function TopToolbar({
         </p>
       </div>
 
-      <IconButton label="Filter">
+      <IconButton label="Filter" onClick={onSearchOpen}>
         <Filter size={18} />
       </IconButton>
       <IconButton label="Export">

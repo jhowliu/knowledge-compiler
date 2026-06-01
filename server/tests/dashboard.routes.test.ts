@@ -121,6 +121,87 @@ describe("dashboard routes", () => {
     });
   });
 
+  test("GET /search filters knowledge blocks by domain, type, and source role", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const personalSnapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "coding",
+      knowledgeType: "knowledge_note",
+      title: "Shortest Path State",
+      bodyMarkdown: "Filterable retrieval note.",
+      structuredData: {},
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Stateful shortest path",
+          bodyMarkdown: "filter-target uses distance state.",
+          tokenEstimate: 5,
+        },
+      ],
+    });
+    const referenceSnapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Retrieval Paper",
+      bodyMarkdown: "Filterable retrieval paper.",
+      structuredData: {},
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Reference retrieval",
+          bodyMarkdown: "filter-target uses paper evidence.",
+          tokenEstimate: 5,
+        },
+      ],
+    });
+    knowledgeRepository.sourceRoleByEvidenceSourceId.set("personal-source", "personal_note");
+    knowledgeRepository.sourceRoleByEvidenceSourceId.set("reference-source", "reference");
+    await knowledgeRepository.createEvidenceLink({
+      sourceType: "raw_source",
+      sourceId: "personal-source",
+      targetType: "knowledge_source",
+      targetId: personalSnapshot.source.id,
+      confidence: "high",
+      impactLevel: 1,
+      approvalStatus: "approved",
+    });
+    await knowledgeRepository.createEvidenceLink({
+      sourceType: "raw_source",
+      sourceId: "reference-source",
+      targetType: "knowledge_source",
+      targetId: referenceSnapshot.source.id,
+      confidence: "high",
+      impactLevel: 1,
+      approvalStatus: "approved",
+    });
+
+    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const domainResponse = await request(app).get("/search?q=filter-target&domain=coding");
+    const typeResponse = await request(app).get("/search?q=filter-target&knowledgeType=paper_note");
+    const sourceRoleResponse = await request(app).get(
+      "/search?q=filter-target&sourceRole=personal_note",
+    );
+
+    expect(domainResponse.status).toBe(200);
+    expect(domainResponse.body.results).toHaveLength(1);
+    expect(domainResponse.body.results[0]).toMatchObject({
+      title: "Shortest Path State",
+      domain: "coding",
+      knowledgeType: "knowledge_note",
+    });
+    expect(typeResponse.status).toBe(200);
+    expect(typeResponse.body.results).toHaveLength(1);
+    expect(typeResponse.body.results[0]).toMatchObject({
+      title: "Retrieval Paper",
+      domain: "research",
+      knowledgeType: "paper_note",
+    });
+    expect(sourceRoleResponse.status).toBe(200);
+    expect(sourceRoleResponse.body.results).toHaveLength(1);
+    expect(sourceRoleResponse.body.results[0]).toMatchObject({
+      title: "Shortest Path State",
+    });
+  });
+
   test("GET /knowledge-sources/:id/timeline returns versions and source evidence", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const first = await knowledgeRepository.upsertKnowledgeSourceVersion({

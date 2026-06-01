@@ -34,6 +34,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
+  readonly sourceRoleByEvidenceSourceId = new Map<string, string>();
   relatedResults: SearchResult[] = [];
 
   async upsertConcept(input: {
@@ -63,6 +64,9 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
+    domain?: string | null;
+    knowledgeType?: string | null;
+    sourceRole?: string | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
     const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = this.knowledgeBlocks
@@ -75,6 +79,22 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         return { block, source, version, rank };
       })
       .filter((item) => item.source && item.version && item.source.status === "active" && item.rank > 0)
+      .filter((item) => !input.domain || item.source?.domain === input.domain)
+      .filter((item) => !input.knowledgeType || item.source?.knowledgeType === input.knowledgeType)
+      .filter((item) => {
+        if (!input.sourceRole) {
+          return true;
+        }
+
+        return this.evidenceLinks.some(
+          (link) =>
+            link.approvalStatus === "approved" &&
+            this.sourceRoleByEvidenceSourceId.get(link.sourceId) === input.sourceRole &&
+            ((link.targetType === "knowledge_block" && link.targetId === item.block.id) ||
+              (link.targetType === "knowledge_version" && link.targetId === item.block.knowledgeVersionId) ||
+              (link.targetType === "knowledge_source" && link.targetId === item.block.knowledgeSourceId)),
+        );
+      })
       .sort((a, b) => b.rank - a.rank)
       .slice(0, input.limit);
 

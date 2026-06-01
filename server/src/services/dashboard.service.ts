@@ -15,11 +15,23 @@ export class DashboardService {
     return this.knowledgeRepository.listReviewMaps(25);
   }
 
-  async search(query: string, options: { includeArchived?: boolean; limit?: number } = {}) {
+  async search(
+    query: string,
+    options: {
+      includeArchived?: boolean;
+      limit?: number;
+      domain?: string | null;
+      knowledgeType?: string | null;
+      sourceRole?: string | null;
+    } = {},
+  ) {
     return this.knowledgeRetrievalService.search({
       query,
       includeArchived: options.includeArchived,
       limit: options.limit ?? 20,
+      domain: options.domain,
+      knowledgeType: options.knowledgeType,
+      sourceRole: options.sourceRole,
     });
   }
 

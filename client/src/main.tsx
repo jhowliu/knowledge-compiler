@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { LeftNavigation, TopToolbar } from './components/AppShell'
 import {
-  AgentActivityCenter,
+  AgentActivityPage,
   summarizeAgentActivity,
 } from './features/agent-runs/AgentActivityCenter'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
@@ -53,7 +53,6 @@ function App() {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
   const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
-  const [isAgentActivityOpen, setIsAgentActivityOpen] = useState(false)
   const [selectedAgentRunDetail, setSelectedAgentRunDetail] = useState<AgentRunDetail | null>(null)
   const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,7 +107,6 @@ function App() {
   }
 
   async function openAgentRunDetail(agentRunId: string) {
-    setIsAgentActivityOpen(false)
     setIsAgentRunDetailLoading(true)
     setSelectedAgentRunDetail({
       agentRun: workspaceData.agentRuns.find((agentRun) => agentRun.id === agentRunId) ?? null,
@@ -158,7 +156,6 @@ function App() {
   }
 
   function openProposalFromAgentRun(proposalId: string) {
-    setIsAgentActivityOpen(false)
     setSelectedProposalId(proposalId)
     setActiveView('update_proposals')
     closeAgentRunDetail()
@@ -363,6 +360,12 @@ function App() {
 
   function openUpdateProposalsView() {
     setActiveView('update_proposals')
+    setNotice(null)
+    setError(null)
+  }
+
+  function openAgentActivityView() {
+    setActiveView('agent_activity')
     setNotice(null)
     setError(null)
   }
@@ -730,7 +733,7 @@ function App() {
         <LeftNavigation
           activeView={activeView}
           agentActivitySummary={agentActivitySummary}
-          onAgentActivityClick={() => setIsAgentActivityOpen(true)}
+          onAgentActivityClick={openAgentActivityView}
           onCaptureClick={openNewRawNoteEditor}
           onKnowledgeMapClick={() => setActiveView('knowledge_map')}
           onRawNotesClick={openRawNotesView}
@@ -769,7 +772,7 @@ function App() {
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
-                onOpenAgentActivity={() => setIsAgentActivityOpen(true)}
+                onOpenAgentActivity={openAgentActivityView}
                 onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
@@ -794,6 +797,16 @@ function App() {
             rawSources={workspaceData.rawSources}
             selectedProposalId={selectedProposalId}
           />
+        ) : activeView === 'agent_activity' ? (
+          <AgentActivityPage
+            agentRuns={workspaceData.agentRuns}
+            onOpenProposal={openProposalFromAgentRun}
+            onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
+            onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
+            proposals={workspaceData.proposals}
+            rawNotes={workspaceData.rawNotes}
+            rawSources={workspaceData.rawSources}
+          />
         ) : (
           <RawNoteEditorPage
             agentActivitySummary={agentActivitySummary}
@@ -814,7 +827,7 @@ function App() {
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
-            onOpenAgentActivity={() => setIsAgentActivityOpen(true)}
+            onOpenAgentActivity={openAgentActivityView}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
@@ -840,17 +853,6 @@ function App() {
           />
         )}
       </section>
-      <AgentActivityCenter
-        agentRuns={workspaceData.agentRuns}
-        isOpen={isAgentActivityOpen}
-        onClose={() => setIsAgentActivityOpen(false)}
-        onOpenProposal={openProposalFromAgentRun}
-        onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
-        onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
-        proposals={workspaceData.proposals}
-        rawNotes={workspaceData.rawNotes}
-        rawSources={workspaceData.rawSources}
-      />
       {selectedAgentRunDetail || isAgentRunDetailLoading ? (
         <AgentRunDrawer
           data={workspaceData}

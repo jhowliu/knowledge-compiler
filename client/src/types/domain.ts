@@ -8,7 +8,7 @@ export type Topic = {
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
-export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals'
+export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals' | 'agent_activity'
 export type ThemeMode = 'light' | 'dark'
 export type RawSourceRole = 'reference' | 'personal_note'
 

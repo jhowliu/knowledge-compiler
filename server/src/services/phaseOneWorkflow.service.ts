@@ -2,6 +2,7 @@ import type { AgentRunRepository } from "../repositories/agentRun.repository.js"
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
+import { agentRunEvents } from "../domain/agentRunEvents.js";
 import { CodingCompilerService } from "./codingCompiler.service.js";
 
 export class PhaseOneWorkflowService {
@@ -28,7 +29,7 @@ export class PhaseOneWorkflowService {
     try {
       await this.agentRunRepository.addEvent({
         agentRunId: agentRun.id,
-        eventType: "classification_started",
+        ...agentRunEvents.indexing.classificationStarted,
         payload: { rawNoteId },
       });
 
@@ -37,7 +38,7 @@ export class PhaseOneWorkflowService {
 
       await this.agentRunRepository.addEvent({
         agentRunId: agentRun.id,
-        eventType: "extraction_completed",
+        ...agentRunEvents.indexing.extractionCompleted,
         payload: extraction,
       });
 
@@ -66,7 +67,7 @@ export class PhaseOneWorkflowService {
 
       await this.agentRunRepository.addEvent({
         agentRunId: agentRun.id,
-        eventType: "related_notes_found",
+        ...agentRunEvents.indexing.relatedFound,
         payload: { relatedNotes },
       });
 
@@ -79,7 +80,7 @@ export class PhaseOneWorkflowService {
 
       await this.agentRunRepository.addEvent({
         agentRunId: agentRun.id,
-        eventType: "proposal_created",
+        ...agentRunEvents.proposal.created,
         payload: { proposalId: proposal.id },
       });
       await this.agentRunRepository.complete(agentRun.id, { proposalId: proposal.id });

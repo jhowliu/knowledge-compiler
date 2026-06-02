@@ -236,7 +236,8 @@ export type AgentRun = {
 export type AgentRunEvent = {
   id: string
   agentRunId: string
-  eventType: string
+  category: 'lifecycle' | 'source' | 'tool' | 'indexing' | 'proposal' | 'eval' | 'linking' | 'error'
+  name: string
   payload: unknown
   createdAt: string
 }

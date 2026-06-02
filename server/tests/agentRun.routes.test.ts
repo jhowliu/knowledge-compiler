@@ -63,8 +63,21 @@ describe("agent run routes", () => {
       runType: "reindex_links",
       status: "completed",
     });
-    expect(detailResponse.body.events.map((event: { eventType: string }) => event.eventType))
-      .toEqual(expect.arrayContaining(["queued", "run_started", "run_completed"]));
+    expect(detailResponse.body.events)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          category: "lifecycle",
+          name: "queued",
+        }),
+        expect.objectContaining({
+          category: "lifecycle",
+          name: "started",
+        }),
+        expect.objectContaining({
+          category: "lifecycle",
+          name: "completed",
+        }),
+      ]));
   });
 
   test("rejects unsupported run types", async () => {
@@ -150,11 +163,13 @@ describe("agent run routes", () => {
       expect.arrayContaining([
         expect.objectContaining({
           agentRunId: failedRun.id,
-          eventType: "retry_queued",
+          category: "lifecycle",
+          name: "retry_queued",
         }),
         expect.objectContaining({
           agentRunId: response.body.agentRun.id,
-          eventType: "retry_of",
+          category: "lifecycle",
+          name: "retry_of",
         }),
       ]),
     );

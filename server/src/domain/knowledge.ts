@@ -1,3 +1,5 @@
+import type { AgentRunEventCategory, AgentRunEventName } from "./agentRunEvents.js";
+
 export type Confidence = "low" | "medium" | "high";
 
 export type Concept = {
@@ -201,7 +203,8 @@ export type AgentRun = {
 export type AgentRunEvent = {
   id: string;
   agentRunId: string;
-  eventType: string;
+  category: AgentRunEventCategory;
+  name: AgentRunEventName;
   payload: unknown;
   createdAt: Date;
 };

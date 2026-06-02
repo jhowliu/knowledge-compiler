@@ -55,6 +55,7 @@ const llmWikiIndexer = {
               appliesTo: "constrained shortest path",
             },
           ],
+          inferredSuggestions: [],
         },
         confidence: "high" as const,
       } satisfies GeneralKnowledgeExtraction,
@@ -135,6 +136,7 @@ describe("agent run queue service", () => {
         ],
         examples: [],
         constraints: [],
+        inferredSuggestions: [],
       },
       confidence: "high",
     };

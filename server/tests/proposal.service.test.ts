@@ -279,6 +279,13 @@ describe("ProposalService", () => {
                     appliesTo: "proposal approval",
                   },
                 ],
+                inferredSuggestions: [
+                  {
+                    text: "Maybe add authoring guidelines later.",
+                    reason: "Useful but not part of approved source-backed content.",
+                    confidence: "low",
+                  },
+                ],
               },
             },
             rationale: "Create approved knowledge from facets.",
@@ -293,6 +300,7 @@ describe("ProposalService", () => {
     expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("## Claims");
     expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("Facet-first approval");
     expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("LLM-written markdown");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("authoring guidelines");
     expect(knowledge.compiledNotes[0].structuredData).toMatchObject({
       concepts: [expect.objectContaining({ name: "Facet rendering", type: "method" })],
       claims: [expect.objectContaining({ text: "Approved markdown is rendered from facets." })],

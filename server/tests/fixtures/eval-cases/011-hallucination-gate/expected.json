@@ -1,0 +1,8 @@
+{
+  "min_concepts": 1,
+  "required_concepts": ["solution"],
+  "forbidden_hallucinations": ["Dijkstra", "priority queue", "sliding window", "common traps"],
+  "should_conflict": false,
+  "min_coverage_score": 0.7,
+  "min_grounding_score": 0.8
+}

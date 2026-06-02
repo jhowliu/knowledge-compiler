@@ -1,5 +1,6 @@
 import type {
   DraftProposalInput,
+  EvalWarning,
   JudgeInput,
   JudgeOutput,
 } from "@knowledge-compiler/agent-contracts";
@@ -9,12 +10,25 @@ export function judgeProposalHeuristically(
   input: JudgeInput,
   invalidItemIndexes: Set<number> = new Set(),
 ): JudgeOutput {
+  const facetWarnings = structuredFacetGroundingWarnings(input);
+  const itemsWithHighFacetWarnings = new Set(
+    facetWarnings
+      .filter((warning) => warning.severity === "high" && warning.affected_item_index !== null)
+      .map((warning) => warning.affected_item_index as number),
+  );
   const grounding: JudgeOutput["grounding"] = input.proposal.items.map((item, index) => {
     if (invalidItemIndexes.has(index)) {
       return {
         item_index: index,
         verdict: "ungrounded" as const,
         reason: "One or more source spans failed verbatim validation.",
+      };
+    }
+    if (itemsWithHighFacetWarnings.has(index)) {
+      return {
+        item_index: index,
+        verdict: "ungrounded" as const,
+        reason: "One or more structured facets are missing valid source evidence.",
       };
     }
     return {
@@ -47,6 +61,7 @@ export function judgeProposalHeuristically(
         severity: "high" as const,
         affected_item_index: item.item_index,
       })),
+    ...facetWarnings,
     ...conflictReview
       .filter((item) => item.missed_conflict)
       .map((item) => ({
@@ -60,6 +75,7 @@ export function judgeProposalHeuristically(
   const hasFail =
     coverageScore < 0.5 ||
     grounding.some((item) => item.verdict === "ungrounded") ||
+    facetWarnings.some((warning) => warning.severity === "high") ||
     conflictReview.some((item) => item.missed_conflict);
   const hasWarn = coverageScore < 0.7 || grounding.some((item) => item.verdict === "weak");
 
@@ -75,6 +91,123 @@ export function judgeProposalHeuristically(
     warnings,
     summary: warnings.length ? "Proposal needs review before approval." : "Proposal passed heuristic eval.",
   });
+}
+
+function structuredFacetGroundingWarnings(input: JudgeInput): EvalWarning[] {
+  const chunksById = new Map(input.chunks.map((chunk) => [chunk.id, chunk]));
+  const warnings: EvalWarning[] = [];
+
+  input.proposal.items.forEach((item, itemIndex) => {
+    const facets = item.structured_facets;
+    if (!facets) return;
+
+    facets.claims.forEach((claim, claimIndex) => {
+      if (!claim.evidenceChunkIds.length) {
+        warnings.push({
+          type: "ungrounded",
+          message: `Claim ${claimIndex + 1} has no evidence chunk IDs: ${claim.text}`,
+          severity: "high",
+          affected_item_index: itemIndex,
+        });
+        return;
+      }
+
+      const missingChunkIds = claim.evidenceChunkIds.filter((chunkId) => !chunksById.has(chunkId));
+      if (missingChunkIds.length) {
+        warnings.push({
+          type: "ungrounded",
+          message: `Claim ${claimIndex + 1} cites unknown source chunk IDs: ${missingChunkIds.join(", ")}`,
+          severity: "high",
+          affected_item_index: itemIndex,
+        });
+        return;
+      }
+
+      const citedText = claim.evidenceChunkIds
+        .map((chunkId) => chunksById.get(chunkId)?.body_markdown ?? "")
+        .join("\n")
+        .toLowerCase();
+      const tokens = significantTokens(claim.text);
+      if (tokens.length >= 4) {
+        const supportedTokens = tokens.filter((token) => citedText.includes(token));
+        const coverage = supportedTokens.length / tokens.length;
+        if (coverage < 0.35) {
+          warnings.push({
+            type: "ungrounded",
+            message: `Claim ${claimIndex + 1} has weak lexical support in cited chunks: ${claim.text}`,
+            severity: "high",
+            affected_item_index: itemIndex,
+          });
+        }
+      }
+    });
+
+    const materialFacetCount = facets.methods.length + facets.examples.length + facets.constraints.length;
+    if (materialFacetCount > 0 && facets.claims.length === 0) {
+      warnings.push({
+        type: "ungrounded",
+        message: "Methods, examples, or constraints were proposed without any source-backed claims.",
+        severity: "high",
+        affected_item_index: itemIndex,
+      });
+    }
+
+    for (const suggestion of facets.inferredSuggestions) {
+      if (item.body_markdown.toLowerCase().includes(suggestion.text.toLowerCase())) {
+        warnings.push({
+          type: "ungrounded",
+          message: `Inferred suggestion leaked into approved markdown: ${suggestion.text}`,
+          severity: "high",
+          affected_item_index: itemIndex,
+        });
+      }
+    }
+  });
+
+  return warnings;
+}
+
+const stopwords = new Set([
+  "about",
+  "after",
+  "also",
+  "because",
+  "before",
+  "being",
+  "between",
+  "could",
+  "every",
+  "from",
+  "have",
+  "into",
+  "more",
+  "must",
+  "need",
+  "only",
+  "should",
+  "than",
+  "that",
+  "their",
+  "then",
+  "there",
+  "this",
+  "through",
+  "when",
+  "where",
+  "with",
+  "without",
+  "would",
+]);
+
+function significantTokens(text: string) {
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .match(/[a-z0-9_]{4,}/g)
+        ?.filter((token) => !stopwords.has(token)) ?? [],
+    ),
+  );
 }
 
 export class EvalJudgeService {

@@ -37,6 +37,12 @@ export type KnowledgeConstraintFacet = {
   appliesTo: string | null;
 };
 
+export type KnowledgeInferredSuggestion = {
+  text: string;
+  reason: string;
+  confidence: Confidence;
+};
+
 export type KnowledgeStructuredData = {
   summary: string;
   concepts: KnowledgeConceptFacet[];
@@ -44,6 +50,7 @@ export type KnowledgeStructuredData = {
   methods: KnowledgeMethodFacet[];
   examples: KnowledgeExampleFacet[];
   constraints: KnowledgeConstraintFacet[];
+  inferredSuggestions: KnowledgeInferredSuggestion[];
   rawSourceId?: string | null;
   rawNoteId?: string | null;
   sourceRole?: string;

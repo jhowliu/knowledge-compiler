@@ -37,7 +37,7 @@ export type WikiIndexer = {
 const knowledgeStructuredDataSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "concepts", "claims", "methods", "examples", "constraints"],
+  required: ["summary", "concepts", "claims", "methods", "examples", "constraints", "inferredSuggestions"],
   properties: {
     summary: { type: "string" },
     concepts: {
@@ -103,6 +103,19 @@ const knowledgeStructuredDataSchema = {
         properties: {
           text: { type: "string" },
           appliesTo: { type: ["string", "null"] },
+        },
+      },
+    },
+    inferredSuggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "reason", "confidence"],
+        properties: {
+          text: { type: "string" },
+          reason: { type: "string" },
+          confidence: { type: "string", enum: ["low", "medium", "high"] },
         },
       },
     },
@@ -220,14 +233,24 @@ export class WikiIndexerService {
 
   private async extractWithOpenAI(source: WikiIndexingSource): Promise<GeneralKnowledgeExtraction> {
     const openAiApiKey = process.env.OPENAI_API_KEY;
-    const chunkContext = source.chunks.length
+    const promptChunks = source.chunks.length
       ? source.chunks
-          .map((chunk) => {
-            const heading = chunk.heading ? ` (${chunk.heading})` : "";
-            return `Chunk ${chunk.chunkIndex + 1}${heading}:\n${chunk.bodyMarkdown}`;
-          })
-          .join("\n\n---\n\n")
-      : source.bodyMarkdown;
+      : [{
+          id: `${source.id}:body`,
+          chunkIndex: 0,
+          heading: source.title,
+          bodyMarkdown: source.bodyMarkdown,
+          tokenEstimate: Math.max(1, Math.ceil(source.bodyMarkdown.length / 4)),
+          rawSourceId: source.rawSourceId ?? source.id,
+          metadata: {},
+          createdAt: new Date(),
+        }];
+    const chunkContext = promptChunks
+      .map((chunk) => {
+        const heading = chunk.heading ? ` (${chunk.heading})` : "";
+        return `Chunk ${chunk.chunkIndex + 1}${heading}\nChunk ID: ${chunk.id}\n${chunk.bodyMarkdown}`;
+      })
+      .join("\n\n---\n\n");
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -240,7 +263,7 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "Extract the source into general LLM-wiki facets. The structuredData object is the source of truth; do not create coding/interview-specific top-level fields such as patterns, algorithms, recognition signals, key insights, implementation details, or common traps. Use concepts, claims, methods, examples, and constraints instead. Only include content supported by the source text. Source roles can be personal_note or reference; use the role as context without forcing an interview-specific classification.",
+              "Extract the source into strict source-grounded LLM-wiki facets. The structuredData object is the source of truth; do not create coding/interview-specific top-level fields such as patterns, algorithms, recognition signals, key insights, implementation details, or common traps. Use concepts, claims, methods, examples, and constraints instead. Only include content directly supported by the source text. Do not add facts, algorithms, steps, traps, examples, terminology, or conclusions from outside knowledge. Every claim must cite one or more provided Chunk IDs in evidenceChunkIds. If a useful idea seems likely but is not explicitly supported by the source, put it in inferredSuggestions instead of claims, methods, examples, constraints, or summary. Source roles can be personal_note or reference; use the role as context without forcing an interview-specific classification.",
           },
           {
             role: "user",

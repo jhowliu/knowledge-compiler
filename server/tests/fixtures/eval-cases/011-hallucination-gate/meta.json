@@ -1,0 +1,5 @@
+{
+  "description": "Sparse source note should not expand into tutorial content from outside knowledge",
+  "topics": ["grounding", "hallucination"],
+  "difficulty": "medium"
+}

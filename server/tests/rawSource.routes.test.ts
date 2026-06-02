@@ -45,6 +45,7 @@ const routeWikiIndexer = {
           ],
           examples: [],
           constraints: [],
+          inferredSuggestions: [],
         },
         confidence: "high" as const,
       } satisfies GeneralKnowledgeExtraction,

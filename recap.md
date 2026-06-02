@@ -9,6 +9,7 @@
 - Added optional pgvector support for approved `knowledge_blocks`: migration `015_knowledge_block_embeddings.sql`, OpenAI embedding service, approval-time block embedding writes, vector-aware RRF search, and `npm run backfill:embeddings --workspace=server`.
 - Added a 10-case offline golden eval fixture set plus `npm run eval --workspace=server` for prompt/indexing regression checks.
 - Wired `/search` and `/ask` through the same embedding-aware `KnowledgeRetrievalService`, so both use FTS + concept ranking + vector similarity when embeddings are available.
+- Started issue #84 on `codex/strict-grounded-indexing`: added `inferredSuggestions` to the general facet contract, tightened the wiki-indexing prompt/schema around chunk IDs, made the heuristic eval judge fail unsupported structured claims, kept inferred suggestions out of approved Markdown/RAG blocks, and surfaced inferred suggestions separately in the Review Inbox modal.
 - Created `PRD.md` from the existing Interview Knowledge Compiler PRD.
 - Added Section 34, Technical Specification, covering the agreed React + Express + self-hosted Postgres direction.
 - Captured the no-ORM decision: use the `postgres` Node.js client with hand-written SQL and plain migrations.
@@ -137,6 +138,8 @@
 - Phase D does not drop legacy `domain` columns yet: active repository, service, UI, and test code still reads/writes them. The drop-domain migration remains blocked until the app is fully topic-only.
 - Phase E embeddings are opportunistic: if `pgvector` or `OPENAI_API_KEY` is unavailable, approval/search continue with the existing non-vector paths instead of blocking local use.
 - Eval fixtures are intentionally checked in as lightweight source/expected pairs; the runner reports coverage/grounding and exits non-zero on expectation failures.
+- Inferred suggestions are review metadata only. They can help explain likely missing context, but they are not rendered into approved Markdown and therefore should not enter `/ask` retrieval blocks.
+- Heuristic grounding now treats claim-level evidence as mandatory: each structured claim needs valid source chunk IDs and weak lexical support is a failed eval until a stronger LLM judge replaces the heuristic.
 
 ## Open Issues
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
@@ -206,9 +209,10 @@
 - Phase D validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. No migration was added in this slice.
 - Phase E validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run eval --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. `npm run migrate --workspace=server` was attempted but failed at database authentication for user `admin` before migrations ran.
 - General facets validation: `npm run typecheck --workspace=@knowledge-compiler/agent-contracts`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, `npm run build`, `npm run eval --workspace=server`, and `git diff --check` pass. No DB migration was needed.
+- Strict source-grounded indexing validation: `npm run typecheck --workspace=@knowledge-compiler/agent-contracts`, `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, focused grounding/facet/proposal tests, `npm run eval --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. No DB migration was needed.
 
 ## Next Target
-- After #59/#83 merges, implement #84 strict source-grounded indexing/hallucination eval gates so facets cannot include unsupported claims.
+- After #84 merges, consider adding a stronger LLM-backed entailment judge for claim-to-span support and a visible eval baseline in CI.
 - Run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.
 - Finish topic-only domain cleanup before attempting the destructive domain-column migration.
 - Add a frontend ask panel and manual QA with real OpenAI answers/citations.

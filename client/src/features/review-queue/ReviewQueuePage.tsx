@@ -116,6 +116,30 @@ function proposalRawSource(proposal: Proposal | null, rawNote: RawNote | undefin
   return rawSourceId ? rawSources.find((rawSource) => rawSource.id === rawSourceId) : undefined
 }
 
+type InferredSuggestion = {
+  text: string
+  reason: string
+  confidence: string
+}
+
+function inferredSuggestions(item: ProposalItem): InferredSuggestion[] {
+  const structuredData = item.payload.structuredData
+  if (!structuredData || typeof structuredData !== 'object' || Array.isArray(structuredData)) return []
+  const suggestions = (structuredData as { inferredSuggestions?: unknown }).inferredSuggestions
+  if (!Array.isArray(suggestions)) return []
+  return suggestions.flatMap((suggestion) => {
+    if (!suggestion || typeof suggestion !== 'object' || Array.isArray(suggestion)) return []
+    const record = suggestion as Record<string, unknown>
+    return typeof record.text === 'string' && record.text.trim()
+      ? [{
+          text: record.text,
+          reason: typeof record.reason === 'string' ? record.reason : '',
+          confidence: typeof record.confidence === 'string' ? record.confidence : 'low',
+        }]
+      : []
+  })
+}
+
 function proposalLifecycle(proposal: Proposal | null) {
   if (!proposal) return 'No proposal'
   if (proposal.status === 'pending') return 'Needs approval'
@@ -408,6 +432,7 @@ function KnowledgeUpdateCard({
   const before = explicitBefore || existingCompiledNoteFor(item, compiledNotes)?.bodyMarkdown || ''
   const knowledgeType = payloadText(item.payload, 'knowledgeType', 'knowledge')
   const domain = payloadText(item.payload, 'domain')
+  const suggestions = inferredSuggestions(item)
 
   return (
     <article className="rounded-lg border border-gray-200 bg-white p-4">
@@ -440,6 +465,24 @@ function KnowledgeUpdateCard({
           This knowledge note will be created or updated after approval.
         </p>
       )}
+      {suggestions.length ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800">
+            Inferred suggestions not applied
+          </p>
+          <div className="mt-2 space-y-2">
+            {suggestions.map((suggestion, index) => (
+              <div className="rounded-md bg-white/70 p-2 text-xs leading-5 text-amber-950" key={`${suggestion.text}-${index}`}>
+                <p className="font-bold">{suggestion.text}</p>
+                {suggestion.reason ? <p className="mt-1 text-amber-900">{suggestion.reason}</p> : null}
+                <p className="mt-1 text-[10px] font-bold uppercase text-amber-700">
+                  Confidence: {suggestion.confidence}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </article>
   )
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const toolContractVersion = "1.1.0";
+export const toolContractVersion = "1.2.0";
 
 export class AgentContractError extends Error {
   constructor(
@@ -59,6 +59,13 @@ export const knowledgeStructuredDataSchema = z.object({
     z.object({
       text: z.string().min(1),
       appliesTo: z.string().nullable(),
+    }),
+  ),
+  inferredSuggestions: z.array(
+    z.object({
+      text: z.string().min(1),
+      reason: z.string(),
+      confidence: confidenceSchema,
     }),
   ),
 });

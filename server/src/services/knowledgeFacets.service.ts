@@ -2,6 +2,7 @@ import type {
   KnowledgeConceptFacet,
   KnowledgeConstraintFacet,
   KnowledgeExampleFacet,
+  KnowledgeInferredSuggestion,
   KnowledgeMethodFacet,
   KnowledgeStructuredData,
 } from "../domain/compiler.js";
@@ -48,6 +49,7 @@ export function normalizeKnowledgeStructuredData(value: unknown): KnowledgeStruc
     methods: normalizeMethods(record.methods),
     examples: normalizeExamples(record.examples),
     constraints: normalizeConstraints(record.constraints),
+    inferredSuggestions: normalizeInferredSuggestions(record.inferredSuggestions),
     rawSourceId: typeof record.rawSourceId === "string" ? record.rawSourceId : null,
     rawNoteId: typeof record.rawNoteId === "string" ? record.rawNoteId : null,
     sourceRole: typeof record.sourceRole === "string" ? record.sourceRole : undefined,
@@ -171,6 +173,21 @@ function normalizeConstraints(value: unknown): KnowledgeConstraintFacet[] {
         ? [{
             text,
             appliesTo: stringValue(record.appliesTo) || null,
+          }]
+        : [];
+    });
+}
+
+function normalizeInferredSuggestions(value: unknown): KnowledgeInferredSuggestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+      const record = asRecord(item);
+      const text = stringValue(record.text);
+      return text
+        ? [{
+            text,
+            reason: stringValue(record.reason),
+            confidence: confidenceValue(record.confidence, "low"),
           }]
         : [];
     });

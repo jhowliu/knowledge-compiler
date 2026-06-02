@@ -15,7 +15,6 @@ const routeWikiIndexer = {
     return {
       provider: "openai" as const,
       extraction: {
-        domain: "general",
         knowledgeType: "knowledge_note",
         title: "Source-first Indexing",
         structuredData: {
@@ -57,7 +56,7 @@ const routeWikiIndexer = {
     relatedNotes: SearchResult[],
   ) {
     return {
-      detectedDomain: extraction.domain,
+      detectedDomain: null,
       detectedKnowledgeType: "knowledge_note",
       impactLevel: 2,
       confidence: extraction.confidence,
@@ -67,7 +66,6 @@ const routeWikiIndexer = {
           actionType: "upsert_knowledge",
           targetType: "knowledge_source",
           payload: {
-            domain: extraction.domain,
             knowledgeType: "knowledge_note",
             title: source.title ?? "Untitled source",
             bodyMarkdown: extraction.structuredData.summary,

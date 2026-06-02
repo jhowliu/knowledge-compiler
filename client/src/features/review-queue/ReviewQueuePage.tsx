@@ -362,7 +362,6 @@ function lineDiff(beforeMarkdown: string, afterMarkdown: string): DiffLine[] {
 
 function existingCompiledNoteFor(item: ProposalItem, compiledNotes: CompiledNote[]) {
   const title = payloadText(item.payload, 'title')
-  const domain = payloadText(item.payload, 'domain')
   const noteType = payloadText(item.payload, 'noteType', payloadText(item.payload, 'knowledgeType'))
 
   if (!title) return null
@@ -370,9 +369,8 @@ function existingCompiledNoteFor(item: ProposalItem, compiledNotes: CompiledNote
   return (
     compiledNotes.find((note) => {
       const sameTitle = note.title.toLowerCase() === title.toLowerCase()
-      const sameDomain = !domain || note.domain.toLowerCase() === domain.toLowerCase()
       const sameType = !noteType || note.noteType.toLowerCase() === noteType.toLowerCase()
-      return sameTitle && sameDomain && sameType
+      return sameTitle && sameType
     }) ?? null
   )
 }
@@ -431,7 +429,6 @@ function KnowledgeUpdateCard({
     payloadText(item.payload, 'currentBodyMarkdown')
   const before = explicitBefore || existingCompiledNoteFor(item, compiledNotes)?.bodyMarkdown || ''
   const knowledgeType = payloadText(item.payload, 'knowledgeType', 'knowledge')
-  const domain = payloadText(item.payload, 'domain')
   const suggestions = inferredSuggestions(item)
 
   return (
@@ -451,7 +448,6 @@ function KnowledgeUpdateCard({
       </div>
       <div className="mb-3 flex flex-wrap gap-2">
         <MetadataPill>{knowledgeType}</MetadataPill>
-        {domain ? <MetadataPill>{domain}</MetadataPill> : null}
       </div>
       <ProposalItemBadges item={item} />
       <ProposalItemWarnings item={item} />

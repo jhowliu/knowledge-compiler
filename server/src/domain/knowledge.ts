@@ -14,7 +14,6 @@ export type Concept = {
 export type CompiledNote = {
   id: string;
   userId: string | null;
-  domain: string;
   noteType: string;
   title: string;
   bodyMarkdown: string;
@@ -28,7 +27,6 @@ export type CompiledNote = {
 export type KnowledgeSource = {
   id: string;
   userId: string | null;
-  domain: string;
   knowledgeType: string;
   title: string;
   status: string;
@@ -87,7 +85,6 @@ export type KnowledgeBlockSearchResult = {
   knowledgeVersionId: string;
   compiledNoteId: string | null;
   title: string;
-  domain: string;
   knowledgeType: string;
   versionNumber: number;
   blockIndex: number;
@@ -214,7 +211,6 @@ export type SearchResult = {
   targetType: "raw_note" | "compiled_note";
   title: string | null;
   bodyMarkdown: string;
-  domain: string | null;
   noteType: string | null;
   rank: number;
   createdAt: Date;

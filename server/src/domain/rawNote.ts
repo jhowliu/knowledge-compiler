@@ -4,7 +4,6 @@ export type RawNote = {
   id: string;
   userId: string | null;
   rawSourceId: string | null;
-  domain: string | null;
   sourceType: string;
   sourceRole: RawSourceRole;
   title: string | null;
@@ -22,7 +21,6 @@ export type RawNoteWithProposal = {
 export type CreateRawNoteInput = {
   userId?: string | null;
   rawSourceId?: string | null;
-  domain?: string | null;
   subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
@@ -32,7 +30,6 @@ export type CreateRawNoteInput = {
 };
 
 export type UpdateRawNoteInput = {
-  domain?: string | null;
   subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;

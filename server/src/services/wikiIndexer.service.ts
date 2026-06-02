@@ -125,9 +125,8 @@ const knowledgeStructuredDataSchema = {
 const extractionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["domain", "knowledgeType", "title", "structuredData", "confidence"],
+  required: ["knowledgeType", "title", "structuredData", "confidence"],
   properties: {
-    domain: { type: "string" },
     knowledgeType: { type: "string" },
     title: { type: ["string", "null"] },
     structuredData: knowledgeStructuredDataSchema,
@@ -191,7 +190,7 @@ export class WikiIndexerService {
       .slice(0, 3);
 
     return {
-      detectedDomain: extraction.domain,
+      detectedDomain: null,
       detectedKnowledgeType: knowledgeType,
       impactLevel: relatedCompiledNotes.length ? 3 : 2,
       confidence: extraction.confidence,
@@ -203,7 +202,6 @@ export class WikiIndexerService {
           actionType: "upsert_knowledge",
           targetType: "knowledge_source",
           payload: {
-            domain: extraction.domain,
             knowledgeType,
             title,
             bodyMarkdown,
@@ -318,7 +316,6 @@ function normalizeExtraction(value: unknown): GeneralKnowledgeExtraction {
     : "medium";
 
   return {
-    domain: typeof record.domain === "string" && record.domain.trim() ? record.domain.trim() : "general",
     knowledgeType:
       typeof record.knowledgeType === "string" && record.knowledgeType.trim()
         ? record.knowledgeType.trim()

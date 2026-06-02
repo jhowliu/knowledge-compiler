@@ -6,7 +6,6 @@ describe("dashboard routes", () => {
   test("GET /search returns active knowledge blocks with evidence references", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const snapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "LLM Agent Memory",
       bodyMarkdown: "Agent memory should retrieve approved knowledge blocks.",
@@ -52,7 +51,6 @@ describe("dashboard routes", () => {
   test("GET /search excludes archived knowledge blocks unless requested", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Retrieval Design",
       bodyMarkdown: "Old stale retrieval detail.",
@@ -67,7 +65,6 @@ describe("dashboard routes", () => {
       ],
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Retrieval Design",
       bodyMarkdown: "Current retrieval detail.",
@@ -99,7 +96,6 @@ describe("dashboard routes", () => {
   test("GET /search can retrieve blocks through embedding similarity", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const snapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Attention Mechanisms",
       bodyMarkdown: "Query and key vectors choose which tokens to attend to.",
@@ -136,7 +132,6 @@ describe("dashboard routes", () => {
   test("GET /knowledge-sources/:id/timeline returns versions and source evidence", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const first = await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Agent Memory",
       bodyMarkdown: "Initial memory note.",
@@ -152,7 +147,6 @@ describe("dashboard routes", () => {
       ],
     });
     const second = await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Agent Memory",
       bodyMarkdown: "Updated memory note.",
@@ -216,14 +210,12 @@ describe("dashboard routes", () => {
   test("GET /compiled-notes/:id/timeline resolves the backing knowledge source", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const compiledNote = await knowledgeRepository.upsertCompiledNote({
-      domain: "research",
       noteType: "paper_note",
       title: "Compiled Memory",
       bodyMarkdown: "Compiled note.",
       structuredData: {},
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Compiled Memory",
       bodyMarkdown: "Compiled note.",

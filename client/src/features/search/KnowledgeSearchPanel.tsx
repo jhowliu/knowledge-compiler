@@ -208,7 +208,7 @@ export function KnowledgeSearchPanel({
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                          {result.domain} / {result.knowledgeType} / v{result.versionNumber}
+                          {result.knowledgeType} / v{result.versionNumber}
                         </p>
                         <h3 className="mt-1 text-[17px] font-bold leading-6 text-ink">
                           {result.title}

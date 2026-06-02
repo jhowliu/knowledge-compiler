@@ -23,7 +23,6 @@ describe("ProposalService", () => {
             actionType: "upsert_compiled_note",
             targetType: "compiled_note",
             payload: {
-              domain: "coding",
               noteType: "problem_note",
               title: "1334. Find the City",
               bodyMarkdown: "Problem: Find the City",
@@ -43,7 +42,6 @@ describe("ProposalService", () => {
     expect(knowledge.knowledgeVersions).toHaveLength(1);
     expect(knowledge.knowledgeBlocks).toHaveLength(1);
     expect(knowledge.knowledgeSources[0]).toMatchObject({
-      domain: "coding",
       knowledgeType: "problem_note",
       title: "1334. Find the City",
       currentVersionId: "knowledge-version-1",
@@ -74,7 +72,6 @@ describe("ProposalService", () => {
         targetType: "compiled_note",
         title: "BFS for unweighted shortest path",
         bodyMarkdown: "Use BFS when all edges have weight 1.",
-        domain: "coding",
         noteType: "algorithm",
         rank: 2,
         createdAt: new Date("2026-05-24T00:00:00.000Z"),
@@ -93,7 +90,6 @@ describe("ProposalService", () => {
             actionType: "upsert_compiled_note",
             targetType: "compiled_note",
             payload: {
-              domain: "coding",
               noteType: "knowledge_note",
               title: "Shortest Path Decision Guide",
               bodyMarkdown: "Weight = 1 -> BFS",
@@ -138,7 +134,6 @@ describe("ProposalService", () => {
             actionType: "upsert_compiled_note",
             targetType: "compiled_note",
             payload: {
-              domain: "coding",
               noteType: "algorithm",
               title: "Dijkstra",
               bodyMarkdown: "Use a priority queue for positive weighted shortest paths.",
@@ -164,7 +159,6 @@ describe("ProposalService", () => {
             actionType: "upsert_compiled_note",
             targetType: "compiled_note",
             payload: {
-              domain: "coding",
               noteType: "algorithm",
               title: "Dijkstra",
               bodyMarkdown: "Track extra state when constraints limit stops or edges.",
@@ -207,7 +201,6 @@ describe("ProposalService", () => {
             actionType: "upsert_knowledge",
             targetType: "knowledge_source",
             payload: {
-              domain: "research",
               knowledgeType: "paper_note",
               title: "Vector search",
               bodyMarkdown: "Vector search helps semantic retrieval.",
@@ -243,7 +236,6 @@ describe("ProposalService", () => {
             actionType: "upsert_knowledge",
             targetType: "knowledge_source",
             payload: {
-              domain: "learning",
               knowledgeType: "knowledge_note",
               title: "Grounded note format",
               bodyMarkdown: "LLM-written markdown that should not be trusted.",
@@ -314,7 +306,6 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
 
     const existing = await knowledge.upsertCompiledNote({
-      domain: "coding",
       noteType: "algorithm",
       title: "BFS",
       bodyMarkdown: "Use BFS for unweighted shortest paths.",
@@ -333,7 +324,6 @@ describe("ProposalService", () => {
             actionType: "upsert_knowledge",
             targetType: "knowledge_source",
             payload: {
-              domain: "coding",
               knowledgeType: "algorithm",
               title: "Dijkstra",
               bodyMarkdown: "Use Dijkstra for positive weighted shortest paths.",

@@ -7,7 +7,6 @@ export type RawSource = {
   userId: string | null;
   projectId: string | null;
   folderId: string | null;
-  domain: string | null;
   subtype: string | null;
   sourceType: string;
   sourceRole: RawSourceRole;
@@ -39,7 +38,6 @@ export type CreateRawSourceInput = {
   userId?: string | null;
   projectId?: string | null;
   folderId?: string | null;
-  domain?: string | null;
   subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;
@@ -52,7 +50,6 @@ export type CreateRawSourceInput = {
 export type UpdateRawSourceInput = {
   projectId?: string | null;
   folderId?: string | null;
-  domain?: string | null;
   subtype?: string | null;
   sourceType?: string;
   sourceRole?: RawSourceRole;

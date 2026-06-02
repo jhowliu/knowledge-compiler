@@ -25,7 +25,6 @@ type ConceptRow = {
 type CompiledNoteRow = {
   id: string;
   user_id: string | null;
-  domain: string;
   note_type: string;
   title: string;
   body_markdown: string;
@@ -39,7 +38,6 @@ type CompiledNoteRow = {
 type KnowledgeSourceRow = {
   id: string;
   user_id: string | null;
-  domain: string;
   knowledge_type: string;
   title: string;
   status: string;
@@ -81,7 +79,6 @@ type SearchResultRow = {
   target_type: "raw_note" | "compiled_note";
   title: string | null;
   body_markdown: string;
-  domain: string | null;
   note_type: string | null;
   rank: number;
   created_at: Date;
@@ -93,7 +90,6 @@ type KnowledgeBlockSearchRow = {
   knowledge_version_id: string;
   compiled_note_id: string | null;
   title: string;
-  domain: string;
   knowledge_type: string;
   version_number: number;
   block_index: number;
@@ -151,7 +147,6 @@ function mapCompiledNote(row: CompiledNoteRow): CompiledNote {
   return {
     id: row.id,
     userId: row.user_id,
-    domain: row.domain,
     noteType: row.note_type,
     title: row.title,
     bodyMarkdown: row.body_markdown,
@@ -167,7 +162,6 @@ function mapKnowledgeSource(row: KnowledgeSourceRow): KnowledgeSource {
   return {
     id: row.id,
     userId: row.user_id,
-    domain: row.domain,
     knowledgeType: row.knowledge_type,
     title: row.title,
     status: row.status,
@@ -215,7 +209,6 @@ function mapSearchResult(row: SearchResultRow): SearchResult {
     targetType: row.target_type,
     title: row.title,
     bodyMarkdown: row.body_markdown,
-    domain: row.domain,
     noteType: row.note_type,
     rank: Number(row.rank),
     createdAt: row.created_at,
@@ -250,7 +243,6 @@ function mapKnowledgeBlockSearchResult(
     knowledgeVersionId: row.knowledge_version_id,
     compiledNoteId: row.compiled_note_id,
     title: row.title,
-    domain: row.domain,
     knowledgeType: row.knowledge_type,
     versionNumber: row.version_number,
     blockIndex: row.block_index,
@@ -450,7 +442,6 @@ export interface KnowledgeRepository {
   }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
-    domain: string;
     noteType: string;
     title: string;
     bodyMarkdown: string;
@@ -459,7 +450,6 @@ export interface KnowledgeRepository {
   listCompiledNotes(limit: number): Promise<CompiledNote[]>;
   upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
-    domain: string;
     knowledgeType: string;
     title: string;
     bodyMarkdown: string;
@@ -587,7 +577,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
             'compiled_note'::text as target_type,
             title,
             body_markdown,
-            domain,
             note_type,
             ts_rank(search_vector, query.ts_query) as rank,
             created_at
@@ -601,7 +590,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
             'raw_note'::text as target_type,
             title,
             body_markdown,
-            domain,
             null::text as note_type,
             ts_rank(search_vector, query.ts_query) as rank,
             created_at
@@ -614,7 +602,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
             cn.target_type,
             coalesce(compiled_notes.title, raw_notes.title) as title,
             coalesce(compiled_notes.body_markdown, raw_notes.body_markdown) as body_markdown,
-            coalesce(compiled_notes.domain, raw_notes.domain) as domain,
             compiled_notes.note_type,
             2.0::real as rank,
             coalesce(compiled_notes.created_at, raw_notes.created_at) as created_at
@@ -631,7 +618,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           target_type,
           title,
           body_markdown,
-          domain,
           note_type,
           rank,
           created_at
@@ -720,7 +706,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           knowledge_blocks.knowledge_version_id,
           knowledge_versions.compiled_note_id,
           knowledge_sources.title,
-          knowledge_sources.domain,
           knowledge_sources.knowledge_type,
           knowledge_versions.version_number,
           knowledge_blocks.block_index,
@@ -830,7 +815,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           knowledge_blocks.knowledge_version_id,
           knowledge_versions.compiled_note_id,
           knowledge_sources.title,
-          knowledge_sources.domain,
           knowledge_sources.knowledge_type,
           knowledge_versions.version_number,
           knowledge_blocks.block_index,
@@ -886,7 +870,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           knowledge_blocks.knowledge_version_id,
           knowledge_versions.compiled_note_id,
           knowledge_sources.title,
-          knowledge_sources.domain,
           knowledge_sources.knowledge_type,
           knowledge_versions.version_number,
           knowledge_blocks.block_index,
@@ -921,7 +904,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
   async upsertCompiledNote(input: {
     userId?: string | null;
-    domain: string;
     noteType: string;
     title: string;
     bodyMarkdown: string;
@@ -932,12 +914,11 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         select *
         from compiled_notes
         where user_id is not distinct from $1
-          and domain = $2
-          and note_type = $3
-          and lower(title) = lower($4)
+          and note_type = $2
+          and lower(title) = lower($3)
         limit 1
       `,
-      [input.userId ?? null, input.domain, input.noteType, input.title],
+      [input.userId ?? null, input.noteType, input.title],
     );
 
     const result = existing.rows[0]
@@ -956,18 +937,16 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           `
             insert into compiled_notes (
               user_id,
-              domain,
               note_type,
               title,
               body_markdown,
               structured_data
             )
-            values ($1, $2, $3, $4, $5, $6)
+            values ($1, $2, $3, $4, $5)
             returning *
           `,
           [
             input.userId ?? null,
-            input.domain,
             input.noteType,
             input.title,
             input.bodyMarkdown,
@@ -995,7 +974,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
   async upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
-    domain: string;
     knowledgeType: string;
     title: string;
     bodyMarkdown: string;
@@ -1011,13 +989,12 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           select *
           from knowledge_sources
           where user_id is not distinct from $1
-            and domain = $2
-            and knowledge_type = $3
-            and lower(title) = lower($4)
+            and knowledge_type = $2
+            and lower(title) = lower($3)
             and status = 'active'
           limit 1
         `,
-        [input.userId ?? null, input.domain, input.knowledgeType, input.title],
+        [input.userId ?? null, input.knowledgeType, input.title],
       );
 
       const source = existing.rows[0]
@@ -1049,17 +1026,15 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
                 `
                   insert into knowledge_sources (
                     user_id,
-                    domain,
                     knowledge_type,
                     title,
                     metadata
                   )
-                  values ($1, $2, $3, $4, $5)
+                  values ($1, $2, $3, $4)
                   returning *
                 `,
                 [
                   input.userId ?? null,
-                  input.domain,
                   input.knowledgeType,
                   input.title,
                   {

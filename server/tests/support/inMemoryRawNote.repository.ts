@@ -9,7 +9,6 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
       id: `raw-note-${this.notes.length + 1}`,
       userId: input.userId ?? null,
       rawSourceId: input.rawSourceId ?? null,
-      domain: input.domain ?? null,
       sourceType: input.sourceType ?? "manual",
       sourceRole: input.sourceRole ?? "personal_note",
       title: input.title ?? null,
@@ -39,7 +38,6 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
       return null;
     }
 
-    note.domain = input.domain ?? null;
     note.sourceType = input.sourceType ?? "manual";
     note.sourceRole = input.sourceRole ?? "personal_note";
     note.title = input.title ?? null;
@@ -58,14 +56,13 @@ export class InMemoryRawNoteRepository implements RawNoteRepository {
     return true;
   }
 
-  async updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote> {
+  async updateExtraction(id: string, extractedData: unknown): Promise<RawNote> {
     const note = await this.getById(id);
     if (!note) {
       throw new Error("Raw note not found");
     }
 
     note.extractedData = extractedData;
-    note.domain = domain ?? note.domain;
     return note;
   }
 }

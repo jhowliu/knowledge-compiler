@@ -64,7 +64,6 @@ export type KnowledgeStructuredData = {
 };
 
 export type GeneralKnowledgeExtraction = {
-  domain: string;
   knowledgeType: string;
   title: string | null;
   structuredData: KnowledgeStructuredData;
@@ -109,7 +108,7 @@ export type DraftProposalItem = {
 };
 
 export type DraftUpdateProposal = {
-  detectedDomain: string;
+  detectedDomain: string | null;
   detectedKnowledgeType: string;
   impactLevel: number;
   confidence: Confidence;

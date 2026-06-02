@@ -5,7 +5,6 @@ const rawSourceRoleSchema = z.enum(rawSourceRoles);
 
 export const createRawNoteSchema = z.object({
   userId: z.string().uuid().nullable().optional(),
-  domain: z.string().min(1).nullable().optional(),
   subtype: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),
@@ -15,7 +14,6 @@ export const createRawNoteSchema = z.object({
 });
 
 export const updateRawNoteSchema = z.object({
-  domain: z.string().min(1).nullable().optional(),
   subtype: z.string().min(1).nullable().optional(),
   sourceType: z.string().min(1).optional(),
   sourceRole: rawSourceRoleSchema.optional(),

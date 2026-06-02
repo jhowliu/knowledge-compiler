@@ -86,7 +86,6 @@ describe("agent tool service", () => {
       ],
     );
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "general",
       knowledgeType: "knowledge_note",
       title: "Merge Sorted Array",
       bodyMarkdown: "Scan arrays from the end.",

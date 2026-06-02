@@ -12,7 +12,6 @@ describe("ask routes", () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Agent Memory",
       bodyMarkdown: "Agent memory should retrieve approved knowledge blocks.",
@@ -98,7 +97,6 @@ describe("ask routes", () => {
   test("POST /ask topic_ids filter narrows the retrieval corpus", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Topic A Retrieval",
       bodyMarkdown: "Shared retrieval phrase belongs to topic A.",
@@ -114,7 +112,6 @@ describe("ask routes", () => {
       ],
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Topic B Retrieval",
       bodyMarkdown: "Shared retrieval phrase belongs to topic B.",
@@ -158,7 +155,6 @@ describe("ask routes", () => {
   test("POST /ask can retrieve through concept index matches", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const compiledNote = await knowledgeRepository.upsertCompiledNote({
-      domain: "research",
       noteType: "paper_note",
       title: "Rank fusion",
       bodyMarkdown: "Combine independent retrievers by reciprocal rank.",
@@ -177,7 +173,6 @@ describe("ask routes", () => {
       source: "test",
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Rank fusion",
       bodyMarkdown: "Combine independent retrievers by reciprocal rank.",
@@ -218,7 +213,6 @@ describe("ask routes", () => {
   test("POST /ask can retrieve context through embedding similarity", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const snapshot = await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Semantic Retrieval",
       bodyMarkdown: "Embeddings find related meaning even when words differ.",
@@ -266,21 +260,18 @@ describe("ask routes", () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     const firstNote = await knowledgeRepository.upsertCompiledNote({
-      domain: "research",
       noteType: "paper_note",
       title: "Vector retrieval",
       bodyMarkdown: "RRF combines retrieval ranks.",
       structuredData: {},
     });
     const secondNote = await knowledgeRepository.upsertCompiledNote({
-      domain: "research",
       noteType: "paper_note",
       title: "Citation policy",
       bodyMarkdown: "Answers cite blocks.",
       structuredData: {},
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Vector retrieval",
       bodyMarkdown: "RRF combines retrieval ranks.",
@@ -297,7 +288,6 @@ describe("ask routes", () => {
       ],
     });
     await knowledgeRepository.upsertKnowledgeSourceVersion({
-      domain: "research",
       knowledgeType: "paper_note",
       title: "Citation policy",
       bodyMarkdown: "Answers cite blocks.",

@@ -1,6 +1,6 @@
 import request from "supertest";
 import { createApp } from "../src/app.js";
-import type { CodingExtraction } from "../src/domain/compiler.js";
+import type { GeneralKnowledgeExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
 import type { WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
@@ -15,33 +15,44 @@ const routeWikiIndexer = {
     return {
       provider: "openai" as const,
       extraction: {
-        domain: "coding" as const,
-        knowledgeType: "general_coding_note" as const,
-        problemNumber: null,
-        problemTitle: null,
-        decisionRules: [],
-        commonTraps: [],
-        patterns: ["Source-first Indexing"],
-        algorithms: [],
-        recognitionSignals: ["source chunks"],
-        keyInsights: ["Index source chunks before drafting approved knowledge."],
-        mistakes: [],
-        implementationDetails: ["Compile from /sources/:id/compile."],
-        reviewActions: [],
-        concepts: [
-          {
-            name: "Source-first Indexing",
-            conceptType: "workflow",
-            confidence: "high" as const,
-          },
-        ],
+        domain: "general",
+        knowledgeType: "knowledge_note",
+        title: "Source-first Indexing",
+        structuredData: {
+          summary: "Index source chunks before drafting approved knowledge.",
+          concepts: [
+            {
+              name: "Source-first Indexing",
+              type: "method",
+              specificity: "specific",
+              confidence: "high" as const,
+            },
+          ],
+          claims: [
+            {
+              text: "Index source chunks before drafting approved knowledge.",
+              confidence: "high" as const,
+              evidenceChunkIds: [],
+            },
+          ],
+          methods: [
+            {
+              name: "Source compile",
+              purpose: "Compile from a source endpoint.",
+              steps: ["Compile from /sources/:id/compile."],
+              conditions: ["source chunks"],
+            },
+          ],
+          examples: [],
+          constraints: [],
+        },
         confidence: "high" as const,
-      },
+      } satisfies GeneralKnowledgeExtraction,
     };
   },
   draftProposal(
     source: WikiIndexingSource,
-    extraction: CodingExtraction,
+    extraction: GeneralKnowledgeExtraction,
     relatedNotes: SearchResult[],
   ) {
     return {
@@ -58,8 +69,8 @@ const routeWikiIndexer = {
             domain: extraction.domain,
             knowledgeType: "knowledge_note",
             title: source.title ?? "Untitled source",
-            bodyMarkdown: extraction.keyInsights.join("\n"),
-            structuredData: { rawSourceId: source.rawSourceId },
+            bodyMarkdown: extraction.structuredData.summary,
+            structuredData: { ...extraction.structuredData, rawSourceId: source.rawSourceId },
           },
           rationale: "Create approved knowledge from this source.",
         },

@@ -6,6 +6,64 @@ export type ExtractedConcept = {
   confidence: Confidence;
 };
 
+export type KnowledgeConceptFacet = {
+  name: string;
+  type: "topic" | "method" | "entity" | "framework" | "term";
+  specificity: "generic" | "specific";
+  confidence: Confidence;
+};
+
+export type KnowledgeClaimFacet = {
+  text: string;
+  confidence: Confidence;
+  evidenceChunkIds: string[];
+};
+
+export type KnowledgeMethodFacet = {
+  name: string;
+  purpose: string;
+  steps: string[];
+  conditions: string[];
+};
+
+export type KnowledgeExampleFacet = {
+  title: string | null;
+  text: string;
+  illustrates: string[];
+};
+
+export type KnowledgeConstraintFacet = {
+  text: string;
+  appliesTo: string | null;
+};
+
+export type KnowledgeStructuredData = {
+  summary: string;
+  concepts: KnowledgeConceptFacet[];
+  claims: KnowledgeClaimFacet[];
+  methods: KnowledgeMethodFacet[];
+  examples: KnowledgeExampleFacet[];
+  constraints: KnowledgeConstraintFacet[];
+  rawSourceId?: string | null;
+  rawNoteId?: string | null;
+  sourceRole?: string;
+  sourceType?: string;
+  sourceChunks?: Array<{
+    id: string;
+    chunkIndex: number;
+    heading: string | null;
+    tokenEstimate: number;
+  }>;
+};
+
+export type GeneralKnowledgeExtraction = {
+  domain: string;
+  knowledgeType: string;
+  title: string | null;
+  structuredData: KnowledgeStructuredData;
+  confidence: Confidence;
+};
+
 export type DecisionRule = {
   signal: string;
   recommendation: string;

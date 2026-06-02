@@ -15,6 +15,7 @@ import { NoopExtractionEvalRepository } from "../repositories/extractionEval.rep
 import type { AgentToolReadRepository } from "../repositories/agentTool.repository.js";
 import { NoopAgentToolReadRepository } from "../repositories/agentTool.repository.js";
 import { AgentToolService } from "./agentTool.service.js";
+import { normalizeKnowledgeStructuredData } from "./knowledgeFacets.service.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -297,6 +298,7 @@ export class AgentRunQueueService {
     }
 
     const { extraction, provider } = await this.wikiIndexerService.extract(source);
+    const extractedConcepts = extraction.structuredData.concepts;
     await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
     if (rawSource && this.rawSourceRepository) {
       await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
@@ -307,30 +309,30 @@ export class AgentRunQueueService {
       payload: {
         provider,
         knowledgeType: extraction.knowledgeType,
-        concepts: extraction.concepts,
+        concepts: extractedConcepts,
       },
     });
 
     const conceptLookup =
-      agentToolService && extraction.concepts.length
+      agentToolService && extractedConcepts.length
         ? await this.callTool(
             agentRunId,
             round,
             "lookup_concepts",
-            { concepts: extraction.concepts.map((concept) => concept.name), fuzzy: true },
+            { concepts: extractedConcepts.map((concept) => concept.name), fuzzy: true },
             () => agentToolService.lookupConcepts({
-              concepts: extraction.concepts.map((concept) => concept.name),
+              concepts: extractedConcepts.map((concept) => concept.name),
               fuzzy: true,
             }),
           )
         : { matches: [] };
-    if (agentToolService && extraction.concepts.length) round += 1;
+    if (agentToolService && extractedConcepts.length) round += 1;
 
-    for (const concept of extraction.concepts) {
+    for (const concept of extractedConcepts) {
       const savedConcept = await this.knowledgeRepository.upsertConcept({
         userId: rawNote.userId,
         name: concept.name,
-        conceptType: concept.conceptType,
+        conceptType: concept.type,
       });
       await this.knowledgeRepository.indexConcept({
         userId: rawNote.userId,
@@ -348,15 +350,15 @@ export class AgentRunQueueService {
       eventType: "wiki_index_drafted",
       payload: {
         provider,
-        conceptCount: extraction.concepts.length,
-        patterns: extraction.patterns,
-        algorithms: extraction.algorithms,
+        conceptCount: extractedConcepts.length,
+        claimCount: extraction.structuredData.claims.length,
+        methodCount: extraction.structuredData.methods.length,
       },
     });
 
     const relatedNotes = await this.knowledgeRepository.searchRelated({
       query: source.bodyMarkdown,
-      conceptNames: extraction.concepts.map((concept) => concept.name),
+      conceptNames: extractedConcepts.map((concept) => concept.name),
       limit: 8,
     });
     await this.agentRunRepository.addEvent({
@@ -386,7 +388,7 @@ export class AgentRunQueueService {
         proposalId: proposal.id,
         provider,
         detectedKnowledgeType: extraction.knowledgeType,
-        conceptCount: extraction.concepts.length,
+        conceptCount: extractedConcepts.length,
         relatedNoteCount: relatedNotes.length,
       };
     }
@@ -452,6 +454,9 @@ export class AgentRunQueueService {
                 target_block_id: firstBlock?.block.id ?? null,
                 title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
                 body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
+                structured_facets: normalizeKnowledgeStructuredData(
+                  payload.structuredData ?? extraction.structuredData,
+                ),
                 source_concept_ids: conceptLookup.matches
                   .map((match) => match.concept_id)
                   .filter((id): id is string => Boolean(id)),
@@ -493,7 +498,7 @@ export class AgentRunQueueService {
       proposalId: draftProposalOutput.proposal_id,
       provider,
       detectedKnowledgeType: extraction.knowledgeType,
-      conceptCount: extraction.concepts.length,
+      conceptCount: extractedConcepts.length,
       relatedNoteCount: relatedNotes.length,
     };
   }

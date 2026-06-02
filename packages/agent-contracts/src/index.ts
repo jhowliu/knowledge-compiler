@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const toolContractVersion = "1.0.0";
+export const toolContractVersion = "1.1.0";
 
 export class AgentContractError extends Error {
   constructor(
@@ -23,12 +23,53 @@ export const sourceSpanSchema = z.object({
 export const confidenceSchema = z.enum(["high", "medium", "low"]);
 export const conflictResolutionSchema = z.enum(["update", "keep_both", "needs_user_decision"]);
 
+export const knowledgeStructuredDataSchema = z.object({
+  summary: z.string(),
+  concepts: z.array(
+    z.object({
+      name: z.string().min(1),
+      type: z.enum(["topic", "method", "entity", "framework", "term"]),
+      specificity: z.enum(["generic", "specific"]),
+      confidence: confidenceSchema,
+    }),
+  ),
+  claims: z.array(
+    z.object({
+      text: z.string().min(1),
+      confidence: confidenceSchema,
+      evidenceChunkIds: z.array(z.string()),
+    }),
+  ),
+  methods: z.array(
+    z.object({
+      name: z.string().min(1),
+      purpose: z.string(),
+      steps: z.array(z.string()),
+      conditions: z.array(z.string()),
+    }),
+  ),
+  examples: z.array(
+    z.object({
+      title: z.string().nullable(),
+      text: z.string().min(1),
+      illustrates: z.array(z.string()),
+    }),
+  ),
+  constraints: z.array(
+    z.object({
+      text: z.string().min(1),
+      appliesTo: z.string().nullable(),
+    }),
+  ),
+});
+
 export const proposalItemSchema = z
   .object({
     action: z.enum(["upsert_knowledge", "create_knowledge"]),
     target_block_id: z.string().nullable(),
     title: z.string().min(1),
     body_markdown: z.string().min(1),
+    structured_facets: knowledgeStructuredDataSchema.optional(),
     source_concept_ids: z.array(z.string()),
     source_spans: z.array(sourceSpanSchema).min(1),
     confidence: confidenceSchema,

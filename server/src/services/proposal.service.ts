@@ -7,6 +7,10 @@ import {
   NoopEmbeddingService,
   type EmbeddingService,
 } from "./embedding.service.js";
+import {
+  hasKnowledgeFacets,
+  renderKnowledgeFacetsMarkdown,
+} from "./knowledgeFacets.service.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -91,6 +95,10 @@ export class ProposalService {
 
     if (item.actionType === "upsert_compiled_note" || item.actionType === "upsert_knowledge") {
       const title = stringValue(payload, "title", "Untitled Note");
+      const structuredData = payload.structuredData ?? {};
+      const bodyMarkdown = hasKnowledgeFacets(structuredData)
+        ? renderKnowledgeFacetsMarkdown(structuredData, stringValue(payload, "bodyMarkdown"))
+        : stringValue(payload, "bodyMarkdown");
       const noteType = stringValue(
         payload,
         "noteType",
@@ -101,8 +109,8 @@ export class ProposalService {
         domain: stringValue(payload, "domain", "coding"),
         noteType,
         title,
-        bodyMarkdown: stringValue(payload, "bodyMarkdown"),
-        structuredData: payload.structuredData ?? {},
+        bodyMarkdown,
+        structuredData,
       });
       context.compiledNoteByTitle.set(normalizedTitle(compiledNote.title), compiledNote);
 
@@ -154,13 +162,13 @@ export class ProposalService {
         });
       }
 
-      const structuredData = asRecord(payload.structuredData);
-      const concepts = Array.isArray(structuredData.concepts) ? structuredData.concepts : [];
+      const structuredDataRecord = asRecord(structuredData);
+      const concepts = Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [];
       const conceptNames: string[] = [];
       for (const concept of concepts) {
         const conceptRecord = asRecord(concept);
         const name = stringValue(conceptRecord, "name");
-        const conceptType = stringValue(conceptRecord, "conceptType", "topic");
+        const conceptType = stringValue(conceptRecord, "conceptType", stringValue(conceptRecord, "type", "topic"));
         if (!name) {
           continue;
         }

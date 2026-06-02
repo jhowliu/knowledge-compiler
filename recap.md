@@ -1,6 +1,10 @@
 # Recap
 
 ## Summary
+- Started #59/#83 implementation on `codex/general-facets-markdown`.
+- Generalized LLM wiki indexing output from coding-specific fields to facet-based `structuredData` (`summary`, `concepts`, `claims`, `methods`, `examples`, `constraints`).
+- Added shared facet normalization/rendering so proposal markdown is deterministically rendered from facets and approval re-renders from the same source of truth.
+- Extended agent-contract proposal items with optional `structured_facets` and bumped `toolContractVersion` to `1.1.0`.
 - Started Phase E on `codex/phase-e-embeddings-evals`.
 - Added optional pgvector support for approved `knowledge_blocks`: migration `015_knowledge_block_embeddings.sql`, OpenAI embedding service, approval-time block embedding writes, vector-aware RRF search, and `npm run backfill:embeddings --workspace=server`.
 - Added a 10-case offline golden eval fixture set plus `npm run eval --workspace=server` for prompt/indexing regression checks.
@@ -77,6 +81,8 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- General facets are now the source of truth for LLM wiki proposals; markdown is a server-rendered view of the facets, not a separate LLM-authored narrative.
+- Legacy deterministic coding extraction still keeps coding-specific fields for compatibility, but the LLM wiki indexing path no longer emits those fields.
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
 - Backend: Express, TypeScript, `postgres` Node.js client.
 - Database: self-hosted Postgres as source of truth.
@@ -199,9 +205,11 @@
 - Phase C validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. `npm run migrate --workspace=server` was attempted in the temporary worktree but could not connect because that worktree lacks the local database credentials; no new migration was added for Phase C.
 - Phase D validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, `npm run typecheck`, and `npm run build` pass. No migration was added in this slice.
 - Phase E validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run eval --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. `npm run migrate --workspace=server` was attempted but failed at database authentication for user `admin` before migrations ran.
+- General facets validation: `npm run typecheck --workspace=@knowledge-compiler/agent-contracts`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, `npm run build`, `npm run eval --workspace=server`, and `git diff --check` pass. No DB migration was needed.
 
 ## Next Target
-- After Phase E merges, run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.
+- After #59/#83 merges, implement #84 strict source-grounded indexing/hallucination eval gates so facets cannot include unsupported claims.
+- Run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.
 - Finish topic-only domain cleanup before attempting the destructive domain-column migration.
 - Add a frontend ask panel and manual QA with real OpenAI answers/citations.
 - Continue with topic-aware agent compile context and richer link scoring.

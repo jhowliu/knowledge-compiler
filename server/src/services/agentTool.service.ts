@@ -30,6 +30,10 @@ import type { RawSourceRepository } from "../repositories/rawSource.repository.j
 import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
 import type { AgentToolReadRepository } from "../repositories/agentTool.repository.js";
 import { EvalJudgeService, itemEvalVerdict } from "./evalJudge.service.js";
+import {
+  normalizeKnowledgeStructuredData,
+  renderKnowledgeFacetsMarkdown,
+} from "./knowledgeFacets.service.js";
 
 export type DraftProposalContext = {
   agentRunId: string;
@@ -210,8 +214,11 @@ function toDraftUpdateProposal(
         payload: {
           knowledgeType: "knowledge_note",
           title: item.title,
-          bodyMarkdown: item.body_markdown,
+          bodyMarkdown: item.structured_facets
+            ? renderKnowledgeFacetsMarkdown(item.structured_facets, item.body_markdown)
+            : item.body_markdown,
           structuredData: {
+            ...(item.structured_facets ? normalizeKnowledgeStructuredData(item.structured_facets) : {}),
             sourceConceptIds: item.source_concept_ids,
             sourceSpans: item.source_spans,
             targetBlockId: item.target_block_id,

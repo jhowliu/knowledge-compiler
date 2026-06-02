@@ -1,8 +1,12 @@
 import { env } from "../config/env.js";
-import type { CodingExtraction, DraftUpdateProposal } from "../domain/compiler.js";
+import type { DraftUpdateProposal, GeneralKnowledgeExtraction } from "../domain/compiler.js";
 import type { SearchResult } from "../domain/knowledge.js";
 import type { RawNote } from "../domain/rawNote.js";
 import type { RawSourceChunk, RawSourceRole } from "../domain/rawSource.js";
+import {
+  normalizeKnowledgeStructuredData,
+  renderKnowledgeFacetsMarkdown,
+} from "./knowledgeFacets.service.js";
 
 export type WikiIndexingSource = {
   id: string;
@@ -17,7 +21,7 @@ export type WikiIndexingSource = {
 };
 
 export type WikiIndexingResult = {
-  extraction: CodingExtraction;
+  extraction: GeneralKnowledgeExtraction;
   provider: "openai";
 };
 
@@ -25,73 +29,95 @@ export type WikiIndexer = {
   extract(source: WikiIndexingSource): Promise<WikiIndexingResult>;
   draftProposal(
     source: WikiIndexingSource,
-    extraction: CodingExtraction,
+    extraction: GeneralKnowledgeExtraction,
     relatedNotes: SearchResult[],
   ): DraftUpdateProposal;
 };
 
-const extractionSchema = {
+const knowledgeStructuredDataSchema = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "domain",
-    "knowledgeType",
-    "problemNumber",
-    "problemTitle",
-    "decisionRules",
-    "commonTraps",
-    "patterns",
-    "algorithms",
-    "recognitionSignals",
-    "keyInsights",
-    "mistakes",
-    "implementationDetails",
-    "reviewActions",
-    "concepts",
-    "confidence",
-  ],
+  required: ["summary", "concepts", "claims", "methods", "examples", "constraints"],
   properties: {
-    domain: { type: "string", enum: ["coding"] },
-    knowledgeType: {
-      type: "string",
-      enum: ["problem_reflection", "general_coding_note"],
-    },
-    problemNumber: { type: ["string", "null"] },
-    problemTitle: { type: ["string", "null"] },
-    decisionRules: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["signal", "recommendation", "confidence"],
-        properties: {
-          signal: { type: "string" },
-          recommendation: { type: "string" },
-          confidence: { type: "string", enum: ["low", "medium", "high"] },
-        },
-      },
-    },
-    commonTraps: { type: "array", items: { type: "string" } },
-    patterns: { type: "array", items: { type: "string" } },
-    algorithms: { type: "array", items: { type: "string" } },
-    recognitionSignals: { type: "array", items: { type: "string" } },
-    keyInsights: { type: "array", items: { type: "string" } },
-    mistakes: { type: "array", items: { type: "string" } },
-    implementationDetails: { type: "array", items: { type: "string" } },
-    reviewActions: { type: "array", items: { type: "string" } },
+    summary: { type: "string" },
     concepts: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "conceptType", "confidence"],
+        required: ["name", "type", "specificity", "confidence"],
         properties: {
           name: { type: "string" },
-          conceptType: { type: "string" },
+          type: { type: "string", enum: ["topic", "method", "entity", "framework", "term"] },
+          specificity: { type: "string", enum: ["generic", "specific"] },
           confidence: { type: "string", enum: ["low", "medium", "high"] },
         },
       },
     },
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "confidence", "evidenceChunkIds"],
+        properties: {
+          text: { type: "string" },
+          confidence: { type: "string", enum: ["low", "medium", "high"] },
+          evidenceChunkIds: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    methods: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "purpose", "steps", "conditions"],
+        properties: {
+          name: { type: "string" },
+          purpose: { type: "string" },
+          steps: { type: "array", items: { type: "string" } },
+          conditions: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    examples: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "text", "illustrates"],
+        properties: {
+          title: { type: ["string", "null"] },
+          text: { type: "string" },
+          illustrates: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    constraints: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "appliesTo"],
+        properties: {
+          text: { type: "string" },
+          appliesTo: { type: ["string", "null"] },
+        },
+      },
+    },
+  },
+};
+
+const extractionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["domain", "knowledgeType", "title", "structuredData", "confidence"],
+  properties: {
+    domain: { type: "string" },
+    knowledgeType: { type: "string" },
+    title: { type: ["string", "null"] },
+    structuredData: knowledgeStructuredDataSchema,
     confidence: { type: "string", enum: ["low", "medium", "high"] },
   },
 };
@@ -130,10 +156,23 @@ export class WikiIndexerService {
     return { extraction: await this.extractWithOpenAI(source), provider: "openai" };
   }
 
-  draftProposal(source: WikiIndexingSource, extraction: CodingExtraction, relatedNotes: SearchResult[]) {
+  draftProposal(source: WikiIndexingSource, extraction: GeneralKnowledgeExtraction, relatedNotes: SearchResult[]) {
     const title = knowledgeTitle(source, extraction);
-    const knowledgeType = knowledgeTypeFor(extraction);
-    const bodyMarkdown = knowledgeBodyMarkdown(source, extraction);
+    const structuredData = normalizeKnowledgeStructuredData({
+      ...extraction.structuredData,
+      rawSourceId: source.rawSourceId,
+      rawNoteId: source.rawNoteId,
+      sourceRole: source.sourceRole,
+      sourceType: source.sourceType,
+      sourceChunks: source.chunks.map((chunk) => ({
+        id: chunk.id,
+        chunkIndex: chunk.chunkIndex,
+        heading: chunk.heading,
+        tokenEstimate: chunk.tokenEstimate,
+      })),
+    });
+    const knowledgeType = extraction.knowledgeType || "knowledge_note";
+    const bodyMarkdown = renderKnowledgeFacetsMarkdown(structuredData, source.bodyMarkdown);
     const relatedCompiledNotes = relatedNotes
       .filter((note) => note.targetType === "compiled_note")
       .slice(0, 3);
@@ -155,29 +194,7 @@ export class WikiIndexerService {
             knowledgeType,
             title,
             bodyMarkdown,
-            structuredData: {
-              rawSourceId: source.rawSourceId,
-              rawNoteId: source.rawNoteId,
-              sourceRole: source.sourceRole,
-              sourceType: source.sourceType,
-              sourceChunks: source.chunks.map((chunk) => ({
-                id: chunk.id,
-                chunkIndex: chunk.chunkIndex,
-                heading: chunk.heading,
-                tokenEstimate: chunk.tokenEstimate,
-              })),
-              originalKnowledgeType: extraction.knowledgeType,
-              problemNumber: extraction.problemNumber,
-              problemTitle: extraction.problemTitle,
-              decisionRules: extraction.decisionRules,
-              commonTraps: extraction.commonTraps,
-              patterns: extraction.patterns,
-              algorithms: extraction.algorithms,
-              recognitionSignals: extraction.recognitionSignals,
-              keyInsights: extraction.keyInsights,
-              implementationDetails: extraction.implementationDetails,
-              concepts: extraction.concepts,
-            },
+            structuredData,
           },
           rationale: "Create or update approved knowledge from this source.",
         },
@@ -201,7 +218,7 @@ export class WikiIndexerService {
     };
   }
 
-  private async extractWithOpenAI(source: WikiIndexingSource): Promise<CodingExtraction> {
+  private async extractWithOpenAI(source: WikiIndexingSource): Promise<GeneralKnowledgeExtraction> {
     const openAiApiKey = process.env.OPENAI_API_KEY;
     const chunkContext = source.chunks.length
       ? source.chunks
@@ -223,7 +240,7 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "Extract the source into LLM-wiki indexing JSON. Source roles can be personal_note or reference; use the role only as context, and do not force an interview-specific classification when the text does not support it. Prefer general knowledge signals: concepts, claims, patterns, algorithms, constraints, recognition signals, and implementation details. Do not invent problem numbers. Mistake and review-action fields are legacy extraction fields only; leave them empty unless the source explicitly states them.",
+              "Extract the source into general LLM-wiki facets. The structuredData object is the source of truth; do not create coding/interview-specific top-level fields such as patterns, algorithms, recognition signals, key insights, implementation details, or common traps. Use concepts, claims, methods, examples, and constraints instead. Only include content supported by the source text. Source roles can be personal_note or reference; use the role as context without forcing an interview-specific classification.",
           },
           {
             role: "user",
@@ -237,7 +254,7 @@ export class WikiIndexerService {
         text: {
           format: {
             type: "json_schema",
-            name: "coding_wiki_extraction",
+            name: "general_wiki_extraction",
             strict: true,
             schema: extractionSchema,
           },
@@ -254,57 +271,37 @@ export class WikiIndexerService {
       throw new Error("OpenAI wiki index response did not include output text");
     }
 
-    return JSON.parse(text) as CodingExtraction;
+    return normalizeExtraction(JSON.parse(text));
   }
 }
 
-function knowledgeTypeFor(extraction: CodingExtraction) {
-  if (extraction.knowledgeType === "problem_reflection") {
-    return "problem_note";
+function knowledgeTitle(source: Pick<RawNote, "title">, extraction: GeneralKnowledgeExtraction) {
+  if (extraction.title) {
+    return extraction.title;
   }
-  if (extraction.algorithms.length > 0) {
-    return "algorithm";
-  }
-  if (extraction.patterns.length > 0) {
-    return "pattern";
-  }
-  return "knowledge_note";
-}
-
-function knowledgeTitle(source: Pick<RawNote, "title">, extraction: CodingExtraction) {
-  if (extraction.problemNumber && extraction.problemTitle) {
-    return `${extraction.problemNumber}. ${extraction.problemTitle}`;
-  }
-  if (extraction.problemTitle) {
-    return extraction.problemTitle;
-  }
-  if (extraction.algorithms[0]) {
-    return extraction.algorithms[0];
-  }
-  if (extraction.patterns[0]) {
-    return extraction.patterns[0];
+  const specificConcept = extraction.structuredData.concepts.find(
+    (concept) => concept.specificity === "specific",
+  );
+  if (specificConcept) {
+    return specificConcept.name;
   }
   return source.title ?? "Untitled knowledge";
 }
 
-function section(title: string, lines: string[]) {
-  const cleanLines = lines.map((line) => line.trim()).filter(Boolean);
-  return cleanLines.length ? [`## ${title}`, ...cleanLines.map((line) => `- ${line}`)].join("\n") : "";
-}
+function normalizeExtraction(value: unknown): GeneralKnowledgeExtraction {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const confidence = record.confidence === "low" || record.confidence === "medium" || record.confidence === "high"
+    ? record.confidence
+    : "medium";
 
-function knowledgeBodyMarkdown(source: Pick<RawNote, "bodyMarkdown">, extraction: CodingExtraction) {
-  const sections = [
-    section("Key insights", extraction.keyInsights),
-    section("Recognition signals", extraction.recognitionSignals),
-    section("Implementation details", extraction.implementationDetails),
-    section("Patterns", extraction.patterns),
-    section("Algorithms", extraction.algorithms),
-    section("Common traps", extraction.commonTraps),
-  ].filter(Boolean);
-
-  if (sections.length) {
-    return sections.join("\n\n");
-  }
-
-  return source.bodyMarkdown;
+  return {
+    domain: typeof record.domain === "string" && record.domain.trim() ? record.domain.trim() : "general",
+    knowledgeType:
+      typeof record.knowledgeType === "string" && record.knowledgeType.trim()
+        ? record.knowledgeType.trim()
+        : "knowledge_note",
+    title: typeof record.title === "string" && record.title.trim() ? record.title.trim() : null,
+    structuredData: normalizeKnowledgeStructuredData(record.structuredData),
+    confidence,
+  };
 }

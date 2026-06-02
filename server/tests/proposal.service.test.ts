@@ -224,6 +224,81 @@ describe("ProposalService", () => {
     expect(knowledge.embeddings.get("knowledge-block-1")).toEqual([1, 0, 0]);
   });
 
+  test("renders approved markdown from generalized facets instead of trusting payload markdown", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-facets",
+      draft: {
+        detectedDomain: "learning",
+        detectedKnowledgeType: "knowledge_note",
+        impactLevel: 2,
+        confidence: "high",
+        rationale: "General facets proposal.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "learning",
+              knowledgeType: "knowledge_note",
+              title: "Grounded note format",
+              bodyMarkdown: "LLM-written markdown that should not be trusted.",
+              structuredData: {
+                summary: "Facets should drive approved markdown.",
+                concepts: [
+                  {
+                    name: "Facet rendering",
+                    type: "method",
+                    specificity: "specific",
+                    confidence: "high",
+                  },
+                ],
+                claims: [
+                  {
+                    text: "Approved markdown is rendered from facets.",
+                    confidence: "high",
+                    evidenceChunkIds: ["chunk-1"],
+                  },
+                ],
+                methods: [
+                  {
+                    name: "Facet-first approval",
+                    purpose: "Keep structured data and markdown aligned.",
+                    steps: ["Normalize facets", "Render markdown", "Store approved knowledge"],
+                    conditions: ["Structured facets are present"],
+                  },
+                ],
+                examples: [],
+                constraints: [
+                  {
+                    text: "Do not store a separate LLM markdown narrative when facets exist.",
+                    appliesTo: "proposal approval",
+                  },
+                ],
+              },
+            },
+            rationale: "Create approved knowledge from facets.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("## Summary");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("## Claims");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("Facet-first approval");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("LLM-written markdown");
+    expect(knowledge.compiledNotes[0].structuredData).toMatchObject({
+      concepts: [expect.objectContaining({ name: "Facet rendering", type: "method" })],
+      claims: [expect.objectContaining({ text: "Approved markdown is rendered from facets." })],
+    });
+  });
+
   test("approves generalized knowledge updates and creates pending link suggestions", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();

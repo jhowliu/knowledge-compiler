@@ -11,6 +11,7 @@
 - Wired `/search` and `/ask` through the same embedding-aware `KnowledgeRetrievalService`, so both use FTS + concept ranking + vector similarity when embeddings are available.
 - Started issue #84 on `codex/strict-grounded-indexing`: added `inferredSuggestions` to the general facet contract, tightened the wiki-indexing prompt/schema around chunk IDs, made the heuristic eval judge fail unsupported structured claims, kept inferred suggestions out of approved Markdown/RAG blocks, and surfaced inferred suggestions separately in the Review Inbox modal.
 - Started issue #85 on `codex/normalize-agent-events`: added `agent_run_events.category` and `name`, backfilled legacy `event_type` values, introduced typed agent event constants, updated backend event writes to category/name, added an `eval.completed` timeline event, and updated the Agent Run drawer to label/style events by category.
+- Started issue #86 on `codex/global-agent-activity`: added a workspace-level Agent Activity Center, surfaced running/review/failed counts in the global sidebar and Sources sidebar, routed source lifecycle badges to the center, and kept the detailed run drawer as a secondary drill-in.
 - Created `PRD.md` from the existing Interview Knowledge Compiler PRD.
 - Added Section 34, Technical Specification, covering the agreed React + Express + self-hosted Postgres direction.
 - Captured the no-ORM decision: use the `postgres` Node.js client with hand-written SQL and plain migrations.
@@ -213,9 +214,10 @@
 - General facets validation: `npm run typecheck --workspace=@knowledge-compiler/agent-contracts`, `npm run typecheck --workspace=server`, `npm run test --workspace=server`, `npm run typecheck`, `npm run build`, `npm run eval --workspace=server`, and `git diff --check` pass. No DB migration was needed.
 - Strict source-grounded indexing validation: `npm run typecheck --workspace=@knowledge-compiler/agent-contracts`, `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, focused grounding/facet/proposal tests, `npm run eval --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. No DB migration was needed.
 - Normalized agent event validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. `npm run migrate --workspace=server` was attempted but failed at database authentication for user `admin` before migration SQL ran.
+- Global Agent Activity Center validation: `npm run typecheck --workspace=client`, `npm run typecheck --workspace=server`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5175/` opened the global Agent Activity Center and the Sources activity shortcut with no console warnings or errors.
 
 ## Next Target
-- After #85 merges, implement #86 Global Agent Activity Center UI on top of the normalized event categories.
+- After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.
 - Consider adding a stronger LLM-backed entailment judge for claim-to-span support and a visible eval baseline in CI.
 - Run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.
 - Finish topic-only domain cleanup before attempting the destructive domain-column migration.

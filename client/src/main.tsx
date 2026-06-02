@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { LeftNavigation, TopToolbar } from './components/AppShell'
+import {
+  AgentActivityCenter,
+  summarizeAgentActivity,
+} from './features/agent-runs/AgentActivityCenter'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
 import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
@@ -49,6 +53,7 @@ function App() {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
   const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
+  const [isAgentActivityOpen, setIsAgentActivityOpen] = useState(false)
   const [selectedAgentRunDetail, setSelectedAgentRunDetail] = useState<AgentRunDetail | null>(null)
   const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -65,12 +70,19 @@ function App() {
 
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const latestAgentRun = workspaceData.agentRuns[0] ?? null
+  const agentActivitySummary = useMemo(
+    () => summarizeAgentActivity(workspaceData.agentRuns, workspaceData.proposals),
+    [workspaceData.agentRuns, workspaceData.proposals],
+  )
   const isAgentRunning = workspaceData.agentRuns.some((agentRun) =>
     ['queued', 'running'].includes(agentRun.status),
   )
 
-  async function refresh() {
-    setIsLoading(true)
+  async function refresh(options: { showLoading?: boolean } = {}) {
+    const showLoading = options.showLoading ?? true
+    if (showLoading) {
+      setIsLoading(true)
+    }
     try {
       const nextData = await loadWorkspaceData()
       setWorkspaceData(nextData)
@@ -80,7 +92,9 @@ function App() {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
       return null
     } finally {
-      setIsLoading(false)
+      if (showLoading) {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -94,6 +108,7 @@ function App() {
   }
 
   async function openAgentRunDetail(agentRunId: string) {
+    setIsAgentActivityOpen(false)
     setIsAgentRunDetailLoading(true)
     setSelectedAgentRunDetail({
       agentRun: workspaceData.agentRuns.find((agentRun) => agentRun.id === agentRunId) ?? null,
@@ -143,6 +158,7 @@ function App() {
   }
 
   function openProposalFromAgentRun(proposalId: string) {
+    setIsAgentActivityOpen(false)
     setSelectedProposalId(proposalId)
     setActiveView('update_proposals')
     closeAgentRunDetail()
@@ -151,6 +167,14 @@ function App() {
   useEffect(() => {
     void refresh()
   }, [])
+
+  useEffect(() => {
+    if (!isAgentRunning) return undefined
+    const interval = window.setInterval(() => {
+      void refresh({ showLoading: false })
+    }, 3000)
+    return () => window.clearInterval(interval)
+  }, [isAgentRunning])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
@@ -705,6 +729,8 @@ function App() {
       {activeView === 'raw_note_editor' ? null : (
         <LeftNavigation
           activeView={activeView}
+          agentActivitySummary={agentActivitySummary}
+          onAgentActivityClick={() => setIsAgentActivityOpen(true)}
           onCaptureClick={openNewRawNoteEditor}
           onKnowledgeMapClick={() => setActiveView('knowledge_map')}
           onRawNotesClick={openRawNotesView}
@@ -743,9 +769,9 @@ function App() {
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
+                onOpenAgentActivity={() => setIsAgentActivityOpen(true)}
                 onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
-                onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
               />
             </div>
@@ -770,6 +796,7 @@ function App() {
           />
         ) : (
           <RawNoteEditorPage
+            agentActivitySummary={agentActivitySummary}
             agentRuns={workspaceData.agentRuns}
             bodyMarkdown={bodyMarkdown}
             error={error}
@@ -787,6 +814,7 @@ function App() {
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
+            onOpenAgentActivity={() => setIsAgentActivityOpen(true)}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
@@ -812,6 +840,17 @@ function App() {
           />
         )}
       </section>
+      <AgentActivityCenter
+        agentRuns={workspaceData.agentRuns}
+        isOpen={isAgentActivityOpen}
+        onClose={() => setIsAgentActivityOpen(false)}
+        onOpenProposal={openProposalFromAgentRun}
+        onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
+        onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
+        proposals={workspaceData.proposals}
+        rawNotes={workspaceData.rawNotes}
+        rawSources={workspaceData.rawSources}
+      />
       {selectedAgentRunDetail || isAgentRunDetailLoading ? (
         <AgentRunDrawer
           data={workspaceData}

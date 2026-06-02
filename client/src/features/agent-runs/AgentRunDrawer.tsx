@@ -5,6 +5,7 @@ import {
   agentRunLabel,
   agentRunOutputText,
   compactJson,
+  eventCategoryClass,
   eventLabel,
   relationOptionLabel,
   shortTimestamp,
@@ -130,9 +131,14 @@ export function AgentRunDrawer({
                     detail.events.map((event) => (
                       <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={event.id}>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                          <p className="text-[13px] font-extrabold capitalize text-white">
-                            {eventLabel(event.eventType)}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-extrabold text-white">
+                              {eventLabel(event)}
+                            </p>
+                            <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${eventCategoryClass(event.category)}`}>
+                              {event.category}
+                            </span>
+                          </div>
                           <span className="text-[11px] font-semibold text-gray-500">
                             {shortTimestamp(event.createdAt)}
                           </span>

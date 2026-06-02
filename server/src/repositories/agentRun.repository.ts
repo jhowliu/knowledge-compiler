@@ -1,4 +1,8 @@
 import { query } from "../db/postgres.js";
+import {
+  type AgentRunEventCategory,
+  type AgentRunEventName,
+} from "../domain/agentRunEvents.js";
 import type { AgentRun, AgentRunEvent } from "../domain/knowledge.js";
 
 type AgentRunRow = {
@@ -18,7 +22,8 @@ type AgentRunRow = {
 type AgentRunEventRow = {
   id: string;
   agent_run_id: string;
-  event_type: string;
+  category: AgentRunEventCategory;
+  name: AgentRunEventName;
   payload: unknown;
   created_at: Date;
 };
@@ -43,7 +48,8 @@ function mapAgentRunEvent(row: AgentRunEventRow): AgentRunEvent {
   return {
     id: row.id,
     agentRunId: row.agent_run_id,
-    eventType: row.event_type,
+    category: row.category,
+    name: row.name,
     payload: row.payload,
     createdAt: row.created_at,
   };
@@ -53,7 +59,12 @@ export interface AgentRunRepository {
   enqueue(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
   create(input: { userId?: string | null; runType: string; input: unknown }): Promise<AgentRun>;
   updateMetadata(id: string, metadata: Record<string, unknown>): Promise<AgentRun>;
-  addEvent(input: { agentRunId: string; eventType: string; payload: unknown }): Promise<AgentRunEvent>;
+  addEvent(input: {
+    agentRunId: string;
+    category: AgentRunEventCategory;
+    name: AgentRunEventName;
+    payload: unknown;
+  }): Promise<AgentRunEvent>;
   start(id: string): Promise<AgentRun>;
   complete(id: string, output: unknown): Promise<AgentRun>;
   fail(id: string, error: string): Promise<AgentRun>;
@@ -104,14 +115,19 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     return mapAgentRun(result.rows[0]);
   }
 
-  async addEvent(input: { agentRunId: string; eventType: string; payload: unknown }) {
+  async addEvent(input: {
+    agentRunId: string;
+    category: AgentRunEventCategory;
+    name: AgentRunEventName;
+    payload: unknown;
+  }) {
     const result = await query<AgentRunEventRow>(
       `
-        insert into agent_run_events (agent_run_id, event_type, payload)
-        values ($1, $2, $3)
+        insert into agent_run_events (agent_run_id, category, name, payload)
+        values ($1, $2, $3, $4)
         returning *
       `,
-      [input.agentRunId, input.eventType, input.payload],
+      [input.agentRunId, input.category, input.name, input.payload],
     );
 
     return mapAgentRunEvent(result.rows[0]);

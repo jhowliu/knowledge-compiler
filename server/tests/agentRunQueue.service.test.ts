@@ -221,15 +221,18 @@ describe("agent run queue service", () => {
       relationType: "related_concept",
       createdByAgentRunId: agentRun.id,
     });
-    expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(
+    expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
       expect.arrayContaining([
-        "queued",
-        "run_started",
-        "notes_loaded",
-        "link_candidates_scored",
-        "link_suggestion_created",
-        "run_completed",
+        "lifecycle.queued",
+        "lifecycle.started",
+        "source.notes_loaded",
+        "linking.scored",
+        "linking.suggestion_created",
+        "lifecycle.completed",
       ]),
+    );
+    expect(agentRunRepository.events.map((event) => event.category)).toEqual(
+      expect.arrayContaining(["lifecycle", "source", "linking"]),
     );
   });
 
@@ -282,14 +285,14 @@ describe("agent run queue service", () => {
         ]),
       },
     });
-    expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(
+    expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
       expect.arrayContaining([
-        "raw_note_loaded",
-        "detection_completed",
-        "wiki_index_drafted",
-        "related_knowledge_found",
-        "proposal_created",
-        "run_completed",
+        "source.raw_note_loaded",
+        "indexing.detected",
+        "indexing.drafted",
+        "indexing.related_found",
+        "proposal.created",
+        "lifecycle.completed",
       ]),
     );
   });
@@ -379,8 +382,8 @@ describe("agent run queue service", () => {
       },
     });
     expect(proposalRepository.proposals).toHaveLength(1);
-    expect(agentRunRepository.events.map((event) => event.eventType)).toEqual(
-      expect.arrayContaining(["raw_source_loaded", "proposal_created", "run_completed"]),
+    expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
+      expect.arrayContaining(["source.raw_source_loaded", "proposal.created", "lifecycle.completed"]),
     );
   });
 
@@ -416,7 +419,14 @@ describe("agent run queue service", () => {
       expect(failedRun?.status).toBe("failed");
       expect(proposalRepository.proposals).toHaveLength(0);
       expect(rawNoteRepository.notes[0].extractedData).toEqual({});
-      expect(agentRunRepository.events.map((event) => event.eventType)).toContain("run_failed");
+      expect(agentRunRepository.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: "lifecycle",
+            name: "failed",
+          }),
+        ]),
+      );
     } finally {
       if (originalOpenAIKey) {
         process.env.OPENAI_API_KEY = originalOpenAIKey;

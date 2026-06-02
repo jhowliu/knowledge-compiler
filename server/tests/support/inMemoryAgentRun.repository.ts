@@ -1,5 +1,9 @@
 import type { AgentRun, AgentRunEvent } from "../../src/domain/knowledge.js";
 import type { AgentRunRepository } from "../../src/repositories/agentRun.repository.js";
+import {
+  type AgentRunEventCategory,
+  type AgentRunEventName,
+} from "../../src/domain/agentRunEvents.js";
 
 export class InMemoryAgentRunRepository implements AgentRunRepository {
   readonly agentRuns: AgentRun[] = [];
@@ -49,13 +53,15 @@ export class InMemoryAgentRunRepository implements AgentRunRepository {
 
   async addEvent(input: {
     agentRunId: string;
-    eventType: string;
+    category: AgentRunEventCategory;
+    name: AgentRunEventName;
     payload: unknown;
   }): Promise<AgentRunEvent> {
     const event: AgentRunEvent = {
       id: `agent-run-event-${this.events.length + 1}`,
       agentRunId: input.agentRunId,
-      eventType: input.eventType,
+      category: input.category,
+      name: input.name,
       payload: input.payload,
       createdAt: new Date("2026-05-25T00:00:00.000Z"),
     };

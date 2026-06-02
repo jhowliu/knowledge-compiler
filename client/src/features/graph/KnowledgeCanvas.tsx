@@ -22,7 +22,7 @@ import type {
   RelatedNoteMatch,
   WorkspaceData,
 } from '../../types/domain'
-import { agentRunLabel, relationLabel, relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
+import { relationLabel, relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
 
 function noteTypeLabel(noteType: string) {
   return noteType.replaceAll('_', ' ')
@@ -99,7 +99,7 @@ export function KnowledgeCanvas({
   onMoveNoteCard,
   onResetBoardLayout,
   onRemoveNoteLink,
-  onSelectAgentRun,
+  onOpenAgentActivity,
   onUpdateNoteLink,
 }: {
   data: WorkspaceData
@@ -108,7 +108,7 @@ export function KnowledgeCanvas({
   onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
   onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
-  onSelectAgentRun: (agentRunId: string) => void
+  onOpenAgentActivity: () => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -873,36 +873,23 @@ export function KnowledgeCanvas({
                   <RotateCw size={15} className="text-violet" />
                   Agent activity
                 </h3>
-                <div className="mb-6 space-y-2">
-                  {data.agentRuns.length ? (
-                    data.agentRuns.slice(0, 3).map((agentRun) => (
-                      <button
-                        className="w-full rounded-lg border border-[#303030] bg-[#202020] p-3 text-left hover:border-violet/50"
-                        key={agentRun.id}
-                        onClick={() => onSelectAgentRun(agentRun.id)}
-                        type="button"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-[13px] font-extrabold capitalize text-white">
-                              {agentRunLabel(agentRun.runType)}
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-gray-400">
-                              {agentRun.error ?? 'Background run tracked with proposal-safe writes.'}
-                            </p>
-                          </div>
-                          <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
-                            {agentRun.status}
-                          </span>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                      No agent runs yet. Start with Re-index links.
-                    </p>
-                  )}
-                </div>
+                <button
+                  className="mb-6 w-full rounded-lg border border-[#303030] bg-[#202020] p-3 text-left hover:border-violet/50"
+                  onClick={onOpenAgentActivity}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[13px] font-extrabold text-white">Open Activity Center</p>
+                      <p className="mt-1 text-xs leading-5 text-gray-400">
+                        View running jobs, pending reviews, failures, and detailed timelines.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
+                      {data.agentRuns.length}
+                    </span>
+                  </div>
+                </button>
 
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
                   <Sparkles size={15} className="text-violet" />

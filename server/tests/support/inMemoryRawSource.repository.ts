@@ -37,7 +37,6 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
       userId: input.userId ?? null,
       projectId: input.projectId ?? this.projects[0].id,
       folderId: input.folderId ?? null,
-      domain: input.domain ?? null,
       subtype: input.subtype ?? null,
       sourceType: input.sourceType ?? "markdown",
       sourceRole: input.sourceRole ?? "personal_note",
@@ -207,7 +206,6 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
 
     source.projectId = input.projectId ?? source.projectId ?? "default-project";
     source.folderId = Object.hasOwn(input, "folderId") ? input.folderId ?? null : source.folderId;
-    source.domain = input.domain ?? null;
     source.subtype = Object.hasOwn(input, "subtype") ? (input.subtype ?? null) : source.subtype;
     source.sourceType = input.sourceType ?? "markdown";
     source.sourceRole = input.sourceRole ?? "personal_note";

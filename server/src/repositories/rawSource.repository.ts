@@ -22,7 +22,6 @@ type RawSourceRow = {
   user_id: string | null;
   project_id: string | null;
   folder_id: string | null;
-  domain: string | null;
   subtype: string | null;
   source_type: string;
   source_role: RawSourceRole;
@@ -99,7 +98,6 @@ function mapRawSource(row: RawSourceRow): RawSource {
     userId: row.user_id,
     projectId: row.project_id,
     folderId: row.folder_id,
-    domain: row.domain,
     subtype: row.subtype,
     sourceType: row.source_type,
     sourceRole: row.source_role,

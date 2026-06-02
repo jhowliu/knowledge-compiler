@@ -14,14 +14,12 @@ describe("agent run routes", () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
       noteType: "algorithm",
       title: "BFS shortest path",
       bodyMarkdown: "BFS solves unweighted shortest path with graph levels.",
       structuredData: {},
     });
     await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
       noteType: "knowledge_note",
       title: "Shortest path decision guide",
       bodyMarkdown: "Use BFS for unweighted shortest path and Dijkstra for positive weights.",

@@ -144,7 +144,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         knowledgeVersionId: block.knowledgeVersionId,
         compiledNoteId: version?.compiledNoteId ?? null,
         title: source?.title ?? "Untitled",
-        domain: source?.domain ?? "general",
         knowledgeType: source?.knowledgeType ?? "note",
         versionNumber: version?.versionNumber ?? 1,
         blockIndex: block.blockIndex,
@@ -181,7 +180,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       knowledgeVersionId: block.knowledgeVersionId,
       compiledNoteId: version?.compiledNoteId ?? null,
       title: source?.title ?? "Untitled",
-      domain: source?.domain ?? "general",
       knowledgeType: source?.knowledgeType ?? "note",
       versionNumber: version?.versionNumber ?? 1,
       blockIndex: block.blockIndex,
@@ -196,7 +194,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async upsertCompiledNote(input: {
     userId?: string | null;
-    domain: string;
     noteType: string;
     title: string;
     bodyMarkdown: string;
@@ -205,7 +202,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     const note: CompiledNote = {
       id: `compiled-${this.compiledNotes.length + 1}`,
       userId: input.userId ?? null,
-      domain: input.domain,
       noteType: input.noteType,
       title: input.title,
       bodyMarkdown: input.bodyMarkdown,
@@ -225,7 +221,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
-    domain: string;
     knowledgeType: string;
     title: string;
     bodyMarkdown: string;
@@ -238,7 +233,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     let source = this.knowledgeSources.find(
       (item) =>
         item.userId === (input.userId ?? null) &&
-        item.domain === input.domain &&
         item.knowledgeType === input.knowledgeType &&
         item.title.toLowerCase() === input.title.toLowerCase() &&
         item.status === "active",
@@ -248,7 +242,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       source = {
         id: `knowledge-source-${this.knowledgeSources.length + 1}`,
         userId: input.userId ?? null,
-        domain: input.domain,
         knowledgeType: input.knowledgeType,
         title: input.title,
         status: "active",

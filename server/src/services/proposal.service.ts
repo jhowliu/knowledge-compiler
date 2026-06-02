@@ -106,7 +106,6 @@ export class ProposalService {
       );
       const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
         userId: proposal.userId,
-        domain: stringValue(payload, "domain", "coding"),
         noteType,
         title,
         bodyMarkdown,
@@ -127,7 +126,6 @@ export class ProposalService {
 
       const knowledgeSnapshot = await this.knowledgeRepository.upsertKnowledgeSourceVersion({
         userId: proposal.userId,
-        domain: compiledNote.domain,
         knowledgeType: compiledNote.noteType,
         title: compiledNote.title,
         bodyMarkdown: compiledNote.bodyMarkdown,

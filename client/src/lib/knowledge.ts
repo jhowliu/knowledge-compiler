@@ -8,7 +8,7 @@ export function payloadText(payload: Record<string, unknown>, key: string, fallb
 }
 
 export function payloadLabel(payload: Record<string, unknown>) {
-  for (const key of ['title', 'targetTitle', 'area', 'status', 'domain', 'knowledgeType', 'noteType']) {
+  for (const key of ['title', 'targetTitle', 'area', 'status', 'knowledgeType', 'noteType']) {
     const value = payload[key]
     if (typeof value === 'string' && value) {
       return value

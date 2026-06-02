@@ -14,7 +14,6 @@ const llmWikiIndexer = {
     return {
       provider: "openai" as const,
       extraction: {
-        domain: "coding",
         knowledgeType: "knowledge_note",
         title: "Dijkstra With State",
         structuredData: {
@@ -67,7 +66,7 @@ const llmWikiIndexer = {
     relatedNotes: SearchResult[],
   ) {
     return {
-      detectedDomain: extraction.domain,
+      detectedDomain: null,
       detectedKnowledgeType: extraction.knowledgeType,
       impactLevel: 3,
       confidence: extraction.confidence,
@@ -77,7 +76,6 @@ const llmWikiIndexer = {
           actionType: "upsert_knowledge",
           targetType: "knowledge_source",
           payload: {
-            domain: extraction.domain,
             knowledgeType: extraction.knowledgeType,
             title: extraction.title ?? "Dijkstra With State",
             bodyMarkdown: extraction.structuredData.summary,
@@ -97,7 +95,6 @@ describe("agent run queue service", () => {
       id: "raw-note-1",
       userId: null,
       rawSourceId: "raw-source-1",
-      domain: null,
       sourceType: "manual",
       sourceRole: "personal_note" as const,
       title: "Binary search note",
@@ -106,7 +103,6 @@ describe("agent run queue service", () => {
       chunks: [],
     };
     const extraction: GeneralKnowledgeExtraction = {
-      domain: "coding",
       knowledgeType: "knowledge_note",
       title: "Binary Search on Answer",
       structuredData: {
@@ -147,7 +143,6 @@ describe("agent run queue service", () => {
         targetType: "compiled_note",
         title: "Monotonic predicate",
         bodyMarkdown: "Feasibility predicates split the answer range.",
-        domain: "coding",
         noteType: "pattern",
         rank: 2,
         createdAt: new Date("2026-05-24T00:00:00.000Z"),
@@ -181,21 +176,18 @@ describe("agent run queue service", () => {
     );
 
     await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
       noteType: "algorithm",
       title: "BFS shortest path",
       bodyMarkdown: "Use BFS for unweighted shortest path and graph levels.",
       structuredData: {},
     });
     await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
       noteType: "knowledge_note",
       title: "Shortest path decision guide",
       bodyMarkdown: "Choose BFS for unweighted shortest path and Dijkstra for positive weights.",
       structuredData: {},
     });
     await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
       noteType: "algorithm",
       title: "Binary search",
       bodyMarkdown: "Use binary search for monotonic predicates.",

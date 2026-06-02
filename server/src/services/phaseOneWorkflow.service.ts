@@ -34,7 +34,7 @@ export class PhaseOneWorkflowService {
       });
 
       const extraction = this.codingCompilerService.extract(rawNote);
-      await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
+      await this.rawNoteRepository.updateExtraction(rawNote.id, extraction);
 
       await this.agentRunRepository.addEvent({
         agentRunId: agentRun.id,

@@ -16,7 +16,6 @@ export type RawNote = {
   id: string
   rawSourceId: string | null
   title: string | null
-  domain: string | null
   sourceType: string
   sourceRole: RawSourceRole
   bodyMarkdown: string
@@ -39,7 +38,6 @@ export type RawSource = {
   userId: string | null
   projectId: string | null
   folderId: string | null
-  domain: string | null
   subtype: string | null
   sourceType: string
   sourceRole: RawSourceRole
@@ -110,7 +108,6 @@ export type Proposal = {
 
 export type CompiledNote = {
   id: string
-  domain: string
   noteType: string
   title: string
   bodyMarkdown: string
@@ -152,7 +149,6 @@ export type KnowledgeSearchResult = {
   knowledgeSourceId: string
   knowledgeVersionId: string
   title: string
-  domain: string
   knowledgeType: string
   versionNumber: number
   blockIndex: number
@@ -184,7 +180,6 @@ export type KnowledgeTimelineVersion = {
 export type KnowledgeSourceTimeline = {
   source: {
     id: string
-    domain: string
     knowledgeType: string
     title: string
     status: string

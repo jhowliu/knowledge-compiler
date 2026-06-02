@@ -300,7 +300,7 @@ export class AgentRunQueueService {
 
     const { extraction, provider } = await this.wikiIndexerService.extract(source);
     const extractedConcepts = extraction.structuredData.concepts;
-    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
+    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction);
     if (rawSource && this.rawSourceRepository) {
       await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
     }
@@ -565,7 +565,6 @@ export class AgentRunQueueService {
     rawNote = rawNote ?? await this.rawNoteRepository!.create({
       userId: rawSource!.userId,
       rawSourceId: rawSource!.id,
-      domain: rawSource!.domain,
       sourceType: rawSource!.sourceType,
       sourceRole: rawSource!.sourceRole,
       title: rawSource!.title,

@@ -5,7 +5,6 @@ type RawNoteRow = {
   id: string;
   user_id: string | null;
   raw_source_id: string | null;
-  domain: string | null;
   source_type: string;
   source_role: "reference" | "personal_note";
   title: string | null;
@@ -21,7 +20,7 @@ export interface RawNoteRepository {
   listRecent(limit: number): Promise<RawNote[]>;
   update(id: string, input: UpdateRawNoteInput): Promise<RawNote | null>;
   delete(id: string): Promise<boolean>;
-  updateExtraction(id: string, extractedData: unknown, domain: string | null): Promise<RawNote>;
+  updateExtraction(id: string, extractedData: unknown): Promise<RawNote>;
 }
 
 function mapRawNote(row: RawNoteRow): RawNote {
@@ -29,7 +28,6 @@ function mapRawNote(row: RawNoteRow): RawNote {
     id: row.id,
     userId: row.user_id,
     rawSourceId: row.raw_source_id,
-    domain: row.domain,
     sourceType: row.source_type,
     sourceRole: row.source_role,
     title: row.title,
@@ -46,19 +44,17 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
         insert into raw_notes (
           user_id,
           raw_source_id,
-          domain,
           source_type,
           source_role,
           title,
           body_markdown
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6)
         returning *
       `,
       [
         input.userId ?? null,
         input.rawSourceId ?? null,
-        input.domain ?? null,
         input.sourceType ?? "manual",
         input.sourceRole ?? "personal_note",
         input.title ?? null,
@@ -115,18 +111,16 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
     const result = await query<RawNoteRow>(
       `
         update raw_notes
-        set domain = $2,
-            source_type = $3,
-            source_role = $4,
-            title = $5,
-            body_markdown = $6,
+        set source_type = $2,
+            source_role = $3,
+            title = $4,
+            body_markdown = $5,
             extracted_data = '{}'::jsonb
         where id = $1
         returning *
       `,
       [
         id,
-        input.domain ?? null,
         input.sourceType ?? "manual",
         input.sourceRole ?? "personal_note",
         input.title ?? null,
@@ -149,16 +143,15 @@ export class PostgresRawNoteRepository implements RawNoteRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async updateExtraction(id: string, extractedData: unknown, domain: string | null) {
+  async updateExtraction(id: string, extractedData: unknown) {
     const result = await query<RawNoteRow>(
       `
         update raw_notes
-        set extracted_data = $2,
-            domain = coalesce($3, domain)
+        set extracted_data = $2
         where id = $1
         returning *
       `,
-      [id, extractedData, domain],
+      [id, extractedData],
     );
 
     return mapRawNote(result.rows[0]);

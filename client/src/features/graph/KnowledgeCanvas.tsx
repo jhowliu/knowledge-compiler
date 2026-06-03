@@ -303,6 +303,20 @@ export function KnowledgeCanvas({
       } => Boolean(edge),
     )
   const selectedEdge = graphEdges.find((edge) => edge.id === selectedEdgeId) ?? null
+  const duplicateRelationTypesForSelectedEdge = new Set(
+    selectedEdge
+      ? graphEdges
+          .filter(
+            (edge) =>
+              edge.id !== selectedEdge.id &&
+              edge.link.sourceNoteType === selectedEdge.link.sourceNoteType &&
+              edge.link.sourceNoteId === selectedEdge.link.sourceNoteId &&
+              edge.link.targetNoteType === selectedEdge.link.targetNoteType &&
+              edge.link.targetNoteId === selectedEdge.link.targetNoteId,
+          )
+          .map((edge) => edge.link.relationType)
+      : [],
+  )
   const evidenceSummaryCount =
     knowledgeTimeline?.sourceEvidenceReferences.length ??
     knowledgeTimeline?.versions.find((version) => version.isCurrent)?.evidenceReferences.length ??
@@ -659,11 +673,14 @@ export function KnowledgeCanvas({
                 onChange={(event) => onUpdateNoteLink(selectedEdge.link.id, event.target.value)}
                 value={selectedEdge.link.relationType}
               >
-                {relationOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {relationOptions.map(([value, label]) => {
+                  const isDuplicateRelation = duplicateRelationTypesForSelectedEdge.has(value)
+                  return (
+                    <option disabled={isDuplicateRelation} key={value} value={value}>
+                      {isDuplicateRelation ? `${label} (already linked)` : label}
+                    </option>
+                  )
+                })}
               </select>
 
               <p className="mt-2 truncate text-[11px] font-semibold text-gray-500">

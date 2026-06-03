@@ -108,6 +108,39 @@ describe("note link routes", () => {
     expect(archiveResponse.body.noteLink.status).toBe("rejected");
   });
 
+  test("returns a conflict when updating a link to an existing relation for the same notes", async () => {
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    await noteLinkRepository.createManual({
+      sourceNoteType: "compiled_note",
+      sourceNoteId: "compiled-1",
+      targetNoteType: "compiled_note",
+      targetNoteId: "compiled-2",
+      relationType: "supports",
+      confidence: "high",
+    });
+    await noteLinkRepository.createManual({
+      sourceNoteType: "compiled_note",
+      sourceNoteId: "compiled-1",
+      targetNoteType: "compiled_note",
+      targetNoteId: "compiled-2",
+      relationType: "related_concept",
+      confidence: "high",
+    });
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository,
+      enablePhaseOneWorkflow: false,
+    });
+
+    const response = await request(app)
+      .patch("/note-links/note-link-1")
+      .send({ relationType: "related_concept" });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("This relation already exists between these notes");
+    expect(noteLinkRepository.noteLinks[0]?.relationType).toBe("supports");
+  });
+
   test("lists bidirectional links for a selected note", async () => {
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     await noteLinkRepository.createSuggestion({

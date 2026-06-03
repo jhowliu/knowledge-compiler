@@ -55,7 +55,23 @@ export class NoteLinkService {
     confidence?: "low" | "medium" | "high";
     rationale?: string | null;
   }) {
-    const link = await this.noteLinkRepository.updateRelation(input);
+    const duplicateLink = await this.noteLinkRepository.findRelationDuplicateForUpdate({
+      id: input.id,
+      relationType: input.relationType,
+    });
+    if (duplicateLink) {
+      throw new AppError("This relation already exists between these notes", 409);
+    }
+
+    let link: Awaited<ReturnType<NoteLinkRepository["updateRelation"]>>;
+    try {
+      link = await this.noteLinkRepository.updateRelation(input);
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        throw new AppError("This relation already exists between these notes", 409);
+      }
+      throw error;
+    }
     if (!link) {
       throw new AppError("Note link not found", 404);
     }
@@ -81,4 +97,13 @@ export class NoteLinkService {
     }
     return link;
   }
+}
+
+function isUniqueConstraintViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }

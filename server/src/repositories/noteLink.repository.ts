@@ -86,6 +86,10 @@ export interface NoteLinkRepository {
     confidence?: Confidence;
     rationale?: string | null;
   }): Promise<NoteLink | null>;
+  findRelationDuplicateForUpdate(input: {
+    id: string;
+    relationType: string;
+  }): Promise<NoteLink | null>;
   setStatus(id: string, status: NoteLinkStatus): Promise<NoteLink | null>;
 }
 
@@ -262,6 +266,25 @@ export class PostgresNoteLinkRepository implements NoteLinkRepository {
           and target_compiled.id = updated.target_note_id
       `,
       [input.id, input.relationType, input.confidence ?? null, input.rationale ?? null],
+    );
+
+    return result.rows[0] ? mapNoteLink(result.rows[0]) : null;
+  }
+
+  async findRelationDuplicateForUpdate(input: { id: string; relationType: string }) {
+    const result = await query<NoteLinkRow>(
+      `
+        ${noteLinkSelect}
+        join note_links current_link on current_link.id = $1
+        where note_links.id <> current_link.id
+          and note_links.source_note_type = current_link.source_note_type
+          and note_links.source_note_id = current_link.source_note_id
+          and note_links.target_note_type = current_link.target_note_type
+          and note_links.target_note_id = current_link.target_note_id
+          and note_links.relation_type = $2
+        limit 1
+      `,
+      [input.id, input.relationType],
     );
 
     return result.rows[0] ? mapNoteLink(result.rows[0]) : null;

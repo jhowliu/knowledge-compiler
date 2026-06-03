@@ -66,13 +66,42 @@ function connectedNoteId(link: NoteLink, noteId: string) {
   return null
 }
 
-function edgePath(start: { x: number; y: number }, end: { x: number; y: number }, laneOffset = 0) {
+type CanvasPoint = { x: number; y: number }
+
+function edgeControlPoints(start: CanvasPoint, end: CanvasPoint, laneOffset = 0) {
   const dx = end.x - start.x
   const bend = Math.max(8, Math.min(22, Math.abs(dx) * 0.45))
   const direction = dx >= 0 ? 1 : -1
-  const c1x = start.x + bend * direction
-  const c2x = end.x - bend * direction
-  return `M ${start.x} ${start.y} C ${c1x} ${start.y + laneOffset}, ${c2x} ${end.y + laneOffset}, ${end.x} ${end.y}`
+  return {
+    c1: { x: start.x + bend * direction, y: start.y + laneOffset },
+    c2: { x: end.x - bend * direction, y: end.y + laneOffset },
+  }
+}
+
+function edgePath(start: CanvasPoint, end: CanvasPoint, laneOffset = 0) {
+  const { c1, c2 } = edgeControlPoints(start, end, laneOffset)
+  return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`
+}
+
+function cubicBezierPoint(start: CanvasPoint, c1: CanvasPoint, c2: CanvasPoint, end: CanvasPoint, t: number) {
+  const inverse = 1 - t
+  return {
+    x:
+      inverse ** 3 * start.x +
+      3 * inverse ** 2 * t * c1.x +
+      3 * inverse * t ** 2 * c2.x +
+      t ** 3 * end.x,
+    y:
+      inverse ** 3 * start.y +
+      3 * inverse ** 2 * t * c1.y +
+      3 * inverse * t ** 2 * c2.y +
+      t ** 3 * end.y,
+  }
+}
+
+function edgeLabelPoint(start: CanvasPoint, end: CanvasPoint, laneOffset = 0) {
+  const { c1, c2 } = edgeControlPoints(start, end, laneOffset)
+  return cubicBezierPoint(start, c1, c2, end, 0.5)
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -327,13 +356,11 @@ export function KnowledgeCanvas({
     const laneIndex = visualGroup.findIndex((item) => item.id === edge.id)
     const automaticLaneOffset = (laneIndex - (visualGroup.length - 1) / 2) * 4.6
     const laneOffset = automaticLaneOffset + (edgeOffsets[edge.id] ?? 0)
+    const labelPoint = edgeLabelPoint(edge.sourceNode.position, edge.targetNode.position, laneOffset)
     return {
       ...edge,
       laneOffset,
-      midpoint: {
-        x: edge.midpoint.x,
-        y: edge.midpoint.y + laneOffset,
-      },
+      midpoint: labelPoint,
     }
   })
   const selectedEdge = graphEdges.find((edge) => edge.id === selectedEdgeId) ?? null

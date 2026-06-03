@@ -15,6 +15,8 @@ describe("eval judge service", () => {
         },
       ],
       proposal: {
+        indexing_outcome: "create_knowledge",
+        outcome_reason: "This fixture tests reusable knowledge grounding.",
         reasoning_summary: "Draft sparse note.",
         incomplete_reasoning: false,
         items: [
@@ -88,6 +90,8 @@ describe("eval judge service", () => {
         },
       ],
       proposal: {
+        indexing_outcome: "create_knowledge",
+        outcome_reason: "This fixture tests reusable knowledge grounding.",
         reasoning_summary: "Draft sparse note.",
         incomplete_reasoning: false,
         items: [

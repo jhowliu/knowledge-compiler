@@ -9,7 +9,12 @@ import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { RawSourceWithChunks } from "../domain/rawSource.js";
 import { agentRunEvents } from "../domain/agentRunEvents.js";
-import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "./wikiIndexer.service.js";
+import {
+  WikiIndexerService,
+  applySourceOnlyOutcomeGuard,
+  type WikiIndexer,
+  type WikiIndexingSource,
+} from "./wikiIndexer.service.js";
 import { compileRunMetadata } from "../agents/versions.js";
 import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
 import { NoopExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
@@ -298,8 +303,17 @@ export class AgentRunQueueService {
       }
     }
 
-    const { extraction, provider } = await this.wikiIndexerService.extract(source);
+    const { extraction: extractedResult, provider } = await this.wikiIndexerService.extract(source);
+    const extraction = applySourceOnlyOutcomeGuard(source, extractedResult);
     const extractedConcepts = extraction.structuredData.concepts;
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      ...agentRunEvents.indexing.outcomeClassified,
+      payload: {
+        outcome: extraction.outcome,
+        reason: extraction.outcomeReason,
+      },
+    });
     await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
     if (rawSource && this.rawSourceRepository) {
       await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
@@ -309,6 +323,8 @@ export class AgentRunQueueService {
       ...agentRunEvents.indexing.detected,
       payload: {
         provider,
+        outcome: extraction.outcome,
+        outcomeReason: extraction.outcomeReason,
         knowledgeType: extraction.knowledgeType,
         concepts: extractedConcepts,
       },
@@ -354,6 +370,7 @@ export class AgentRunQueueService {
         conceptCount: extractedConcepts.length,
         claimCount: extraction.structuredData.claims.length,
         methodCount: extraction.structuredData.methods.length,
+        outcome: extraction.outcome,
       },
     });
 
@@ -388,6 +405,7 @@ export class AgentRunQueueService {
         chunkCount: source.chunks.length,
         proposalId: proposal.id,
         provider,
+        indexingOutcome: extraction.outcome,
         detectedKnowledgeType: extraction.knowledgeType,
         conceptCount: extractedConcepts.length,
         relatedNoteCount: relatedNotes.length,
@@ -444,15 +462,19 @@ export class AgentRunQueueService {
           existingBlocksContext: blockSearch.results,
         },
         {
+          indexing_outcome: extraction.outcome,
+          outcome_reason: extraction.outcomeReason,
           reasoning_summary: draft.rationale,
           incomplete_reasoning: false,
           items: draft.items
-            .filter((item) => item.actionType === "upsert_knowledge")
+            .filter((item) => item.actionType === "upsert_knowledge" || item.actionType === "keep_source_searchable")
             .map((item) => {
               const payload = item.payload as Record<string, unknown>;
               return {
-                action: "upsert_knowledge" as const,
-                target_block_id: firstBlock?.block.id ?? null,
+                action: item.actionType === "keep_source_searchable"
+                  ? ("keep_source_searchable" as const)
+                  : ("upsert_knowledge" as const),
+                target_block_id: item.actionType === "keep_source_searchable" ? null : firstBlock?.block.id ?? null,
                 title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
                 body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
                 structured_facets: normalizeKnowledgeStructuredData(
@@ -463,20 +485,26 @@ export class AgentRunQueueService {
                   .filter((id): id is string => Boolean(id)),
                 source_spans: sourceSpan ? [sourceSpan] : [],
                 confidence: extraction.confidence,
-                conflict_detected: conflictDetected,
-                conflict_summary: conflictDetected
+                conflict_detected: item.actionType === "keep_source_searchable" ? false : conflictDetected,
+                conflict_summary: item.actionType === "keep_source_searchable" ? null : conflictDetected
                   ? "The source appears to contradict or revise existing knowledge."
                   : null,
-                conflict_resolution: conflictDetected ? ("needs_user_decision" as const) : null,
+                conflict_resolution: item.actionType === "keep_source_searchable"
+                  ? null
+                  : conflictDetected
+                    ? ("needs_user_decision" as const)
+                    : null,
               };
             }),
-          suggested_links: blockSearch.results.slice(0, 2).map((result) => ({
-            source_block_id: null,
-            target_block_id: result.block_id,
-            relation_type: "related_concept",
-            confidence: "medium" as const,
-            rationale: `Search found related block: ${result.title}.`,
-          })),
+          suggested_links: extraction.outcome === "keep_searchable"
+            ? []
+            : blockSearch.results.slice(0, 2).map((result) => ({
+                source_block_id: null,
+                target_block_id: result.block_id,
+                relation_type: "related_concept",
+                confidence: "medium" as const,
+                rationale: `Search found related block: ${result.title}.`,
+              })),
         },
       ),
     );
@@ -503,6 +531,7 @@ export class AgentRunQueueService {
       chunkCount: source.chunks.length,
       proposalId: draftProposalOutput.proposal_id,
       provider,
+      indexingOutcome: extraction.outcome,
       detectedKnowledgeType: extraction.knowledgeType,
       conceptCount: extractedConcepts.length,
       relatedNoteCount: relatedNotes.length,

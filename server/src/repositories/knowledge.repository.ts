@@ -450,6 +450,7 @@ export interface KnowledgeRepository {
   }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
+    targetCompiledNoteId?: string | null;
     domain: string;
     noteType: string;
     title: string;
@@ -459,6 +460,7 @@ export interface KnowledgeRepository {
   listCompiledNotes(limit: number): Promise<CompiledNote[]>;
   upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
+    targetKnowledgeSourceId?: string | null;
     domain: string;
     knowledgeType: string;
     title: string;
@@ -921,12 +923,43 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
   async upsertCompiledNote(input: {
     userId?: string | null;
+    targetCompiledNoteId?: string | null;
     domain: string;
     noteType: string;
     title: string;
     bodyMarkdown: string;
     structuredData: unknown;
   }) {
+    if (input.targetCompiledNoteId) {
+      const targeted = await query<CompiledNoteRow>(
+        `
+          update compiled_notes
+          set domain = $2,
+              note_type = $3,
+              title = $4,
+              body_markdown = $5,
+              structured_data = $6,
+              updated_at = now()
+          where id = $1
+            and status = 'active'
+            and user_id is not distinct from $7
+          returning *
+        `,
+        [
+          input.targetCompiledNoteId,
+          input.domain,
+          input.noteType,
+          input.title,
+          input.bodyMarkdown,
+          input.structuredData,
+          input.userId ?? null,
+        ],
+      );
+      if (targeted.rows[0]) {
+        return mapCompiledNote(targeted.rows[0]);
+      }
+    }
+
     const existing = await query<CompiledNoteRow>(
       `
         select *
@@ -995,6 +1028,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
   async upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
+    targetKnowledgeSourceId?: string | null;
     domain: string;
     knowledgeType: string;
     title: string;
@@ -1006,19 +1040,46 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     blocks: CreateKnowledgeBlockInput[];
   }): Promise<KnowledgeSourceSnapshot> {
     return transaction(async (transactionQuery) => {
-      const existing = await transactionQuery<KnowledgeSourceRow>(
-        `
-          select *
-          from knowledge_sources
-          where user_id is not distinct from $1
-            and domain = $2
-            and knowledge_type = $3
-            and lower(title) = lower($4)
-            and status = 'active'
-          limit 1
-        `,
-        [input.userId ?? null, input.domain, input.knowledgeType, input.title],
-      );
+      const existing = input.targetKnowledgeSourceId
+        ? await transactionQuery<KnowledgeSourceRow>(
+            `
+              select *
+              from knowledge_sources
+              where id = $1
+                and status = 'active'
+                and user_id is not distinct from $2
+              limit 1
+            `,
+            [input.targetKnowledgeSourceId, input.userId ?? null],
+          )
+        : input.compiledNoteId
+          ? await transactionQuery<KnowledgeSourceRow>(
+              `
+                select knowledge_sources.*
+                from knowledge_sources
+                join knowledge_versions
+                  on knowledge_versions.knowledge_source_id = knowledge_sources.id
+                where knowledge_versions.compiled_note_id = $1
+                  and knowledge_sources.status = 'active'
+                  and knowledge_sources.user_id is not distinct from $2
+                order by knowledge_versions.created_at desc
+                limit 1
+              `,
+              [input.compiledNoteId, input.userId ?? null],
+            )
+          : await transactionQuery<KnowledgeSourceRow>(
+              `
+                select *
+                from knowledge_sources
+                where user_id is not distinct from $1
+                  and domain = $2
+                  and knowledge_type = $3
+                  and lower(title) = lower($4)
+                  and status = 'active'
+                limit 1
+              `,
+              [input.userId ?? null, input.domain, input.knowledgeType, input.title],
+            );
 
       const source = existing.rows[0]
         ? mapKnowledgeSource(
@@ -1026,14 +1087,18 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
               await transactionQuery<KnowledgeSourceRow>(
                 `
                   update knowledge_sources
-                  set title = $2,
-                      metadata = metadata || $3::jsonb,
+                  set domain = $2,
+                      knowledge_type = $3,
+                      title = $4,
+                      metadata = metadata || $5::jsonb,
                       updated_at = now()
                   where id = $1
                   returning *
                 `,
                 [
                   existing.rows[0].id,
+                  input.domain,
+                  input.knowledgeType,
                   input.title,
                   {
                     lastProposalId: input.proposalId ?? null,

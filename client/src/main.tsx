@@ -616,19 +616,31 @@ function App() {
     }
   }
 
-  async function decideProposal(proposalId: string, decision: 'approve' | 'reject') {
+  async function decideProposal(
+    proposalId: string,
+    decision: 'approve' | 'reject',
+    indexingOutcomeOverride?: 'keep_searchable' | 'create_knowledge',
+  ) {
     setIsSubmitting(true)
     try {
+      const proposal = workspaceData.proposals.find((item) => item.id === proposalId)
+      const recommendedKeep = proposal?.items.some((item) => item.actionType === 'keep_source_searchable') ?? false
+      const keepingSourceOnly =
+        decision === 'approve' &&
+        (indexingOutcomeOverride === 'keep_searchable' ||
+          (!indexingOutcomeOverride && recommendedKeep))
       await requestJson(`/update-proposals/${proposalId}/${decision}`, {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ indexingOutcomeOverride: indexingOutcomeOverride ?? null }),
       })
       const nextData = await refresh()
       const nextPending = nextData?.proposals.find((proposal) => proposal.status === 'pending')
       setSelectedProposalId(nextPending?.id ?? proposalId)
       setNotice(
         decision === 'approve'
-          ? 'Updates applied to compiled knowledge. Review any new link suggestions on the right.'
+          ? keepingSourceOnly
+            ? 'Source kept searchable and visible on the graph. No Knowledge Note was created.'
+            : 'Updates applied to compiled knowledge. Review any new link suggestions on the right.'
           : 'Proposal rejected. No compiled knowledge was changed.',
       )
       setError(null)
@@ -859,7 +871,9 @@ function App() {
             noteLinks={workspaceData.noteLinks}
             notice={notice}
             onApproveNoteLink={(linkId) => void decideNoteLink(linkId, 'approve')}
-            onApproveProposal={(proposalId) => void decideProposal(proposalId, 'approve')}
+            onApproveProposal={(proposalId, indexingOutcomeOverride) =>
+              void decideProposal(proposalId, 'approve', indexingOutcomeOverride)
+            }
             onRefresh={() => void refresh()}
             onRejectNoteLink={(linkId) => void decideNoteLink(linkId, 'reject')}
             onRejectProposal={(proposalId) => void decideProposal(proposalId, 'reject')}

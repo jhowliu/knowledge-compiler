@@ -17,6 +17,8 @@ const llmWikiIndexer = {
         domain: "coding",
         knowledgeType: "knowledge_note",
         title: "Dijkstra With State",
+        outcome: "create_knowledge" as const,
+        outcomeReason: "This teaches a reusable shortest-path method.",
         structuredData: {
           summary: "Track remaining stops as part of the distance state.",
           concepts: [
@@ -109,6 +111,8 @@ describe("agent run queue service", () => {
       domain: "coding",
       knowledgeType: "knowledge_note",
       title: "Binary Search on Answer",
+      outcome: "create_knowledge",
+      outcomeReason: "This teaches a reusable search pattern.",
       structuredData: {
         summary: "Search the answer space when feasibility is monotonic.",
         concepts: [
@@ -168,6 +172,185 @@ describe("agent run queue service", () => {
     const knowledgePayload = draft.items[0].payload as { bodyMarkdown: string };
     expect(knowledgePayload.bodyMarkdown).toContain("## Claims");
     expect(knowledgePayload.bodyMarkdown).not.toContain("## Recognition signals");
+  });
+
+  test("drafts keep-searchable proposal for one-off interview answer sources", async () => {
+    const wikiIndexer = new WikiIndexerService();
+    const draft = wikiIndexer.draftProposal(
+      {
+        id: "source-interview-answer",
+        rawNoteId: "raw-note-interview-answer",
+        rawSourceId: "raw-source-interview-answer",
+        userId: null,
+        sourceRole: "personal_note",
+        sourceType: "markdown",
+        title: "Tell me about yourself",
+        bodyMarkdown: "I grew up building small tools and I like product engineering.",
+        chunks: [],
+      },
+      {
+        domain: "general",
+        knowledgeType: "knowledge_note",
+        title: "Tell me about yourself",
+        outcome: "keep_searchable",
+        outcomeReason: "This looks like an interview answer draft, not reusable knowledge.",
+        structuredData: {
+          summary: "A personal interview answer draft.",
+          concepts: [
+            {
+              name: "Self introduction",
+              type: "topic",
+              specificity: "specific",
+              confidence: "medium",
+            },
+          ],
+          claims: [],
+          methods: [],
+          examples: [],
+          constraints: [],
+          inferredSuggestions: [],
+        },
+        confidence: "high",
+      },
+      [],
+    );
+
+    expect(draft.rationale).toContain("Recommended: Keep searchable");
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]).toMatchObject({
+      actionType: "keep_source_searchable",
+      targetType: "raw_source",
+      payload: {
+        outcome: "keep_searchable",
+        outcomeReason: "This looks like an interview answer draft, not reusable knowledge.",
+        title: "Tell me about yourself",
+      },
+    });
+    const sourceOnlyPayload = draft.items[0].payload as Record<string, unknown>;
+    expect(sourceOnlyPayload.knowledgeProposal).toMatchObject({
+      title: "Tell me about yourself",
+      knowledgeType: "knowledge_note",
+    });
+  });
+
+  test("guards personal interview drafts even when extraction proposes knowledge", async () => {
+    const wikiIndexer = new WikiIndexerService();
+    const draft = wikiIndexer.draftProposal(
+      {
+        id: "source-interview-answer-guard",
+        rawNoteId: "raw-note-interview-answer-guard",
+        rawSourceId: "raw-source-interview-answer-guard",
+        userId: null,
+        sourceRole: "personal_note",
+        sourceType: "markdown",
+        title: "Tell me about yourself draft",
+        bodyMarkdown:
+          "I am a product-minded engineer who likes turning ambiguous workflows into clear systems. When interviewing, I want to emphasize product judgment and mention the graph UI work.",
+        chunks: [],
+      },
+      {
+        domain: "general",
+        knowledgeType: "knowledge_note",
+        title: "Product-minded engineering",
+        outcome: "create_knowledge",
+        outcomeReason: "The source contains extractable concepts about product engineering.",
+        structuredData: {
+          summary: "A personal interview answer draft.",
+          concepts: [
+            {
+              name: "Product-minded engineering",
+              type: "topic",
+              specificity: "specific",
+              confidence: "medium",
+            },
+          ],
+          claims: [
+            {
+              text: "The source describes product-minded engineering.",
+              confidence: "medium",
+              evidenceChunkIds: [],
+            },
+          ],
+          methods: [],
+          examples: [],
+          constraints: [],
+          inferredSuggestions: [],
+        },
+        confidence: "high",
+      },
+      [],
+    );
+
+    expect(draft.rationale).toContain("Recommended: Keep searchable");
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]).toMatchObject({
+      actionType: "keep_source_searchable",
+      payload: {
+        outcome: "keep_searchable",
+      },
+    });
+  });
+
+  test("drafts update-existing proposals with a target compiled note id", async () => {
+    const wikiIndexer = new WikiIndexerService();
+    const draft = wikiIndexer.draftProposal(
+      {
+        id: "source-rag-revision",
+        rawNoteId: "raw-note-rag-revision",
+        rawSourceId: "raw-source-rag-revision",
+        userId: null,
+        sourceRole: "reference",
+        sourceType: "markdown",
+        title: "RAG Evaluation Loop Revision",
+        bodyMarkdown: "This is a revision of the original RAG evaluation loop.",
+        chunks: [],
+      },
+      {
+        domain: "general",
+        knowledgeType: "knowledge_note",
+        title: "RAG Evaluation Loop Revision",
+        outcome: "update_existing_knowledge",
+        outcomeReason: "This source revises an existing RAG evaluation loop.",
+        structuredData: {
+          summary: "A revision of a reusable RAG evaluation loop.",
+          concepts: [
+            {
+              name: "RAG evaluation",
+              type: "framework",
+              specificity: "specific",
+              confidence: "high",
+            },
+          ],
+          claims: [],
+          methods: [],
+          examples: [],
+          constraints: [],
+          inferredSuggestions: [],
+        },
+        confidence: "high",
+      },
+      [
+        {
+          id: "compiled-rag-loop",
+          targetType: "compiled_note",
+          title: "Retrieval-Augmented Generation Evaluation Loop",
+          bodyMarkdown: "Evaluate retrieval before answer generation.",
+          domain: "general",
+          noteType: "knowledge_note",
+          rank: 3,
+          createdAt: new Date("2026-05-24T00:00:00.000Z"),
+        },
+      ],
+    );
+
+    expect(draft.items[0]).toMatchObject({
+      actionType: "upsert_knowledge",
+      payload: {
+        outcome: "update_existing_knowledge",
+        targetCompiledNoteId: "compiled-rag-loop",
+        targetTitle: "Retrieval-Augmented Generation Evaluation Loop",
+      },
+    });
   });
 
   test("runs deterministic reindex links and creates pending link suggestions", async () => {
@@ -291,6 +474,94 @@ describe("agent run queue service", () => {
         "indexing.detected",
         "indexing.drafted",
         "indexing.related_found",
+        "proposal.created",
+        "lifecycle.completed",
+      ]),
+    );
+  });
+
+  test("guards one-off interview answer drafts to keep-searchable proposals", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const overlyEagerKnowledgeIndexer = {
+      async extract() {
+        return {
+          provider: "openai" as const,
+          extraction: {
+            domain: "general",
+            knowledgeType: "knowledge_note",
+            title: "Product-minded engineering",
+            outcome: "create_knowledge" as const,
+            outcomeReason: "The source contains extractable concepts about product engineering.",
+            structuredData: {
+              summary: "A personal interview answer draft.",
+              concepts: [
+                {
+                  name: "Self introduction",
+                  type: "topic",
+                  specificity: "specific",
+                  confidence: "medium" as const,
+                },
+              ],
+              claims: [
+                {
+                  text: "The source describes product-minded engineering.",
+                  confidence: "medium" as const,
+                  evidenceChunkIds: [],
+                },
+              ],
+              methods: [],
+              examples: [],
+              constraints: [],
+              inferredSuggestions: [],
+            },
+            confidence: "high" as const,
+          } satisfies GeneralKnowledgeExtraction,
+        };
+      },
+      draftProposal: new WikiIndexerService().draftProposal,
+    };
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      overlyEagerKnowledgeIndexer,
+    );
+    const rawNote = await rawNoteRepository.create({
+      title: "Tell me about yourself",
+      bodyMarkdown: "I am a product-minded engineer and this is my personal interview answer.",
+    });
+
+    const agentRun = await service.enqueue({
+      runType: "compile_raw_note",
+      input: { rawNoteId: rawNote.id },
+    });
+    await service.process(agentRun.id);
+
+    const completedRun = await agentRunRepository.getById(agentRun.id);
+
+    expect(completedRun?.status).toBe("completed");
+    expect(completedRun?.output).toMatchObject({
+      indexingOutcome: "keep_searchable",
+      detectedKnowledgeType: "knowledge_note",
+    });
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items[0]).toMatchObject({
+      actionType: "keep_source_searchable",
+      targetType: "raw_note",
+    });
+    expect(knowledgeRepository.compiledNotes).toHaveLength(0);
+    expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
+      expect.arrayContaining([
+        "source.raw_note_loaded",
+        "indexing.outcome_classified",
+        "indexing.detected",
         "proposal.created",
         "lifecycle.completed",
       ]),

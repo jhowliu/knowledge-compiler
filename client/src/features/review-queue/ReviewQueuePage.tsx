@@ -18,6 +18,11 @@ import { actionLabel, payloadLabel, payloadText } from '../../lib/knowledge'
 import type { CompiledNote, NoteLink, Proposal, ProposalItem, RawNote, RawSource } from '../../types/domain'
 
 type ReviewTab = 'updates' | 'links' | 'done'
+type IndexingOutcomeOverride = 'keep_searchable' | 'create_knowledge'
+type IndexingRecommendation = {
+  outcome: 'keep_searchable' | 'create_knowledge' | 'update_existing_knowledge'
+  reason: string
+}
 
 const tabs: Array<{ key: ReviewTab; label: string }> = [
   { key: 'updates', label: 'Updates' },
@@ -147,10 +152,43 @@ function proposalLifecycle(proposal: Proposal | null) {
   return 'Rejected'
 }
 
+function recordValue(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringValue(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function indexingRecommendation(proposal: Proposal): IndexingRecommendation {
+  const itemWithOutcome = proposal.items.find((item) => {
+    const payload = recordValue(item.payload)
+    return ['keep_searchable', 'create_knowledge', 'update_existing_knowledge'].includes(stringValue(payload, 'outcome'))
+  })
+  const payload = recordValue(itemWithOutcome?.payload)
+  const outcome = stringValue(payload, 'outcome')
+  return {
+    outcome: outcome === 'keep_searchable' || outcome === 'update_existing_knowledge'
+      ? outcome
+      : 'create_knowledge',
+    reason: stringValue(payload, 'outcomeReason') || proposal.rationale || 'Agent recommendation is ready for review.',
+  }
+}
+
+function recommendationLabel(outcome: IndexingRecommendation['outcome']) {
+  if (outcome === 'keep_searchable') return 'Keep searchable'
+  if (outcome === 'update_existing_knowledge') return 'Update existing knowledge'
+  return 'Create knowledge note'
+}
+
 function itemVerb(actionType: string) {
   if (actionType === 'upsert_knowledge') return 'Knowledge'
   if (actionType === 'create_link') return 'Link'
   if (actionType === 'upsert_compiled_note') return 'Knowledge'
+  if (actionType === 'keep_source_searchable') return 'Source'
   return 'Update'
 }
 
@@ -159,11 +197,13 @@ function summarizeProposal(proposal: Proposal) {
     ['upsert_knowledge', 'upsert_compiled_note'].includes(item.actionType),
   ).length
   const links = proposal.items.filter((item) => item.actionType === 'create_link').length
+  const sourceOnly = proposal.items.filter((item) => item.actionType === 'keep_source_searchable').length
   const other = proposal.items.length - updates - links
   return [
+    sourceOnly ? 'source-only' : null,
     updates ? `${updates} update${updates > 1 ? 's' : ''}` : null,
     links ? `${links} link${links > 1 ? 's' : ''}` : null,
-    other ? `${other} other` : null,
+    other - sourceOnly > 0 ? `${other - sourceOnly} other` : null,
   ].filter(Boolean).join(' · ')
 }
 
@@ -185,8 +225,8 @@ function proposalGroups(proposal: Proposal) {
       actionTypes: proposal.items
         .filter((item) => !['upsert_knowledge', 'upsert_compiled_note', 'create_link'].includes(item.actionType))
         .map((item) => item.actionType),
-      label: 'Legacy items',
-      description: 'Older proposal items kept read-only for compatibility.',
+      label: 'Source-only',
+      description: 'Sources to keep searchable without creating graph knowledge.',
       icon: FileText,
     },
   ]
@@ -212,6 +252,43 @@ function MetadataPill({ children }: { children: ReactNode }) {
     <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
       {children}
     </span>
+  )
+}
+
+function RecommendationCard({ recommendation }: { recommendation: IndexingRecommendation }) {
+  const isSourceOnly = recommendation.outcome === 'keep_searchable'
+  const willDo = isSourceOnly
+    ? [
+        'make source searchable',
+        'store topics and concepts as metadata',
+        'keep source in Sources',
+        'show a source card on Knowledge Graph',
+        'not create a Knowledge Note',
+      ]
+    : [
+        recommendation.outcome === 'update_existing_knowledge'
+          ? 'update reusable knowledge'
+          : 'create a Knowledge Note',
+        'create searchable knowledge blocks',
+        'attach source evidence',
+        'show the note on Knowledge Graph',
+      ]
+
+  return (
+    <section className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-5">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700">
+        Recommended: {recommendationLabel(recommendation.outcome)}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-blue-950">{recommendation.reason}</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {willDo.map((item) => (
+          <div className="flex items-start gap-2 rounded-md border border-blue-100 bg-white/70 px-3 py-2 text-xs font-semibold leading-5 text-blue-950" key={item}>
+            <Check size={13} className="mt-0.5 shrink-0 text-blue-700" />
+            {item}
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -520,7 +597,7 @@ function ReviewDetailModal({
 }: {
   compiledNotes: CompiledNote[]
   isSubmitting: boolean
-  onApproveProposal: (proposalId: string) => void
+  onApproveProposal: (proposalId: string, indexingOutcomeOverride?: IndexingOutcomeOverride) => void
   onClose: () => void
   onRejectProposal: (proposalId: string) => void
   onToggleAdvancedDetails: () => void
@@ -535,8 +612,13 @@ function ReviewDetailModal({
   const selectedKnowledgeItems = knowledgeItems(proposal)
   const selectedLinkItems = linkItems(proposal)
   const gatedItems = proposal.items.filter(itemRequiresAcknowledgement)
+  const recommendation = indexingRecommendation(proposal)
   const [acknowledgedItemIds, setAcknowledgedItemIds] = useState<string[]>([])
   const allRequiredItemsAcknowledged = gatedItems.every((item) => acknowledgedItemIds.includes(item.id))
+  const canApply =
+    !isSubmitting &&
+    proposal.status === 'pending' &&
+    (gatedItems.length === 0 || allRequiredItemsAcknowledged)
 
   useEffect(() => {
     setAcknowledgedItemIds([])
@@ -580,17 +662,34 @@ function ReviewDetailModal({
               </button>
               <button
                 className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-violet px-4 text-[13px] font-extrabold text-white disabled:opacity-50 sm:flex-none"
-                disabled={
-                  isSubmitting ||
-                  proposal.status !== 'pending' ||
-                  (gatedItems.length > 0 && !allRequiredItemsAcknowledged)
-                }
+                disabled={!canApply}
                 onClick={() => onApproveProposal(proposal.id)}
                 type="button"
               >
                 <Check size={15} />
-                Apply updates
+                {recommendation.outcome === 'keep_searchable' ? 'Keep searchable' : 'Apply updates'}
               </button>
+              {recommendation.outcome === 'keep_searchable' ? (
+                <button
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-[13px] font-bold text-ink disabled:opacity-50 sm:flex-none"
+                  disabled={!canApply}
+                  onClick={() => onApproveProposal(proposal.id, 'create_knowledge')}
+                  type="button"
+                >
+                  <FileText size={15} />
+                  Create knowledge instead
+                </button>
+              ) : (
+                <button
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-[13px] font-bold text-ink disabled:opacity-50 sm:flex-none"
+                  disabled={!canApply}
+                  onClick={() => onApproveProposal(proposal.id, 'keep_searchable')}
+                  type="button"
+                >
+                  <BookOpen size={15} />
+                  Keep source only
+                </button>
+              )}
               <button
                 aria-label="Close update review"
                 className="grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-ink"
@@ -605,6 +704,8 @@ function ReviewDetailModal({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden bg-slate-50 lg:grid-cols-[minmax(520px,1fr)_340px]">
           <div className="min-h-0 overflow-y-auto px-6 py-6">
+            <RecommendationCard recommendation={recommendation} />
+
             <section className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
@@ -879,7 +980,7 @@ export function ReviewQueuePage({
   notice: string | null
   error: string | null
   onSelectProposal: (proposalId: string) => void
-  onApproveProposal: (proposalId: string) => void
+  onApproveProposal: (proposalId: string, indexingOutcomeOverride?: IndexingOutcomeOverride) => void
   onRejectProposal: (proposalId: string) => void
   onApproveNoteLink: (linkId: string) => void
   onRejectNoteLink: (linkId: string) => void

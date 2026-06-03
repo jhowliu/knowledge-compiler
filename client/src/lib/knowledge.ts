@@ -28,5 +28,6 @@ export function statusTone(status: string) {
 export function actionLabel(actionType: string) {
   if (actionType === 'upsert_knowledge') return 'Knowledge update'
   if (actionType === 'create_link') return 'Link suggestion'
+  if (actionType === 'keep_source_searchable') return 'Keep source searchable'
   return actionType.replaceAll('_', ' ')
 }

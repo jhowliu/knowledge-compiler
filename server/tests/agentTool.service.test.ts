@@ -17,6 +17,7 @@ class TestAgentToolReadRepository implements AgentToolReadRepository {
         id: blockId,
         knowledge_source_id: "knowledge-source-1",
         knowledge_version_id: "knowledge-version-1",
+        compiled_note_id: "compiled-1",
         title: "Existing knowledge",
         heading: "Prior claim",
         body_markdown: "The prior version says to scan left to right.",
@@ -127,6 +128,8 @@ describe("agent tool service", () => {
         existingBlocksContext: searchOutput.results,
       },
       {
+        indexing_outcome: "update_existing_knowledge",
+        outcome_reason: "The source revises an existing reusable merge-array technique.",
         reasoning_summary: "Update the canonical note using the grounded source span.",
         incomplete_reasoning: false,
         items: [

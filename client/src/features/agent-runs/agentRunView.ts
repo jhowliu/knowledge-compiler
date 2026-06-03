@@ -50,6 +50,7 @@ export function eventLabel(event: Pick<AgentRunEvent, 'category' | 'name'>) {
     'tool.called': 'Tool called',
     'tool.result': 'Tool result',
     'indexing.classification_started': 'Classification started',
+    'indexing.outcome_classified': 'Outcome classified',
     'indexing.extraction_completed': 'Extraction completed',
     'indexing.react_loop_started': 'Agent loop started',
     'indexing.detected': 'Index detected',
@@ -82,10 +83,13 @@ export function agentRunOutputText(agentRun: AgentRun | null) {
   if (agentRun.error) return agentRun.error
   if (isRecord(agentRun.output)) {
     const proposalId = typeof agentRun.output.proposalId === 'string' ? agentRun.output.proposalId : null
+    const indexingOutcome =
+      typeof agentRun.output.indexingOutcome === 'string' ? agentRun.output.indexingOutcome : null
     const suggestionsCreated =
       typeof agentRun.output.suggestionsCreated === 'number' ? agentRun.output.suggestionsCreated : null
     const relatedNoteCount =
       typeof agentRun.output.relatedNoteCount === 'number' ? agentRun.output.relatedNoteCount : null
+    if (proposalId && indexingOutcome === 'keep_searchable') return `Created source-only proposal ${proposalId}.`
     if (proposalId) return `Created proposal ${proposalId}.`
     if (suggestionsCreated !== null) return `Created ${suggestionsCreated} pending link suggestions.`
     if (relatedNoteCount !== null) return `Found ${relatedNoteCount} related notes.`

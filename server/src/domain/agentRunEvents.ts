@@ -24,6 +24,7 @@ export const agentRunEventNames = [
   "called",
   "result",
   "classification_started",
+  "outcome_classified",
   "extraction_completed",
   "react_loop_started",
   "detected",
@@ -65,6 +66,7 @@ export const agentRunEvents = {
   },
   indexing: {
     classificationStarted: { category: "indexing", name: "classification_started" },
+    outcomeClassified: { category: "indexing", name: "outcome_classified" },
     extractionCompleted: { category: "indexing", name: "extraction_completed" },
     reactLoopStarted: { category: "indexing", name: "react_loop_started" },
     detected: { category: "indexing", name: "detected" },

@@ -18,6 +18,8 @@ const routeWikiIndexer = {
         domain: "general",
         knowledgeType: "knowledge_note",
         title: "Source-first Indexing",
+        outcome: "create_knowledge" as const,
+        outcomeReason: "This teaches reusable source-first indexing behavior.",
         structuredData: {
           summary: "Index source chunks before drafting approved knowledge.",
           concepts: [

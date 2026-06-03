@@ -5,7 +5,6 @@ import {
   ExternalLink,
   FileText,
   RotateCw,
-  X,
 } from 'lucide-react'
 import { isRecord, payloadLabel } from '../../lib/knowledge'
 import type { AgentRun, Proposal, RawNote, RawSource } from '../../types/domain'
@@ -251,10 +250,8 @@ function ActivityGroupSection({
   )
 }
 
-export function AgentActivityCenter({
+export function AgentActivityPage({
   agentRuns,
-  isOpen,
-  onClose,
   onOpenProposal,
   onRetry,
   onSelectAgentRun,
@@ -263,8 +260,6 @@ export function AgentActivityCenter({
   rawSources,
 }: {
   agentRuns: AgentRun[]
-  isOpen: boolean
-  onClose: () => void
   onOpenProposal: (proposalId: string) => void
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
@@ -272,39 +267,21 @@ export function AgentActivityCenter({
   rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
-  if (!isOpen) return null
-
   const groups = groupRuns(agentRuns, proposals)
   const summary = summarizeAgentActivity(agentRuns, proposals)
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30">
-      <button
-        aria-label="Close agent activity"
-        className="absolute inset-0 cursor-default"
-        onClick={onClose}
-        type="button"
-      />
-      <aside className="relative z-10 flex h-full w-[480px] flex-col border-l border-gray-200 bg-white shadow-2xl">
-        <header className="border-b border-gray-200 px-5 py-5">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-violet">Agent</p>
-              <h2 className="mt-1 text-xl font-extrabold text-ink">Activity center</h2>
-              <p className="mt-1 text-sm leading-6 text-gray-500">
-                Workspace-level indexing, review, and retry state.
-              </p>
-            </div>
-            <button
-              aria-label="Close agent activity"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-slate-50 hover:text-ink"
-              onClick={onClose}
-              type="button"
-            >
-              <X size={16} />
-            </button>
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
+      <header className="border-b border-gray-200 bg-white px-8 py-6">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-violet">Agent</p>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">Activity</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+              Workspace-level indexing, review, retry, and run timeline state.
+            </p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid w-[420px] grid-cols-3 gap-2">
             {[
               ['Running', summary.running],
               ['Needs review', summary.needsReview],
@@ -312,13 +289,15 @@ export function AgentActivityCenter({
             ].map(([label, value]) => (
               <div className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={label}>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                <p className="mt-1 text-lg font-extrabold text-ink">{value}</p>
+                <p className="mt-1 text-xl font-extrabold text-ink">{value}</p>
               </div>
             ))}
           </div>
-        </header>
+        </div>
+      </header>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        <div className="grid gap-6 xl:grid-cols-2">
           {(['running', 'needsReview', 'failed', 'completed'] as ActivityGroup[]).map((group) => (
             <ActivityGroupSection
               group={group}
@@ -332,7 +311,7 @@ export function AgentActivityCenter({
             />
           ))}
         </div>
-      </aside>
+      </div>
     </div>
   )
 }

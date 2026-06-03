@@ -116,38 +116,20 @@ export function LeftNavigation({
             </span>
           ) : null}
         </button>
-      </nav>
-
-      <section className="space-y-1.5">
         <button
-          className={`w-full rounded-lg border p-3 text-left ${
-            isDark
-              ? 'border-[#343434] bg-[#262626] text-gray-200 hover:border-violet/50'
-              : 'border-gray-200 bg-slate-50 text-ink hover:border-violet/40'
-          }`}
+          className={navItemClass(activeView === 'agent_activity')}
           onClick={onAgentActivityClick}
           type="button"
         >
-          <div className="mb-2 flex items-center gap-2">
-            <Activity size={15} className="text-violet" />
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Agent</p>
-          </div>
-          <div className="space-y-1 text-[12px] font-semibold">
-            <div className="flex items-center justify-between">
-              <span>Running</span>
-              <span>{agentActivitySummary.running}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Needs review</span>
-              <span>{agentActivitySummary.needsReview}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Failed</span>
-              <span>{agentActivitySummary.failed}</span>
-            </div>
-          </div>
+          <Activity size={16} className="text-gray-400" />
+          Agent activity
+          {agentActivitySummary.running + agentActivitySummary.needsReview + agentActivitySummary.failed > 0 ? (
+            <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
+              {agentActivitySummary.running + agentActivitySummary.needsReview + agentActivitySummary.failed}
+            </span>
+          ) : null}
         </button>
-      </section>
+      </nav>
 
       <button
         className={`mt-auto flex h-10 items-center justify-between rounded-lg border px-3 text-left text-[13px] font-bold ${

@@ -102,31 +102,56 @@ function groupCopy(group: ActivityGroup) {
       icon: Clock3,
       label: 'Running',
       empty: 'No active runs.',
-      className: 'border-violet/30 bg-violet/10 text-violet',
+      accentClassName: 'bg-violet',
+      countClassName: 'border-violet/20 bg-violet/10 text-violet',
+      headerClassName: 'border-violet/20 bg-violet/5 hover:bg-violet/10',
+      iconClassName: 'border-violet/30 bg-violet/10 text-violet',
+      rowClassName: 'border-violet/10 bg-violet/[0.025] hover:bg-violet/[0.06]',
+      sectionClassName: 'border-violet/20 bg-violet/[0.035]',
+      statusClassName: 'border-violet/20 bg-violet/10 text-violet',
     },
     needsReview: {
       icon: FileText,
       label: 'Needs review',
       empty: 'No generated proposals waiting for review.',
-      className: 'border-amber-200 bg-amber-50 text-amber-800',
+      accentClassName: 'bg-amber-500',
+      countClassName: 'border-amber-200 bg-amber-100 text-amber-800',
+      headerClassName: 'border-amber-200 bg-amber-50/80 hover:bg-amber-50',
+      iconClassName: 'border-amber-200 bg-amber-50 text-amber-800',
+      rowClassName: 'border-amber-100 bg-amber-50/25 hover:bg-amber-50/60',
+      sectionClassName: 'border-amber-200 bg-amber-50/35',
+      statusClassName: 'border-amber-200 bg-amber-50 text-amber-800',
     },
     failed: {
       icon: AlertTriangle,
       label: 'Failed',
       empty: 'No failed runs.',
-      className: 'border-red-200 bg-red-50 text-red-700',
+      accentClassName: 'bg-red-500',
+      countClassName: 'border-red-200 bg-red-100 text-red-700',
+      headerClassName: 'border-red-200 bg-red-50/80 hover:bg-red-50',
+      iconClassName: 'border-red-200 bg-red-50 text-red-700',
+      rowClassName: 'border-red-100 bg-red-50/25 hover:bg-red-50/60',
+      sectionClassName: 'border-red-200 bg-red-50/35',
+      statusClassName: 'border-red-200 bg-red-50 text-red-700',
     },
     completed: {
       icon: CheckCircle2,
       label: 'Completed',
       empty: 'No completed runs yet.',
-      className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+      accentClassName: 'bg-emerald-500',
+      countClassName: 'border-emerald-200 bg-emerald-100 text-emerald-800',
+      headerClassName: 'border-emerald-200 bg-emerald-50/80 hover:bg-emerald-50',
+      iconClassName: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+      rowClassName: 'border-emerald-100 bg-emerald-50/25 hover:bg-emerald-50/60',
+      sectionClassName: 'border-emerald-200 bg-emerald-50/35',
+      statusClassName: 'border-emerald-200 bg-emerald-50 text-emerald-800',
     },
   }[group]
 }
 
 function ActivityRow({
   agentRun,
+  group,
   onOpenProposal,
   onRetry,
   onSelectAgentRun,
@@ -135,6 +160,7 @@ function ActivityRow({
   rawSources,
 }: {
   agentRun: AgentRun
+  group: ActivityGroup
   onOpenProposal: (proposalId: string) => void
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
@@ -142,11 +168,16 @@ function ActivityRow({
   rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
+  const copy = groupCopy(group)
+
   return (
-    <article className="grid gap-3 border-t border-gray-200 px-4 py-3 first:border-t-0 md:grid-cols-[1fr_auto] md:items-center">
+    <article
+      className={`relative grid gap-3 border-t px-4 py-3 pl-5 first:border-t-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center ${copy.rowClassName}`}
+    >
+      <span className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${copy.accentClassName}`} />
       <div className="min-w-0">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-violet" />
+          <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${copy.accentClassName}`} />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-extrabold text-ink">
             {agentRunLabel(agentRun.runType)} · {sourceTitleForRun(agentRun, rawNotes, rawSources)}
@@ -161,8 +192,8 @@ function ActivityRow({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 md:justify-end">
-        <span className="shrink-0 rounded-full border border-gray-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-600">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/70 bg-white/70 p-2 shadow-[0_1px_0_rgba(15,23,42,0.04)] md:justify-end">
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${copy.statusClassName}`}>
           {agentRun.status}
         </span>
         <span className="text-[11px] font-semibold text-gray-400">
@@ -225,14 +256,14 @@ function ActivityGroupSection({
   const Icon = copy.icon
 
   return (
-    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+    <section className={`overflow-hidden rounded-lg border shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${copy.sectionClassName}`}>
       <button
-        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50"
+        className={`flex w-full items-center justify-between gap-4 border-b px-4 py-3 text-left transition ${copy.headerClassName}`}
         onClick={onToggle}
         type="button"
       >
         <span className="inline-flex min-w-0 items-center gap-3">
-          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${copy.className}`}>
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${copy.iconClassName}`}>
             <Icon size={15} />
           </span>
           <span className="min-w-0">
@@ -243,7 +274,7 @@ function ActivityGroupSection({
           </span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-3">
-          <span className="rounded-full border border-gray-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-gray-500">
+          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${copy.countClassName}`}>
             {items.length}
           </span>
           <ChevronDown
@@ -254,10 +285,11 @@ function ActivityGroupSection({
       </button>
       {isOpen ? (
         items.length ? (
-          <div className="border-t border-gray-200">
+          <div>
             {items.map(({ agentRun, proposal }) => (
               <ActivityRow
                 agentRun={agentRun}
+                group={group}
                 key={agentRun.id}
                 onOpenProposal={onOpenProposal}
                 onRetry={onRetry}

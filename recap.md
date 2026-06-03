@@ -1,6 +1,7 @@
 # Recap
 
 ## Summary
+- Started Agent Run detail receipt UI on `codex/agent-run-detail-receipt`: widened the drawer, replaced raw event-card timelines with a human-readable progress tracker, added output summaries for proposals/concepts/related cards/generated links/eval results, and moved JSON payloads into a collapsed Technical details section.
 - Started #59/#83 implementation on `codex/general-facets-markdown`.
 - Generalized LLM wiki indexing output from coding-specific fields to facet-based `structuredData` (`summary`, `concepts`, `claims`, `methods`, `examples`, `constraints`).
 - Added shared facet normalization/rendering so proposal markdown is deterministically rendered from facets and approval re-renders from the same source of truth.
@@ -84,6 +85,7 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- Agent run details should read like an agent work receipt first: current state, progress, outputs, eval/errors, and only then debug JSON behind an explicit disclosure.
 - General facets are now the source of truth for LLM wiki proposals; markdown is a server-rendered view of the facets, not a separate LLM-authored narrative.
 - Legacy deterministic coding extraction still keeps coding-specific fields for compatibility, but the LLM wiki indexing path no longer emits those fields.
 - Frontend: React, Vite, TypeScript, Tailwind CSS, shadcn/ui.
@@ -218,8 +220,10 @@
 - Agent Activity page validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://127.0.0.1:5173/` opened Agent Activity from the sidebar and from the Notes Graph shortcut with no console warnings or errors.
 - Source page Agent Activity removal validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://localhost:5173/` confirmed the Sources page no longer exposes Agent Activity text/buttons, while the dedicated Agent Activity page still opens from the global sidebar with no console warnings or errors.
 - Index Source local fix validation: patched `015_knowledge_block_embeddings.sql` to skip pgvector setup when the extension is unavailable, then `npm run migrate --workspace=server` applied migrations 015 and 016. Retried `/sources/:id/compile` for the generated Dijkstra note; the agent run completed with OpenAI and created proposal `e1f7a75c-efb3-4f80-a945-10fde0702f6d`.
+- Agent Run detail receipt validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://localhost:5174/` opened a completed Agent Activity run and confirmed the drawer shows Summary, Progress, Output, Eval, Generated links, and collapsed Technical details with no console errors beyond the React DevTools info message.
 
 ## Next Target
+- Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.
 - Consider adding a stronger LLM-backed entailment judge for claim-to-span support and a visible eval baseline in CI.
 - Run manual semantic search QA against a database with `pgvector` installed and add a checked-in eval baseline if CI should track deltas automatically.

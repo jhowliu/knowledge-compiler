@@ -5,6 +5,7 @@ import {
   History,
   Link2,
   Maximize2,
+  Plus,
   X,
   ZoomIn,
   ZoomOut,
@@ -867,7 +868,7 @@ export function KnowledgeCanvas({
               const isSelected = node.note.id === selectedNote?.id
               return (
                 <button
-                  className={`absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
+                  className={`group absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
                     isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
                   }`}
                   data-note-id={node.note.id}
@@ -883,8 +884,9 @@ export function KnowledgeCanvas({
                   type="button"
                 >
                   <span
-                    className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-violet shadow-md"
+                    className="absolute -right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-violet text-white opacity-0 shadow-md transition group-hover:opacity-100 group-focus-visible:opacity-100"
                     data-link-handle="true"
+                    onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
@@ -897,7 +899,10 @@ export function KnowledgeCanvas({
                         current: pointFromEvent(event),
                       })
                     }}
-                  />
+                    title="Create link"
+                  >
+                    <Plus size={15} strokeWidth={2.8} />
+                  </span>
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
                       {noteTypeLabel(node.note.noteType)}

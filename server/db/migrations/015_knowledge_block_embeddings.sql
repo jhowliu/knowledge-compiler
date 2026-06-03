@@ -1,9 +1,10 @@
 do $$
 begin
-  create extension if not exists vector;
-exception
-  when undefined_file then
+  if exists (select 1 from pg_available_extensions where name = 'vector') then
+    create extension if not exists vector;
+  else
     raise notice 'pgvector extension is not installed; skipping knowledge_blocks.embedding setup';
+  end if;
 end $$;
 
 do $$

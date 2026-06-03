@@ -4,6 +4,7 @@ import {
   type AgentRunEventName,
 } from "../domain/agentRunEvents.js";
 import type { AgentRun, AgentRunEvent } from "../domain/knowledge.js";
+import { agentRunEventStreamService } from "../services/agentRunEventStream.service.js";
 
 type AgentRunRow = {
   id: string;
@@ -130,7 +131,9 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
       [input.agentRunId, input.category, input.name, input.payload],
     );
 
-    return mapAgentRunEvent(result.rows[0]);
+    const event = mapAgentRunEvent(result.rows[0]);
+    agentRunEventStreamService.publishAgentRunEvent(event);
+    return event;
   }
 
   async start(id: string) {

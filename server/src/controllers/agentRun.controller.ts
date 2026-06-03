@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
 import type { AgentRunQueueService } from "../services/agentRunQueue.service.js";
+import { agentRunEventStreamService } from "../services/agentRunEventStream.service.js";
 import type { PhaseOneWorkflowService } from "../services/phaseOneWorkflow.service.js";
 import { requireStringParam } from "./requestParams.js";
 
@@ -19,6 +20,10 @@ export class AgentRunController {
     } catch (error) {
       next(error);
     }
+  };
+
+  stream = async (_request: Request, response: Response) => {
+    agentRunEventStreamService.connect(response);
   };
 
   enqueue = async (request: Request, response: Response, next: NextFunction) => {

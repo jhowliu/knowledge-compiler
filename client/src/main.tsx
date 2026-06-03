@@ -13,6 +13,7 @@ import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
   applySourceTopics,
+  createAgentRunEventSource,
   createTopic,
   loadAgentRunDetail,
   loadRawNoteIndexingTrace,
@@ -40,6 +41,8 @@ import type {
 
 function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const selectedAgentRunIdRef = useRef<string | null>(null)
+  const agentStreamRefreshTimerRef = useRef<number | null>(null)
   const [activeView, setActiveView] = useState<ActiveView>('knowledge_map')
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
@@ -127,6 +130,32 @@ function App() {
     setIsAgentRunDetailLoading(false)
   }
 
+  function scheduleAgentStreamRefresh(agentRunId?: string | null) {
+    if (agentStreamRefreshTimerRef.current !== null) {
+      return
+    }
+
+    agentStreamRefreshTimerRef.current = window.setTimeout(() => {
+      agentStreamRefreshTimerRef.current = null
+      void (async () => {
+        await refresh({ showLoading: false })
+        const selectedAgentRunId = selectedAgentRunIdRef.current
+        if (!selectedAgentRunId || (agentRunId && selectedAgentRunId !== agentRunId)) {
+          return
+        }
+
+        try {
+          const detail = await loadAgentRunDetail(selectedAgentRunId)
+          if (selectedAgentRunIdRef.current === selectedAgentRunId) {
+            setSelectedAgentRunDetail(detail)
+          }
+        } catch (nextError) {
+          setError(nextError instanceof Error ? nextError.message : 'Unable to load agent run')
+        }
+      })()
+    }, 200)
+  }
+
   async function runKnowledgeSearch(nextQuery = searchQuery, includeArchived = includeArchivedSearch) {
     const trimmedQuery = nextQuery.trim()
     setIsSearchOpen(true)
@@ -166,6 +195,39 @@ function App() {
   }, [])
 
   useEffect(() => {
+    selectedAgentRunIdRef.current = selectedAgentRunDetail?.agentRun?.id ?? null
+  }, [selectedAgentRunDetail?.agentRun?.id])
+
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') {
+      return undefined
+    }
+
+    const eventSource = createAgentRunEventSource()
+    const onAgentRunEvent = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data) as { agentRunId?: unknown }
+        scheduleAgentStreamRefresh(
+          typeof payload.agentRunId === 'string' ? payload.agentRunId : null,
+        )
+      } catch {
+        scheduleAgentStreamRefresh()
+      }
+    }
+
+    eventSource.addEventListener('agent-run.event', onAgentRunEvent)
+    return () => {
+      eventSource.removeEventListener('agent-run.event', onAgentRunEvent)
+      eventSource.close()
+      if (agentStreamRefreshTimerRef.current !== null) {
+        window.clearTimeout(agentStreamRefreshTimerRef.current)
+        agentStreamRefreshTimerRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof EventSource !== 'undefined') return undefined
     if (!isAgentRunning) return undefined
     const interval = window.setInterval(() => {
       void refresh({ showLoading: false })

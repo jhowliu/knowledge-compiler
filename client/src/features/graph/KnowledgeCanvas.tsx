@@ -356,7 +356,7 @@ export function KnowledgeCanvas({
 
   function startPan(event: React.PointerEvent) {
     const target = event.target as HTMLElement
-    if (target.closest('[data-note-id], [data-edge-toolbar], button, input, select, textarea')) {
+    if (target.closest('[data-note-id], button, input, select, textarea')) {
       return
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -595,95 +595,6 @@ export function KnowledgeCanvas({
             </svg>
           ) : null}
 
-          {selectedEdge ? (
-            <div
-              className="absolute z-30 w-[296px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl"
-              data-edge-toolbar="true"
-              onPointerDown={(event) => event.stopPropagation()}
-              style={{
-                left: `${selectedEdge.midpoint.x}%`,
-                top: `${selectedEdge.midpoint.y}%`,
-                transform: `translate(-50%, -50%) scale(${1 / canvasZoom})`,
-              }}
-            >
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                    {selectedEdge.link.status === 'pending' ? 'Pending link' : 'Approved link'}
-                  </p>
-                  <p className="mt-1 truncate text-[13px] font-extrabold text-ink">
-                    {selectedEdge.sourceNode.note.title} to {selectedEdge.targetNode.note.title}
-                  </p>
-                </div>
-                <button
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-ink"
-                  onClick={() => setSelectedEdgeId(null)}
-                  title="Close"
-                  type="button"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                Relation
-              </label>
-              <select
-                className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-ink outline-none focus:border-violet"
-                onChange={(event) => onUpdateNoteLink(selectedEdge.link.id, event.target.value)}
-                value={selectedEdge.link.relationType}
-              >
-                {relationOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-
-              <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  {confidenceLabel(selectedEdge.link.confidence)}
-                </p>
-                {selectedEdge.link.rationale ? (
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
-                    {selectedEdge.link.rationale}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="mt-3 flex flex-wrap justify-end gap-2">
-                {selectedEdge.link.status === 'pending' ? (
-                  <>
-                    <button
-                      className="inline-flex h-8 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark"
-                      onClick={() => onDecideNoteLink(selectedEdge.link.id, 'approve')}
-                      type="button"
-                    >
-                      <Check size={13} />
-                      Approve
-                    </button>
-                    <button
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                      onClick={() => onDecideNoteLink(selectedEdge.link.id, 'reject')}
-                      type="button"
-                    >
-                      <X size={13} />
-                      Reject
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    className="h-8 rounded-md border border-red-200 px-3 text-xs font-bold text-red-700 hover:bg-red-50"
-                    onClick={() => onRemoveNoteLink(selectedEdge.link.id)}
-                    type="button"
-                  >
-                    Remove link
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : null}
-
           {graphNodes.length ? (
             graphNodes.map((node) => {
               const isSelected = node.note.id === selectedNote?.id
@@ -741,6 +652,101 @@ export function KnowledgeCanvas({
           )}
         </div>
       </main>
+
+      {selectedEdge ? (
+        <div
+          aria-labelledby="edge-link-modal-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4"
+          onClick={() => setSelectedEdgeId(null)}
+          role="dialog"
+        >
+          <form
+            className="w-full max-w-[420px] rounded-lg border border-gray-200 bg-white p-5 text-left shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  {selectedEdge.link.status === 'pending' ? 'Pending link' : 'Approved link'}
+                </p>
+                <h3 className="mt-1 text-lg font-extrabold leading-6 text-ink" id="edge-link-modal-title">
+                  Manage relation
+                </h3>
+                <p className="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">
+                  {selectedEdge.sourceNode.note.title} to {selectedEdge.targetNode.note.title}
+                </p>
+              </div>
+              <button
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-ink"
+                onClick={() => setSelectedEdgeId(null)}
+                title="Close"
+                type="button"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">
+              Relation
+            </label>
+            <select
+              className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-violet"
+              onChange={(event) => onUpdateNoteLink(selectedEdge.link.id, event.target.value)}
+              value={selectedEdge.link.relationType}
+            >
+              {relationOptions.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+
+            <div className="mt-4 rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                {confidenceLabel(selectedEdge.link.confidence)}
+              </p>
+              {selectedEdge.link.rationale ? (
+                <p className="mt-1 text-xs leading-5 text-gray-500">
+                  {selectedEdge.link.rationale}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              {selectedEdge.link.status === 'pending' ? (
+                <>
+                  <button
+                    className="inline-flex h-9 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark"
+                    onClick={() => onDecideNoteLink(selectedEdge.link.id, 'approve')}
+                    type="button"
+                  >
+                    <Check size={13} />
+                    Approve
+                  </button>
+                  <button
+                    className="inline-flex h-9 items-center gap-1 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    onClick={() => onDecideNoteLink(selectedEdge.link.id, 'reject')}
+                    type="button"
+                  >
+                    <X size={13} />
+                    Reject
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="h-9 rounded-md border border-red-200 px-3 text-xs font-bold text-red-700 hover:bg-red-50"
+                  onClick={() => onRemoveNoteLink(selectedEdge.link.id)}
+                  type="button"
+                >
+                  Remove link
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <aside className="flex w-[380px] shrink-0 flex-col border-l border-[#303030] bg-[#1B1B1B] text-white">
         {selectedNote ? (

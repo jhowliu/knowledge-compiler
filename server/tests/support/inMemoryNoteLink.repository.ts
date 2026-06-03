@@ -122,6 +122,25 @@ export class InMemoryNoteLinkRepository implements NoteLinkRepository {
     return link;
   }
 
+  async findRelationDuplicateForUpdate(input: {
+    id: string;
+    relationType: string;
+  }): Promise<NoteLink | null> {
+    const current = this.noteLinks.find((item) => item.id === input.id) ?? null;
+    if (!current) return null;
+    return (
+      this.noteLinks.find(
+        (link) =>
+          link.id !== current.id &&
+          link.sourceNoteType === current.sourceNoteType &&
+          link.sourceNoteId === current.sourceNoteId &&
+          link.targetNoteType === current.targetNoteType &&
+          link.targetNoteId === current.targetNoteId &&
+          link.relationType === input.relationType,
+      ) ?? null
+    );
+  }
+
   async setStatus(id: string, status: NoteLinkStatus): Promise<NoteLink | null> {
     const link = this.noteLinks.find((item) => item.id === id) ?? null;
     if (link) {

@@ -7,9 +7,12 @@ export const maxCanvasZoom = 1.65
 export const graphBoardKey = 'default'
 
 export const relationOptions = [
-  ['related_concept', 'Related concept'],
+  ['supports', 'Supports'],
   ['prerequisite', 'Prerequisite'],
   ['example_of', 'Example of'],
+  ['contrasts', 'Contrasts'],
+  ['duplicate_candidate', 'Duplicate candidate'],
+  ['related_concept', 'Related concept'],
   ['contrasts_with', 'Contrasts with'],
   ['part_of', 'Part of'],
 ] as const

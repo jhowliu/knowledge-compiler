@@ -26,8 +26,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   })
 
   if (!response.ok) {
-    const body = await response.text()
-    throw new Error(body || `Request failed with ${response.status}`)
+    throw new Error(await responseErrorMessage(response))
   }
 
   return response.json() as Promise<T>
@@ -43,9 +42,24 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   })
 
   if (!response.ok) {
-    const body = await response.text()
-    throw new Error(body || `Request failed with ${response.status}`)
+    throw new Error(await responseErrorMessage(response))
   }
+}
+
+async function responseErrorMessage(response: Response) {
+  const body = await response.text()
+  if (!body) return `Request failed with ${response.status}`
+
+  try {
+    const payload = JSON.parse(body) as { error?: unknown }
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      return payload.error
+    }
+  } catch {
+    // Plain-text error responses are still useful as-is.
+  }
+
+  return body
 }
 
 export function createAgentRunEventSource() {

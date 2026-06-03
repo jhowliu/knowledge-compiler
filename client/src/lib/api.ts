@@ -16,6 +16,26 @@ import type {
   WorkspaceData,
 } from '../types/domain'
 
+export const agentRunStreamEventNames = [
+  'agent-stream.connected',
+  'agent-stream.heartbeat',
+  'agent-run.queued',
+  'agent-run.started',
+  'agent-run.event',
+  'agent-run.completed',
+  'agent-run.failed',
+  'agent-run.retry-queued',
+] as const
+
+export type AgentRunStreamEventName = (typeof agentRunStreamEventNames)[number]
+
+export type AgentRunStreamEvent = {
+  id: string
+  name: AgentRunStreamEventName
+  payload: unknown
+  createdAt: string
+}
+
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: {
@@ -45,6 +65,31 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   if (!response.ok) {
     const body = await response.text()
     throw new Error(body || `Request failed with ${response.status}`)
+  }
+}
+
+export function subscribeToAgentRunEvents(
+  onEvent: (event: AgentRunStreamEvent) => void,
+  onError?: () => void,
+) {
+  const eventSource = new EventSource(`${apiBaseUrl}/agent-runs/stream`)
+
+  for (const eventName of agentRunStreamEventNames) {
+    eventSource.addEventListener(eventName, (message) => {
+      try {
+        onEvent(JSON.parse(message.data) as AgentRunStreamEvent)
+      } catch {
+        // Ignore malformed stream frames; the next valid event will refresh state.
+      }
+    })
+  }
+
+  eventSource.onerror = () => {
+    onError?.()
+  }
+
+  return () => {
+    eventSource.close()
   }
 }
 

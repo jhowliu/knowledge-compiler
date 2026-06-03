@@ -553,7 +553,7 @@ export function KnowledgeCanvas({
                         role="button"
                         stroke="transparent"
                         strokeLinecap="round"
-                        strokeWidth="10"
+                        strokeWidth="4"
                         style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
                         tabIndex={0}
                         vectorEffect="non-scaling-stroke"
@@ -595,37 +595,44 @@ export function KnowledgeCanvas({
             const isPending = edge.link.status === 'pending'
             const isSelected = edge.id === selectedEdgeId
             return (
-              <div
-                className={`pointer-events-none absolute z-[5] rounded-full border px-2.5 py-1 text-xs font-extrabold shadow-sm ${
+              <button
+                className={`pointer-events-auto absolute z-[5] rounded-full border px-2.5 py-1 text-xs font-extrabold shadow-sm transition hover:-translate-y-px hover:shadow-md ${
                   isPending
                     ? 'border-violet/20 bg-white/90 text-violet'
                     : 'border-blue-200 bg-white/90 text-blue-700'
                 } ${isSelected ? 'ring-4 ring-violet/10' : ''}`}
                 data-edge-label="true"
                 key={`${edge.id}-label`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setSelectedEdgeId(edge.id)
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
                 style={{
                   left: `${edge.midpoint.x}%`,
                   top: `${edge.midpoint.y}%`,
                   transform: `translate(-50%, -50%) scale(${1 / canvasZoom})`,
                 }}
+                type="button"
               >
                 {relationOptionLabel(edge.link.relationType)}
-              </div>
+              </button>
             )
           })}
 
           {selectedEdge ? (
             <div
-              className="absolute z-30 w-[296px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl"
+              className="absolute z-30 w-[224px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white p-2 text-left shadow-xl"
               data-edge-toolbar="true"
               onPointerDown={(event) => event.stopPropagation()}
               style={{
                 left: `${selectedEdge.midpoint.x}%`,
                 top: `${selectedEdge.midpoint.y}%`,
-                transform: `translate(-50%, -50%) scale(${1 / canvasZoom})`,
+                transform: `translate(-50%, calc(-100% - 20px)) scale(${1 / canvasZoom})`,
+                transformOrigin: 'center bottom',
               }}
             >
-              <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
                     {selectedEdge.link.status === 'pending' ? 'Pending link' : 'Approved link'}
@@ -648,7 +655,7 @@ export function KnowledgeCanvas({
                 Relation
               </label>
               <select
-                className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-ink outline-none focus:border-violet"
+                className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none focus:border-violet"
                 onChange={(event) => onUpdateNoteLink(selectedEdge.link.id, event.target.value)}
                 value={selectedEdge.link.relationType}
               >
@@ -659,18 +666,12 @@ export function KnowledgeCanvas({
                 ))}
               </select>
 
-              <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                  {confidenceLabel(selectedEdge.link.confidence)}
-                </p>
-                {selectedEdge.link.rationale ? (
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
-                    {selectedEdge.link.rationale}
-                  </p>
-                ) : null}
-              </div>
+              <p className="mt-2 truncate text-[11px] font-semibold text-gray-500">
+                {confidenceLabel(selectedEdge.link.confidence)}
+                {selectedEdge.link.rationale ? ` · ${selectedEdge.link.rationale}` : ''}
+              </p>
 
-              <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
                 {selectedEdge.link.status === 'pending' ? (
                   <>
                     <button
@@ -700,6 +701,7 @@ export function KnowledgeCanvas({
                   </button>
                 )}
               </div>
+              <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-gray-200 bg-white" />
             </div>
           ) : null}
 

@@ -830,12 +830,16 @@ function App() {
                 {error}
               </div>
             ) : null}
-            {notice ? (
-              <div className="mx-6 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-                {notice}
-              </div>
-            ) : null}
-            <div className="flex min-h-0 flex-1">
+            <div className="relative flex min-h-0 flex-1" data-knowledge-map-panel="true">
+              {notice ? (
+                <div
+                  aria-live="polite"
+                  className="pointer-events-none absolute right-6 top-4 z-40 max-w-sm rounded-lg border border-emerald-200 bg-emerald-50/95 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-lg"
+                  role="status"
+                >
+                  {notice}
+                </div>
+              ) : null}
               <KnowledgeCanvas
                 data={workspaceData}
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}

@@ -5,9 +5,6 @@ import {
   History,
   Link2,
   Maximize2,
-  Plus,
-  RotateCw,
-  Sparkles,
   X,
   ZoomIn,
   ZoomOut,
@@ -22,7 +19,7 @@ import type {
   RelatedNoteMatch,
   WorkspaceData,
 } from '../../types/domain'
-import { relationLabel, relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
+import { relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
 
 function noteTypeLabel(noteType: string) {
   return noteType.replaceAll('_', ' ')
@@ -92,6 +89,21 @@ function uniqueRelatedMatches(matches: RelatedNoteMatch[]) {
   })
 }
 
+function uniqueNotes(notes: CompiledNote[]) {
+  const seen = new Set<string>()
+  return notes.filter((note) => {
+    if (seen.has(note.id)) {
+      return false
+    }
+    seen.add(note.id)
+    return true
+  })
+}
+
+function confidenceLabel(confidence: string) {
+  return confidence ? `${confidence} confidence` : 'confidence unknown'
+}
+
 export function KnowledgeCanvas({
   data,
   onCreateNoteLink,
@@ -99,7 +111,6 @@ export function KnowledgeCanvas({
   onMoveNoteCard,
   onResetBoardLayout,
   onRemoveNoteLink,
-  onOpenAgentActivity,
   onUpdateNoteLink,
 }: {
   data: WorkspaceData
@@ -108,7 +119,6 @@ export function KnowledgeCanvas({
   onMoveNoteCard: (noteId: string, position: { x: number; y: number }) => void
   onResetBoardLayout: () => void
   onRemoveNoteLink: (linkId: string) => void
-  onOpenAgentActivity: () => void
   onUpdateNoteLink: (linkId: string, relationType: string) => void
 }) {
   const canvasRef = useRef<HTMLElement | null>(null)
@@ -116,11 +126,7 @@ export function KnowledgeCanvas({
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [linkSearch, setLinkSearch] = useState('')
-  const [linkTargetId, setLinkTargetId] = useState('')
-  const [manualRelationType, setManualRelationType] = useState<(typeof relationOptions)[number][0]>(
-    'related_concept',
-  )
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [canvasZoom, setCanvasZoom] = useState(1)
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 })
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
@@ -203,7 +209,7 @@ export function KnowledgeCanvas({
         ? {
             note,
             score: link.confidence === 'high' ? 10 : link.confidence === 'medium' ? 8 : 6,
-            reason: relationLabel(link.relationType),
+            reason: relationOptionLabel(link.relationType),
             link,
           }
         : null
@@ -222,7 +228,7 @@ export function KnowledgeCanvas({
         reason: titleMatch
           ? 'Backlink by title mention'
           : keywordMatches > 1
-            ? 'Shares indexed concepts'
+            ? 'Concept overlap'
             : 'Nearby compiled note',
       }
     })
@@ -230,11 +236,16 @@ export function KnowledgeCanvas({
     .sort((left, right) => right.score - left.score)
     .slice(0, 5)
   const relatedNotes = uniqueRelatedMatches([...approvedLinkedNotes, ...inferredRelatedNotes]).slice(0, 5)
-  const baseVisibleGraphNotes = notes.slice(0, 9)
-  const visibleGraphNotes =
-    selectedNote && !baseVisibleGraphNotes.some((note) => note.id === selectedNote.id)
-      ? [...baseVisibleGraphNotes.slice(0, 8), selectedNote]
-      : baseVisibleGraphNotes
+  const linkVisibleStatuses = new Set(['approved', 'pending'])
+  const connectedGraphNotes = selectedNoteLinks
+    .filter((link) => linkVisibleStatuses.has(link.status))
+    .map((link) => (selectedNote ? noteById.get(connectedNoteId(link, selectedNote.id) ?? '') : null))
+    .filter((note): note is CompiledNote => Boolean(note))
+  const visibleGraphNotes = uniqueNotes([
+    ...(selectedNote ? [selectedNote] : []),
+    ...connectedGraphNotes,
+    ...notes,
+  ]).slice(0, 9)
   const graphPositions = [
     { x: 44, y: 48 },
     { x: 22, y: 31 },
@@ -255,55 +266,52 @@ export function KnowledgeCanvas({
         : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
     link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
-  const selectedGraphNode = graphNodes.find((node) => node.note.id === selectedNote?.id) ?? graphNodes[0]
-  const approvedLinkRows = selectedNoteLinks
-    .filter((link) => link.status === 'approved')
+  const graphNodeById = new globalThis.Map(graphNodes.map((node) => [node.note.id, node]))
+  const graphEdges = data.noteLinks
+    .filter(
+      (link) =>
+        link.sourceNoteType === 'compiled_note' &&
+        link.targetNoteType === 'compiled_note' &&
+        linkVisibleStatuses.has(link.status),
+    )
     .map((link) => {
-      const otherId = selectedNote ? connectedNoteId(link, selectedNote.id) : null
-      const note = otherId ? noteById.get(otherId) : null
-      return note ? { link, note } : null
+      const sourceNode = graphNodeById.get(link.sourceNoteId)
+      const targetNode = graphNodeById.get(link.targetNoteId)
+      if (!sourceNode || !targetNode) return null
+      return {
+        id: link.id,
+        link,
+        sourceNode,
+        targetNode,
+        midpoint: {
+          x: (sourceNode.position.x + targetNode.position.x) / 2,
+          y: (sourceNode.position.y + targetNode.position.y) / 2,
+        },
+      }
     })
-    .filter((row): row is { link: NoteLink; note: CompiledNote } => Boolean(row))
-  const rawEvidence = data.rawNotes
-    .filter((note) => {
-      const haystack = `${note.title ?? ''} ${note.bodyMarkdown}`.toLowerCase()
-      return (
-        (selectedNote ? haystack.includes(selectedNote.title.toLowerCase()) : false) ||
-        selectedKeywords.some((keyword) => haystack.includes(keyword))
-      )
-    })
-    .slice(0, 4)
-  const pendingSuggestions = data.proposals
-    .filter((proposal) => proposal.status === 'pending')
-    .slice(0, 3)
-  const pendingNoteLinks = selectedNoteLinks.filter((link) => link.status === 'pending').slice(0, 5)
-  const linkCandidateNotes = notes
-    .filter((note) => note.id !== selectedNote?.id)
-    .filter((note) => {
-      const query = linkSearch.trim().toLowerCase()
-      if (!query) return true
-      return `${note.title} ${note.noteType} ${note.bodyMarkdown}`.toLowerCase().includes(query)
-    })
-    .slice(0, 12)
-  const selectedLinkTargetId =
-    linkTargetId && linkCandidateNotes.some((note) => note.id === linkTargetId)
-      ? linkTargetId
-      : (linkCandidateNotes[0]?.id ?? '')
+    .filter(
+      (
+        edge,
+      ): edge is {
+        id: string
+        link: NoteLink
+        sourceNode: (typeof graphNodes)[number]
+        targetNode: (typeof graphNodes)[number]
+        midpoint: { x: number; y: number }
+      } => Boolean(edge),
+    )
+  const selectedEdge = graphEdges.find((edge) => edge.id === selectedEdgeId) ?? null
+  const evidenceSummaryCount =
+    knowledgeTimeline?.sourceEvidenceReferences.length ??
+    knowledgeTimeline?.versions.find((version) => version.isCurrent)?.evidenceReferences.length ??
+    0
+  const approvedConnectionCount = selectedNoteLinks.filter((link) => link.status === 'approved').length
 
-  function submitManualLink(event: React.FormEvent) {
-    event.preventDefault()
-    if (!selectedNote || !selectedLinkTargetId) {
-      return
+  useEffect(() => {
+    if (selectedEdgeId && !graphEdges.some((edge) => edge.id === selectedEdgeId)) {
+      setSelectedEdgeId(null)
     }
-    onCreateNoteLink({
-      sourceNoteId: selectedNote.id,
-      targetNoteId: selectedLinkTargetId,
-      relationType: manualRelationType,
-    })
-    setLinkSearch('')
-    setLinkTargetId('')
-    setManualRelationType('related_concept')
-  }
+  }, [graphEdges, selectedEdgeId])
 
   function pointFromEvent(event: React.PointerEvent) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -348,7 +356,7 @@ export function KnowledgeCanvas({
 
   function startPan(event: React.PointerEvent) {
     const target = event.target as HTMLElement
-    if (target.closest('[data-note-id], button, input, select, textarea')) {
+    if (target.closest('[data-note-id], [data-edge-toolbar], button, input, select, textarea')) {
       return
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -507,42 +515,69 @@ export function KnowledgeCanvas({
             transformOrigin: '0 0',
           }}
         >
-          {selectedGraphNode ? (
+          {graphNodes.length ? (
             <svg
-              className="pointer-events-none absolute inset-0 h-full w-full"
+              className="absolute inset-0 h-full w-full"
               aria-hidden="true"
               preserveAspectRatio="none"
+              style={{ pointerEvents: 'none' }}
               viewBox="0 0 100 100"
             >
-              {graphNodes
-                .filter((node) => node.note.id !== selectedGraphNode.note.id)
-                .map((node) => {
-                  const labelX = (selectedGraphNode.position.x + node.position.x) / 2
-                  const labelY = (selectedGraphNode.position.y + node.position.y) / 2
+              {graphEdges.map((edge) => {
+                  const isPending = edge.link.status === 'pending'
+                  const isSelected = edge.id === selectedEdgeId
                   return (
-                    <g key={`${selectedGraphNode.note.id}-${node.note.id}`}>
+                    <g key={edge.id}>
                       <path
-                        d={edgePath(selectedGraphNode.position, node.position)}
+                        d={edgePath(edge.sourceNode.position, edge.targetNode.position)}
                         fill="none"
-                        stroke={node.link ? 'rgba(79, 70, 229, 0.78)' : 'rgba(100, 116, 139, 0.56)'}
-                        strokeDasharray={node.link ? undefined : '2.5 3.5'}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSelectedEdgeId(edge.id)
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setSelectedEdgeId(edge.id)
+                          }
+                        }}
+                        role="button"
+                        stroke="transparent"
                         strokeLinecap="round"
-                        strokeWidth={node.link ? '0.9' : '0.55'}
+                        strokeWidth="10"
+                        style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+                        tabIndex={0}
                         vectorEffect="non-scaling-stroke"
                       />
-                      {node.link ? (
-                        <text
-                          dominantBaseline="middle"
-                          fill="rgba(67, 56, 202, 0.96)"
-                          fontSize="2.3"
-                          fontWeight="700"
-                          textAnchor="middle"
-                          x={labelX}
-                          y={labelY}
-                        >
-                          {relationOptionLabel(node.link.relationType)}
-                        </text>
-                      ) : null}
+                      <path
+                        d={edgePath(edge.sourceNode.position, edge.targetNode.position)}
+                        fill="none"
+                        pointerEvents="none"
+                        stroke={
+                          isSelected
+                            ? 'rgba(79, 70, 229, 0.98)'
+                            : isPending
+                              ? 'rgba(147, 51, 234, 0.7)'
+                              : 'rgba(37, 99, 235, 0.86)'
+                        }
+                        strokeDasharray={isPending ? '4 3' : undefined}
+                        strokeLinecap="round"
+                        strokeWidth={isSelected ? '1.35' : isPending ? '0.85' : '1'}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <text
+                        dominantBaseline="middle"
+                        fill={isPending ? 'rgba(126, 34, 206, 0.9)' : 'rgba(29, 78, 216, 0.95)'}
+                        fontSize="2.3"
+                        fontWeight="700"
+                        pointerEvents="none"
+                        textAnchor="middle"
+                        x={edge.midpoint.x}
+                        y={edge.midpoint.y}
+                      >
+                        {relationOptionLabel(edge.link.relationType)}
+                      </text>
                     </g>
                   )
                 })}
@@ -558,6 +593,95 @@ export function KnowledgeCanvas({
                 />
               ) : null}
             </svg>
+          ) : null}
+
+          {selectedEdge ? (
+            <div
+              className="absolute z-30 w-[296px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl"
+              data-edge-toolbar="true"
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{
+                left: `${selectedEdge.midpoint.x}%`,
+                top: `${selectedEdge.midpoint.y}%`,
+                transform: `translate(-50%, -50%) scale(${1 / canvasZoom})`,
+              }}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                    {selectedEdge.link.status === 'pending' ? 'Pending link' : 'Approved link'}
+                  </p>
+                  <p className="mt-1 truncate text-[13px] font-extrabold text-ink">
+                    {selectedEdge.sourceNode.note.title} to {selectedEdge.targetNode.note.title}
+                  </p>
+                </div>
+                <button
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-ink"
+                  onClick={() => setSelectedEdgeId(null)}
+                  title="Close"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                Relation
+              </label>
+              <select
+                className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-ink outline-none focus:border-violet"
+                onChange={(event) => onUpdateNoteLink(selectedEdge.link.id, event.target.value)}
+                value={selectedEdge.link.relationType}
+              >
+                {relationOptions.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+
+              <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                  {confidenceLabel(selectedEdge.link.confidence)}
+                </p>
+                {selectedEdge.link.rationale ? (
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
+                    {selectedEdge.link.rationale}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                {selectedEdge.link.status === 'pending' ? (
+                  <>
+                    <button
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark"
+                      onClick={() => onDecideNoteLink(selectedEdge.link.id, 'approve')}
+                      type="button"
+                    >
+                      <Check size={13} />
+                      Approve
+                    </button>
+                    <button
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                      onClick={() => onDecideNoteLink(selectedEdge.link.id, 'reject')}
+                      type="button"
+                    >
+                      <X size={13} />
+                      Reject
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="h-8 rounded-md border border-red-200 px-3 text-xs font-bold text-red-700 hover:bg-red-50"
+                    onClick={() => onRemoveNoteLink(selectedEdge.link.id)}
+                    type="button"
+                  >
+                    Remove link
+                  </button>
+                )}
+              </div>
+            </div>
           ) : null}
 
           {graphNodes.length ? (
@@ -626,18 +750,9 @@ export function KnowledgeCanvas({
                 {noteTypeLabel(selectedNote.noteType)}
               </span>
               <h2 className="text-xl font-extrabold leading-7 text-white">{selectedNote.title}</h2>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {[
-                  ['Links', relatedNotes.length],
-                  ['Evidence', rawEvidence.length],
-                  ['Queue', pendingNoteLinks.length + pendingSuggestions.length],
-                ].map(([label, value]) => (
-                  <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                    <p className="mt-1 text-lg font-extrabold text-white">{value}</p>
-                  </div>
-                ))}
-              </div>
+              <p className="mt-3 text-xs font-semibold text-gray-400">
+                {evidenceSummaryCount} evidence sources · {approvedConnectionCount} connected notes
+              </p>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -683,33 +798,6 @@ export function KnowledgeCanvas({
                         <p className="line-clamp-2 text-xs leading-5 text-gray-400">
                           {version.changeSummary ?? `Proposal ${version.proposalId ?? 'unknown'} updated this note.`}
                         </p>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <div className="rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Blocks</p>
-                            <p className="mt-0.5 text-sm font-extrabold text-white">{version.blocks.length}</p>
-                          </div>
-                          <div className="rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Evidence</p>
-                            <p className="mt-0.5 text-sm font-extrabold text-white">
-                              {version.evidenceReferences.length}
-                            </p>
-                          </div>
-                        </div>
-                        {version.evidenceReferences.length ? (
-                          <div className="mt-3 space-y-1.5">
-                            {version.evidenceReferences.slice(0, 2).map((evidence) => (
-                              <p
-                                className="line-clamp-2 rounded-md border border-[#303030] bg-[#171717] px-2 py-1.5 text-[11px] leading-4 text-gray-400"
-                                key={evidence.id}
-                              >
-                                {evidence.chunkHeading ??
-                                  evidence.sourceTitle ??
-                                  evidence.rawSourceTitle ??
-                                  evidence.sourceType.replaceAll('_', ' ')}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
                       </article>
                     ))}
                   </div>
@@ -746,218 +834,6 @@ export function KnowledgeCanvas({
                 </div>
               </section>
 
-              <section className="mb-6">
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
-                  <GitBranch size={15} className="text-violet" />
-                  Link management
-                </h3>
-                <div className="space-y-2">
-                  {approvedLinkRows.length ? (
-                    approvedLinkRows.map(({ link, note }) => (
-                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={link.id}>
-                        <div className="mb-3 flex items-start justify-between gap-3">
-                          <div>
-                            <p className="line-clamp-1 text-[13px] font-extrabold text-white">{note.title}</p>
-                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                              Approved link
-                            </p>
-                          </div>
-                          <button
-                            className="rounded-md border border-[#3A3A3A] px-2 py-1 text-[11px] font-bold text-gray-300 hover:border-red-400 hover:text-red-200"
-                            onClick={() => onRemoveNoteLink(link.id)}
-                            type="button"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <select
-                          className="h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
-                          onChange={(event) => onUpdateNoteLink(link.id, event.target.value)}
-                          value={link.relationType}
-                        >
-                          {relationOptions.map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                      Drag from a card node to another card to create the first approved link.
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              <section className="mb-6">
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
-                  <Plus size={15} className="text-violet" />
-                  Add link
-                </h3>
-                <form className="rounded-lg border border-[#303030] bg-[#202020] p-3" onSubmit={submitManualLink}>
-                  <input
-                    className="mb-2 h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
-                    onChange={(event) => {
-                      setLinkSearch(event.target.value)
-                      setLinkTargetId('')
-                    }}
-                    placeholder="Search notes"
-                    value={linkSearch}
-                  />
-                  <select
-                    className="mb-2 h-9 w-full rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
-                    disabled={!linkCandidateNotes.length}
-                    onChange={(event) => setLinkTargetId(event.target.value)}
-                    value={selectedLinkTargetId}
-                  >
-                    {linkCandidateNotes.length ? (
-                      linkCandidateNotes.map((note) => (
-                        <option key={note.id} value={note.id}>
-                          {note.title}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">No matching notes</option>
-                    )}
-                  </select>
-                  <div className="flex gap-2">
-                    <select
-                      className="h-9 min-w-0 flex-1 rounded-md border border-[#303030] bg-[#171717] px-3 text-xs font-semibold text-gray-100 outline-none focus:border-violet"
-                      onChange={(event) =>
-                        setManualRelationType(event.target.value as (typeof relationOptions)[number][0])
-                      }
-                      value={manualRelationType}
-                    >
-                      {relationOptions.map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="inline-flex h-9 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!selectedLinkTargetId}
-                      type="submit"
-                    >
-                      <Plus size={13} />
-                      Add
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Raw evidence</h3>
-                <div className="space-y-2">
-                  {rawEvidence.length ? (
-                    rawEvidence.map((note) => (
-                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={note.id}>
-                        <p className="line-clamp-1 text-[13px] font-extrabold text-white">
-                          {note.title ?? 'Untitled raw note'}
-                        </p>
-                        <p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-400">{note.bodyMarkdown}</p>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                      No raw evidence found for this card.
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
-                  <RotateCw size={15} className="text-violet" />
-                  Agent activity
-                </h3>
-                <button
-                  className="mb-6 w-full rounded-lg border border-[#303030] bg-[#202020] p-3 text-left hover:border-violet/50"
-                  onClick={onOpenAgentActivity}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[13px] font-extrabold text-white">Open Activity Center</p>
-                      <p className="mt-1 text-xs leading-5 text-gray-400">
-                        View running jobs, pending reviews, failures, and detailed timelines.
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
-                      {data.agentRuns.length}
-                    </span>
-                  </div>
-                </button>
-
-                <h3 className="mb-3 flex items-center gap-2 text-sm font-extrabold text-gray-100">
-                  <Sparkles size={15} className="text-violet" />
-                  Agent queue
-                </h3>
-                <div className="space-y-2">
-                  {pendingSuggestions.length ? (
-                    pendingSuggestions.map((proposal) => (
-                      <article className="rounded-lg border border-violet/30 bg-violet/10 p-3" key={proposal.id}>
-                        <p className="line-clamp-1 text-[13px] font-extrabold text-white">
-                          {proposal.detectedKnowledgeType ?? 'knowledge update'}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-300">
-                          {proposal.rationale ?? 'Review this proposal to approve new notes and links.'}
-                        </p>
-                      </article>
-                    ))
-                  ) : null}
-                  {pendingNoteLinks.length ? (
-                    pendingNoteLinks.map((link) => {
-                      const otherId = selectedNote ? connectedNoteId(link, selectedNote.id) : null
-                      const otherNote = otherId ? noteById.get(otherId) : null
-                      return (
-                        <article className="rounded-lg border border-violet/30 bg-violet/10 p-3" key={link.id}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="line-clamp-1 text-[13px] font-extrabold text-white">
-                                {otherNote?.title ?? link.targetTitle ?? link.sourceTitle ?? 'Related note'}
-                              </p>
-                              <p className="mt-1 text-xs leading-5 text-gray-300">
-                                {link.rationale ?? `Suggested ${relationLabel(link.relationType)} link.`}
-                              </p>
-                            </div>
-                            <span className="rounded-full border border-violet/30 px-2 py-0.5 text-[10px] font-bold uppercase text-violet">
-                              {link.confidence}
-                            </span>
-                          </div>
-                          <div className="mt-3 flex gap-2">
-                            <button
-                              className="inline-flex items-center gap-1 rounded-md bg-violet px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-violet-dark"
-                              onClick={() => onDecideNoteLink(link.id, 'approve')}
-                              type="button"
-                            >
-                              <Check size={13} />
-                              Approve
-                            </button>
-                            <button
-                              className="inline-flex items-center gap-1 rounded-md border border-[#3A3A3A] px-2.5 py-1.5 text-[11px] font-bold text-gray-300 hover:border-gray-500"
-                              onClick={() => onDecideNoteLink(link.id, 'reject')}
-                              type="button"
-                            >
-                              <X size={13} />
-                              Reject
-                            </button>
-                          </div>
-                        </article>
-                      )
-                    })
-                  ) : null}
-                  {!pendingSuggestions.length && !pendingNoteLinks.length ? (
-                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                      No pending link suggestions.
-                    </p>
-                  ) : (
-                    null
-                  )}
-                </div>
-              </section>
             </div>
           </>
         ) : (

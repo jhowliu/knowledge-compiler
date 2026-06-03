@@ -17,7 +17,7 @@ describe("note link routes", () => {
       .send({
         sourceNoteId: "11111111-1111-4111-8111-111111111111",
         targetNoteId: "22222222-2222-4222-8222-222222222222",
-        relationType: "prerequisite",
+        relationType: "supports",
         confidence: "high",
         rationale: "BFS should be understood before shortest path decision guides.",
       });
@@ -26,7 +26,7 @@ describe("note link routes", () => {
     expect(response.body.noteLink).toMatchObject({
       sourceNoteId: "11111111-1111-4111-8111-111111111111",
       targetNoteId: "22222222-2222-4222-8222-222222222222",
-      relationType: "prerequisite",
+      relationType: "supports",
       status: "approved",
     });
   });
@@ -97,10 +97,10 @@ describe("note link routes", () => {
 
     const updateResponse = await request(app)
       .patch("/note-links/note-link-1")
-      .send({ relationType: "prerequisite" });
+      .send({ relationType: "duplicate_candidate" });
 
     expect(updateResponse.status).toBe(200);
-    expect(updateResponse.body.noteLink.relationType).toBe("prerequisite");
+    expect(updateResponse.body.noteLink.relationType).toBe("duplicate_candidate");
 
     const archiveResponse = await request(app).delete("/note-links/note-link-1");
 

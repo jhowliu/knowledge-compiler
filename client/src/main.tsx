@@ -841,7 +841,6 @@ function App() {
                 onCreateNoteLink={(input) => void createManualNoteLink(input)}
                 onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
                 onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
-                onOpenAgentActivity={openAgentActivityView}
                 onResetBoardLayout={() => void resetBoardLayout()}
                 onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
                 onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}

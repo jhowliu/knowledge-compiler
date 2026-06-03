@@ -1,6 +1,9 @@
 # Recap
 
 ## Summary
+- Started issue #99 on `codex/graph-edge-toolbar-99`: Notes Graph now renders approved and pending `note_links` as direct graph edges, opens a midpoint edge toolbar, supports relation updates/removal for approved links, and supports approve/reject for pending links from the graph.
+- Cleaned the graph inspector to keep selected-note content, a compact evidence/connected-notes summary, lightweight evolution rows, and related cards while removing link-management lists, add-link form, raw evidence lists, agent queue/activity shortcuts, and dense blocks/evidence metadata cards.
+- Added graph relation options for `supports`, `contrasts`, and `duplicate_candidate`, and synchronized the server note-link validators/tests so those toolbar values are accepted by create/update routes.
 - Started issue #96 on `codex/redesign-app-navigation-96`: redesigned the Sources navigation shell so the left sidebar is app navigation plus a scrollable project/source tree, moved source role/state filters into the main Sources header, moved theme and Agent Activity controls into topbars, removed the sidebar Index status/mode cards, and moved project/folder rename tools into the right Context panel.
 - Started Agent Run detail receipt UI on `codex/agent-run-detail-receipt`: widened the drawer, replaced raw event-card timelines with a human-readable progress tracker, added output summaries for proposals/concepts/related cards/generated links/eval results, and moved JSON payloads into a collapsed Technical details section.
 - Updated the Agent Activity page on the same branch from a 2x2 status grid to a single-column collapsible listing view with compact rows and expandable status sections.
@@ -88,6 +91,8 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- Notes Graph link management should be edge-first: approved/manual links render as solid high-contrast edges; pending links render dashed/tinted; rejected links remain hidden because the graph API does not return them.
+- Manual card-to-card link creation stays on the graph drag handle rather than the inspector form; the inspector is now a read-focused selected-note surface.
 - App shell navigation should keep global actions discoverable without turning the Sources tree into a settings panel: sidebar is navigation/tree, topbar is page context plus Agent/theme controls, and main content owns filters/empty states.
 - Agent run details should read like an agent work receipt first: current state, progress, outputs, eval/errors, and only then debug JSON behind an explicit disclosure.
 - General facets are now the source of truth for LLM wiki proposals; markdown is a server-rendered view of the facets, not a separate LLM-authored narrative.
@@ -151,6 +156,7 @@
 - Agent run timeline events are now modeled directly as `category` + `name` with categories such as lifecycle, source, tool, indexing, proposal, eval, linking, and error. Migration 016 backfills old rows and drops legacy `event_type`; runtime code and client types no longer expose it.
 
 ## Open Issues
+- Issue #99 validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` verified manual drag link creation, edge toolbar positioning, approved relation label rendering, approved remove, pending approve, pending reject, no console errors, and no document horizontal overflow. The in-app browser automation could not drive the native `<select>` directly, so the new relation-value route contract was validated by API PATCH plus refreshed edge-label rendering.
 - Choose final auth library: Better Auth, Auth.js, or a minimal custom MVP auth.
 - Decide whether the agent runtime runs inside the Express API process initially or in a separate worker service.
 - Docker daemon status should be rechecked before relying on Docker Compose for local Postgres.

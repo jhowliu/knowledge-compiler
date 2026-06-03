@@ -1,8 +1,6 @@
 import type React from 'react'
 import {
   Activity,
-  Download,
-  Filter,
   Map,
   Moon,
   PencilLine,
@@ -15,13 +13,22 @@ import {
 import type { ActiveView, ThemeMode } from '../types/domain'
 import type { AgentActivitySummary } from '../features/agent-runs/AgentActivityCenter'
 
-function IconButton({ label, children }: { label: string; children: React.ReactNode }) {
+function IconButton({
+  children,
+  label,
+  onClick,
+}: {
+  children: React.ReactNode
+  label: string
+  onClick?: () => void
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       className="grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
+      onClick={onClick}
     >
       {children}
     </button>
@@ -31,25 +38,23 @@ function IconButton({ label, children }: { label: string; children: React.ReactN
 export function LeftNavigation({
   activeView,
   agentActivitySummary,
-  themeMode,
   pendingCount,
   onAgentActivityClick,
   onCaptureClick,
   onKnowledgeMapClick,
   onRawNotesClick,
   onUpdateProposalsClick,
-  onThemeToggle,
+  themeMode,
 }: {
   activeView: ActiveView
   agentActivitySummary: AgentActivitySummary
-  themeMode: ThemeMode
   pendingCount: number
   onAgentActivityClick: () => void
   onCaptureClick: () => void
   onKnowledgeMapClick: () => void
   onRawNotesClick: () => void
   onUpdateProposalsClick: () => void
-  onThemeToggle: () => void
+  themeMode: ThemeMode
 }) {
   const isDark = themeMode === 'dark'
   const navItemClass = (isActive: boolean) =>
@@ -72,7 +77,7 @@ export function LeftNavigation({
       }`}
     >
       <div className="space-y-1">
-        <p className="text-lg font-bold leading-5">Interview Knowledge</p>
+        <p className="text-lg font-bold leading-5">Knowledge</p>
         <p className="text-lg font-bold leading-5">Compiler</p>
       </div>
 
@@ -131,86 +136,132 @@ export function LeftNavigation({
         </button>
       </nav>
 
-      <button
-        className={`mt-auto flex h-10 items-center justify-between rounded-lg border px-3 text-left text-[13px] font-bold ${
-          isDark
-            ? 'border-[#343434] bg-[#262626] text-gray-200'
-            : 'border-gray-200 bg-slate-50 text-ink'
+      <div
+        className={`mt-auto rounded-lg border px-3 py-2 text-[11px] font-semibold ${
+          isDark ? 'border-[#343434] bg-[#262626] text-gray-400' : 'border-gray-200 bg-slate-50 text-gray-500'
         }`}
-        onClick={onThemeToggle}
-        type="button"
       >
-        <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
-        {isDark ? <Moon size={16} /> : <Sun size={16} />}
-      </button>
+        Local workspace
+      </div>
     </aside>
   )
 }
 
 export function TopToolbar({
+  activeView,
+  agentActivitySummary,
   agentRunStatus,
   compiledCount,
   isAgentRunning,
   noteCount,
+  onAgentActivityClick,
   onReindexLinks,
   onSearchQueryChange,
   onSearchSubmit,
+  onThemeToggle,
+  pendingCount,
   searchQuery,
+  themeMode,
 }: {
+  activeView: ActiveView
+  agentActivitySummary: AgentActivitySummary
   agentRunStatus: string
   noteCount: number
   compiledCount: number
   isAgentRunning: boolean
+  onAgentActivityClick: () => void
   onReindexLinks: () => void
   onSearchQueryChange: (value: string) => void
   onSearchSubmit: () => void
+  onThemeToggle: () => void
+  pendingCount: number
   searchQuery: string
+  themeMode: ThemeMode
 }) {
+  const agentAttentionCount =
+    agentActivitySummary.running + agentActivitySummary.needsReview + agentActivitySummary.failed
+  const pageCopy = {
+    knowledge_map: {
+      title: 'Notes network',
+      subtitle: `${noteCount} sources -> ${compiledCount} compiled notes. Open a card to inspect links.`,
+    },
+    raw_note_editor: {
+      title: 'Sources',
+      subtitle: 'Capture evidence, organize projects, and index reusable knowledge.',
+    },
+    update_proposals: {
+      title: 'Update proposals',
+      subtitle: `${pendingCount} proposals need review.`,
+    },
+    agent_activity: {
+      title: 'Agent activity',
+      subtitle: `${agentActivitySummary.running} running, ${agentActivitySummary.needsReview} need review, ${agentActivitySummary.failed} failed.`,
+    },
+  } satisfies Record<ActiveView, { title: string; subtitle: string }>
+  const copy = pageCopy[activeView]
+  const isDark = themeMode === 'dark'
+
   return (
     <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">
-      <form
-        className="flex h-10 w-[420px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
-        onSubmit={(event) => {
-          event.preventDefault()
-          onSearchSubmit()
-        }}
-      >
-        <Search size={16} />
-        <input
-          aria-label="Search knowledge"
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
-          onChange={(event) => onSearchQueryChange(event.target.value)}
-          placeholder="Search knowledge and evidence..."
-          type="search"
-          value={searchQuery}
-        />
-      </form>
+      {activeView === 'knowledge_map' ? (
+        <form
+          className="flex h-10 w-[360px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSearchSubmit()
+          }}
+        >
+          <Search size={16} />
+          <input
+            aria-label="Search knowledge"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            placeholder="Search knowledge and evidence..."
+            type="search"
+            value={searchQuery}
+          />
+        </form>
+      ) : null}
 
       <div className="min-w-0 flex-1">
-        <h1 className="text-[15px] font-bold text-ink">Notes Graph</h1>
-        <p className="text-xs text-gray-500">
-          {noteCount} sources {'->'} {compiledCount} compiled notes. Open a card to inspect links.
-        </p>
+        <h1 className="truncate text-[15px] font-bold text-ink">{copy.title}</h1>
+        <p className="truncate text-xs text-gray-500">{copy.subtitle}</p>
       </div>
 
-      <IconButton label="Filter">
-        <Filter size={18} />
-      </IconButton>
-      <IconButton label="Export">
-        <Download size={18} />
-      </IconButton>
-      <button
-        type="button"
-        className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isAgentRunning}
-        onClick={onReindexLinks}
-      >
-        <RotateCw size={16} />
-        {isAgentRunning ? 'Re-indexing' : 'Re-index links'}
-      </button>
+      {activeView === 'knowledge_map' ? (
+        <button
+          type="button"
+          className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isAgentRunning}
+          onClick={onReindexLinks}
+        >
+          <RotateCw size={16} />
+          {isAgentRunning ? 'Re-indexing' : 'Re-index links'}
+        </button>
+      ) : null}
       <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-500">
         Agent {agentRunStatus}
       </span>
+      <button
+        aria-label="Open agent activity"
+        className="relative grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
+        onClick={onAgentActivityClick}
+        title="Open agent activity"
+        type="button"
+      >
+        <Activity size={18} />
+        {agentAttentionCount > 0 ? (
+          <span className="absolute -right-1 -top-1 rounded-full bg-violet px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {agentAttentionCount}
+          </span>
+        ) : null}
+      </button>
+      <IconButton
+        label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        onClick={onThemeToggle}
+      >
+        {isDark ? <Moon size={18} /> : <Sun size={18} />}
+      </IconButton>
     </header>
   )
 }

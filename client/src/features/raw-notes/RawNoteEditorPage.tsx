@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
+  Activity,
   BookOpen,
   CheckCircle2,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
+import type { AgentActivitySummary } from '../agent-runs/AgentActivityCenter'
 import type {
   AgentRun,
   Proposal,
@@ -110,36 +112,6 @@ function projectSourceCount(project: SourceProject | undefined, fallbackCount: n
 function formatDate(value: string | undefined) {
   if (!value) return 'Draft'
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
-}
-
-function NavButton({
-  active,
-  count,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active?: boolean
-  count?: number
-  icon: typeof Inbox
-  label: string
-  onClick?: () => void
-}) {
-  return (
-    <button
-      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] font-semibold ${
-        active ? 'bg-slate-100 text-ink' : 'text-gray-600 hover:bg-slate-50 hover:text-ink'
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      <Icon size={15} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {typeof count === 'number' ? (
-        <span className="text-[11px] font-bold text-gray-400">{count}</span>
-      ) : null}
-    </button>
-  )
 }
 
 function SourceGroupButton({
@@ -293,8 +265,10 @@ export function RawNoteEditorPage({
   onApplyTopics,
   onCreateTopic,
   onOpenKnowledgeMap,
+  onOpenAgentActivity,
   onOpenReviewQueue,
   onThemeToggle,
+  agentActivitySummary,
 }: {
   indexingTrace: RawNoteIndexingTrace | null
   rawNotes: RawNote[]
@@ -333,8 +307,10 @@ export function RawNoteEditorPage({
   onApplyTopics: (rawSourceId: string, topicIds: string[]) => void
   onCreateTopic: (name: string) => Promise<Topic | null>
   onOpenKnowledgeMap?: () => void
+  onOpenAgentActivity: () => void
   onOpenReviewQueue?: () => void
   onThemeToggle: () => void
+  agentActivitySummary: AgentActivitySummary
 }) {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all')
@@ -359,6 +335,8 @@ export function RawNoteEditorPage({
     ? getLifecycle(selectedRawNote, proposals, agentRuns)
     : { label: 'Draft', tone: 'idle' as const }
   const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
+  const agentAttentionCount =
+    agentActivitySummary.running + agentActivitySummary.needsReview + agentActivitySummary.failed
   const selectedProject = sourceProjects.find((project) => project.id === selectedProjectId)
   const selectedFolder =
     selectedFolderFilter === 'all' || selectedFolderFilter === 'uncategorized'
@@ -420,6 +398,7 @@ export function RawNoteEditorPage({
       const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
       return matchesRole && matchesLifecycle
     })
+  const filteredSourceRows = filterVisibleRows(sourceRows)
   const sourceGroupIsExpanded = (key: string) => expandedSourceGroups.includes(key)
   const toggleSourceGroup = (key: string) => {
     setExpandedSourceGroups((groups) =>
@@ -433,8 +412,6 @@ export function RawNoteEditorPage({
       return groups.includes(key) ? withoutTopLevel : [...withoutTopLevel, key]
     })
   }
-  const rowsForProject = (projectId: string) =>
-    filterVisibleRows(sourceRows.filter(({ source }) => source?.projectId === projectId))
   const rowsForFolder = (folderId: string) =>
     filterVisibleRows(sourceRows.filter(({ source }) => source?.folderId === folderId))
   const rowsForUncategorized = (projectId: string) =>
@@ -471,77 +448,61 @@ export function RawNoteEditorPage({
 
   return (
     <section className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] bg-canvas text-ink">
-      <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-gray-200 bg-white px-[18px] py-6">
-        <div className="space-y-1">
-          <p className="text-lg font-bold leading-5 text-ink">Interview Knowledge</p>
-          <p className="text-lg font-bold leading-5 text-ink">Compiler</p>
-        </div>
-
-        <button
-          className="mt-[18px] flex h-11 items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white"
-          onClick={onNewNote}
-          type="button"
-        >
-          <Plus size={18} />
-          Capture source
-        </button>
-
-        <nav className="mt-[18px] space-y-1.5">
-          <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">WORKSPACE</p>
-          <button className={appNavClass(false)} onClick={onOpenKnowledgeMap} type="button">
-            <MapIcon size={16} />
-            Notes network
-          </button>
-          <button className={appNavClass(true)} type="button">
-            <PencilLine size={16} className="text-gray-400" />
-            Sources
-          </button>
-          <button className={appNavClass(false)} onClick={onOpenReviewQueue} type="button">
-            <Sparkles size={16} className="text-gray-400" />
-            Update proposals
-            {pendingCount > 0 ? (
-              <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
-                {pendingCount}
-              </span>
-            ) : null}
-          </button>
-        </nav>
-
-        <div className="mt-[18px] px-2">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Workspace</p>
-          <h1 className="mt-1 text-lg font-extrabold text-ink">Knowledge sources</h1>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              aria-label="Filter sources by role"
-              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
-              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
-              value={roleFilter}
-            >
-              <option value="all">All roles</option>
-              <option value="personal_note">Personal</option>
-              <option value="reference">Reference</option>
-            </select>
-            <select
-              aria-label="Filter sources by status"
-              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
-              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
-              value={lifecycleFilter}
-            >
-              <option value="all">All states</option>
-              <option value="idle">Captured</option>
-              <option value="active">Indexing</option>
-              <option value="pending">Needs approval</option>
-              <option value="done">Applied</option>
-              <option value="failed">Failed</option>
-            </select>
+      <aside className="flex min-h-0 flex-col overflow-hidden border-r border-gray-200 bg-white px-[18px] py-6">
+        <div className="shrink-0">
+          <div className="space-y-1">
+            <p className="text-lg font-bold leading-5 text-ink">Knowledge</p>
+            <p className="text-lg font-bold leading-5 text-ink">Compiler</p>
           </div>
 
+          <button
+            className="mt-[18px] flex h-11 w-full items-center gap-2 rounded-lg bg-violet px-3.5 text-sm font-bold text-white"
+            onClick={onNewNote}
+            type="button"
+          >
+            <Plus size={18} />
+            Capture source
+          </button>
+
+          <nav className="mt-[18px] space-y-1.5">
+            <p className="px-2 text-[11px] font-semibold tracking-wide text-gray-400">NAVIGATION</p>
+            <button className={appNavClass(false)} onClick={onOpenKnowledgeMap} type="button">
+              <MapIcon size={16} />
+              Notes network
+            </button>
+            <button className={appNavClass(true)} type="button">
+              <PencilLine size={16} className="text-gray-400" />
+              Sources
+            </button>
+            <button className={appNavClass(false)} onClick={onOpenReviewQueue} type="button">
+              <Sparkles size={16} className="text-gray-400" />
+              Update proposals
+              {pendingCount > 0 ? (
+                <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
+                  {pendingCount}
+                </span>
+              ) : null}
+            </button>
+            <button className={appNavClass(false)} onClick={onOpenAgentActivity} type="button">
+              <Activity size={16} className="text-gray-400" />
+              Agent activity
+              {agentAttentionCount > 0 ? (
+                <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white">
+                  {agentAttentionCount}
+                </span>
+              ) : null}
+            </button>
+          </nav>
+        </div>
+
+        <div className="mt-5 shrink-0 px-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Projects</p>
+        </div>
+
+        <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           <SourceGroupButton
             active={selectedProjectId === 'all'}
-            count={filterVisibleRows(sourceRows).length}
+            count={filteredSourceRows.length}
             expanded={sourceGroupIsExpanded('all')}
             icon={Inbox}
             label="All sources"
@@ -553,30 +514,23 @@ export function RawNoteEditorPage({
           />
           {sourceGroupIsExpanded('all') ? (
             <div className="space-y-1">
-              {filterVisibleRows(sourceRows).length ? (
-                filterVisibleRows(sourceRows).map(({ lifecycle, note, source }) => (
-                  <SourceSidebarItem
-                    isSelected={note.id === selectedRawNoteId}
-                    key={note.id}
-                    lifecycle={lifecycle}
-                    note={note}
-                    onSelect={() => onSelectRawNote(note)}
-                    source={source}
-                    topics={topics}
-                  />
-                ))
-              ) : (
-                <p className="ml-6 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
-                  No sources match these filters.
-                </p>
-              )}
+              {filteredSourceRows.map(({ lifecycle, note, source }) => (
+                <SourceSidebarItem
+                  isSelected={note.id === selectedRawNoteId}
+                  key={note.id}
+                  lifecycle={lifecycle}
+                  note={note}
+                  onSelect={() => onSelectRawNote(note)}
+                  source={source}
+                  topics={topics}
+                />
+              ))}
             </div>
           ) : null}
 
           {sourceProjects.map((project) => {
             const projectKey = `project:${project.id}`
             const uncategorizedKey = `uncategorized:${project.id}`
-            const projectRows = rowsForProject(project.id)
             const uncategorizedRows = rowsForUncategorized(project.id)
 
             return (
@@ -613,23 +567,17 @@ export function RawNoteEditorPage({
                     />
                     {sourceGroupIsExpanded(uncategorizedKey) ? (
                       <div className="space-y-1">
-                        {uncategorizedRows.length ? (
-                          uncategorizedRows.map(({ lifecycle, note, source }) => (
-                            <SourceSidebarItem
-                              isSelected={note.id === selectedRawNoteId}
-                              key={note.id}
-                              lifecycle={lifecycle}
-                              note={note}
-                              onSelect={() => onSelectRawNote(note)}
-                              source={source}
-                              topics={topics}
-                            />
-                          ))
-                        ) : (
-                          <p className="ml-10 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
-                            No uncategorized sources.
-                          </p>
-                        )}
+                        {uncategorizedRows.map(({ lifecycle, note, source }) => (
+                          <SourceSidebarItem
+                            isSelected={note.id === selectedRawNoteId}
+                            key={note.id}
+                            lifecycle={lifecycle}
+                            note={note}
+                            onSelect={() => onSelectRawNote(note)}
+                            source={source}
+                            topics={topics}
+                          />
+                        ))}
                       </div>
                     ) : null}
 
@@ -654,34 +602,22 @@ export function RawNoteEditorPage({
                           />
                           {sourceGroupIsExpanded(folderKey) ? (
                             <div className="space-y-1">
-                              {folderRows.length ? (
-                                folderRows.map(({ lifecycle, note, source }) => (
-                                  <SourceSidebarItem
-                                    isSelected={note.id === selectedRawNoteId}
-                                    key={note.id}
-                                    lifecycle={lifecycle}
-                                    note={note}
-                                    onSelect={() => onSelectRawNote(note)}
-                                    source={source}
-                                    topics={topics}
-                                  />
-                                ))
-                              ) : (
-                                <p className="ml-10 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
-                                  No sources in this folder.
-                                </p>
-                              )}
+                              {folderRows.map(({ lifecycle, note, source }) => (
+                                <SourceSidebarItem
+                                  isSelected={note.id === selectedRawNoteId}
+                                  key={note.id}
+                                  lifecycle={lifecycle}
+                                  note={note}
+                                  onSelect={() => onSelectRawNote(note)}
+                                  source={source}
+                                  topics={topics}
+                                />
+                              ))}
                             </div>
                           ) : null}
                         </div>
                       )
                     })}
-
-                    {!projectRows.length ? (
-                      <p className="ml-6 rounded-md border border-dashed border-gray-300 bg-slate-50 p-2 text-xs leading-5 text-gray-500">
-                        No sources match these filters.
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -716,155 +652,41 @@ export function RawNoteEditorPage({
             </button>
           </form>
         </div>
-
-        {selectedProject ? (
-          <div className="mt-5 space-y-2 rounded-lg border border-gray-200 bg-slate-50 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Project settings</p>
-            <form
-              className="flex gap-1.5"
-              onSubmit={(event) => {
-                event.preventDefault()
-                const trimmedName = renameProjectName.trim()
-                if (!trimmedName || trimmedName === selectedProject.name) return
-                onRenameProject(selectedProject.id, trimmedName)
-              }}
-            >
-              <input
-                aria-label="Rename project"
-                className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
-                onChange={(event) => setRenameProjectName(event.target.value)}
-                value={renameProjectName}
-              />
-              <button
-                aria-label="Save project name"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
-                disabled={
-                  isSubmitting || !renameProjectName.trim() || renameProjectName.trim() === selectedProject.name
-                }
-                title="Save project name"
-                type="submit"
-              >
-                <Save size={13} />
-              </button>
-              <button
-                aria-label="Delete project"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
-                disabled={isSubmitting || !canDeleteSelectedProject}
-                onClick={() => {
-                  if (!selectedProject || !canDeleteSelectedProject) return
-                  onDeleteProject(selectedProject.id)
-                }}
-                title={
-                  canDeleteSelectedProject
-                    ? 'Delete empty project'
-                    : 'Only empty custom projects can be deleted'
-                }
-                type="button"
-              >
-                <Trash2 size={13} />
-              </button>
-            </form>
-
-            {selectedFolder ? (
-              <form
-                className="flex gap-1.5"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  const trimmedName = renameFolderName.trim()
-                  if (!trimmedName || trimmedName === selectedFolder.name) return
-                  onRenameFolder(selectedProject.id, selectedFolder.id, trimmedName)
-                }}
-              >
-                <input
-                  aria-label="Rename folder"
-                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
-                  onChange={(event) => setRenameFolderName(event.target.value)}
-                  value={renameFolderName}
-                />
-                <button
-                  aria-label="Save folder name"
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
-                  disabled={
-                    isSubmitting || !renameFolderName.trim() || renameFolderName.trim() === selectedFolder.name
-                  }
-                  title="Save folder name"
-                  type="submit"
-                >
-                  <Save size={13} />
-                </button>
-                <button
-                  aria-label="Delete folder"
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
-                  disabled={isSubmitting || !canDeleteSelectedFolder}
-                  onClick={() => {
-                    if (!selectedProject || !selectedFolder || !canDeleteSelectedFolder) return
-                    onDeleteFolder(selectedProject.id, selectedFolder.id)
-                  }}
-                  title={canDeleteSelectedFolder ? 'Delete empty folder' : 'Only empty folders can be deleted'}
-                  type="button"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </form>
-            ) : null}
-
-            <form
-              className="flex gap-1.5"
-              onSubmit={(event) => {
-                event.preventDefault()
-                const trimmedName = newFolderName.trim()
-                if (!trimmedName) return
-                onCreateFolder(selectedProject.id, trimmedName)
-                setNewFolderName('')
-              }}
-            >
-              <input
-                aria-label="New folder name"
-                className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
-                onChange={(event) => setNewFolderName(event.target.value)}
-                placeholder="New folder"
-                value={newFolderName}
-              />
-              <button
-                aria-label="Create folder"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
-                disabled={isSubmitting || !newFolderName.trim()}
-                title="Create folder"
-                type="submit"
-              >
-                <Plus size={14} />
-              </button>
-            </form>
-          </div>
-        ) : null}
-
-        <div className="mt-5 rounded-lg border border-gray-200 bg-slate-50 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Index status</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-lg font-extrabold text-ink">{rawSources.length}</p>
-              <p className="text-[11px] text-gray-500">sources</p>
-            </div>
-            <div>
-              <p className="text-lg font-extrabold text-ink">
-                {sourceRows.filter((row) => row.lifecycle.tone === 'pending').length}
-              </p>
-              <p className="text-[11px] text-gray-500">pending</p>
-            </div>
-          </div>
-        </div>
-
-        <button
-          className="mt-auto flex h-10 items-center justify-between rounded-lg border border-gray-200 bg-slate-50 px-3 text-left text-[13px] font-bold text-ink"
-          onClick={onThemeToggle}
-          type="button"
-        >
-          <span>{isDark ? 'Dark mode' : 'Light mode'}</span>
-          {isDark ? <Moon size={16} /> : <Sun size={16} />}
-        </button>
       </aside>
 
-      <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_232px]">
+      <div className="flex min-h-0 min-w-0 flex-col">
+        <header className="flex h-[72px] shrink-0 items-center gap-4 border-b border-gray-300 bg-white px-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[15px] font-bold text-ink">Sources</h1>
+            <p className="truncate text-xs text-gray-500">
+              {rawSources.length} sources, {filteredSourceRows.length} visible with current filters.
+            </p>
+          </div>
+          <button
+            aria-label="Open agent activity"
+            className="relative grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
+            onClick={onOpenAgentActivity}
+            title="Open agent activity"
+            type="button"
+          >
+            <Activity size={18} />
+            {agentAttentionCount > 0 ? (
+              <span className="absolute -right-1 -top-1 rounded-full bg-violet px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {agentAttentionCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-gray-300 bg-white text-ink hover:bg-gray-50"
+            onClick={onThemeToggle}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            type="button"
+          >
+            {isDark ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+        </header>
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_232px]">
       <form className="flex min-h-0 min-w-0 flex-col bg-white" onSubmit={onSubmit}>
         <header className="shrink-0 border-b border-gray-200 px-5 py-3">
           <div className="min-w-0">
@@ -884,6 +706,29 @@ export function RawNoteEditorPage({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Filter sources by role"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+              value={roleFilter}
+            >
+              <option value="all">All roles</option>
+              <option value="personal_note">Personal</option>
+              <option value="reference">Reference</option>
+            </select>
+            <select
+              aria-label="Filter sources by status"
+              className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-ink outline-none"
+              onChange={(event) => setLifecycleFilter(event.target.value as LifecycleFilter)}
+              value={lifecycleFilter}
+            >
+              <option value="all">All states</option>
+              <option value="idle">Captured</option>
+              <option value="active">Indexing</option>
+              <option value="pending">Needs approval</option>
+              <option value="done">Applied</option>
+              <option value="failed">Failed</option>
+            </select>
             <div className="flex h-9 rounded-lg border border-gray-200 bg-slate-50 p-1">
               {[
                 { value: 'personal_note' as const, label: 'Personal', icon: PencilLine },
@@ -958,6 +803,11 @@ export function RawNoteEditorPage({
             {notice}
           </div>
         ) : null}
+        {!filteredSourceRows.length && rawNotes.length ? (
+          <div className="mx-5 mt-4 rounded-lg border border-dashed border-gray-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-gray-600">
+            No sources match the current filters. Adjust role or state filters in the header to widen the list.
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex min-h-[430px] flex-col px-6 py-5">
@@ -1008,6 +858,123 @@ export function RawNoteEditorPage({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          {selectedProject ? (
+            <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
+              <p className="text-[12px] font-extrabold text-ink">Project tools</p>
+              <form
+                className="mt-3 flex gap-1.5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const trimmedName = renameProjectName.trim()
+                  if (!trimmedName || trimmedName === selectedProject.name) return
+                  onRenameProject(selectedProject.id, trimmedName)
+                }}
+              >
+                <input
+                  aria-label="Rename project"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                  onChange={(event) => setRenameProjectName(event.target.value)}
+                  value={renameProjectName}
+                />
+                <button
+                  aria-label="Save project name"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                  disabled={
+                    isSubmitting || !renameProjectName.trim() || renameProjectName.trim() === selectedProject.name
+                  }
+                  title="Save project name"
+                  type="submit"
+                >
+                  <Save size={13} />
+                </button>
+                <button
+                  aria-label="Delete project"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
+                  disabled={isSubmitting || !canDeleteSelectedProject}
+                  onClick={() => {
+                    if (!selectedProject || !canDeleteSelectedProject) return
+                    onDeleteProject(selectedProject.id)
+                  }}
+                  title={canDeleteSelectedProject ? 'Delete empty project' : 'Only empty custom projects can be deleted'}
+                  type="button"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </form>
+
+              {selectedFolder ? (
+                <form
+                  className="mt-2 flex gap-1.5"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    const trimmedName = renameFolderName.trim()
+                    if (!trimmedName || trimmedName === selectedFolder.name) return
+                    onRenameFolder(selectedProject.id, selectedFolder.id, trimmedName)
+                  }}
+                >
+                  <input
+                    aria-label="Rename folder"
+                    className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                    onChange={(event) => setRenameFolderName(event.target.value)}
+                    value={renameFolderName}
+                  />
+                  <button
+                    aria-label="Save folder name"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={
+                      isSubmitting || !renameFolderName.trim() || renameFolderName.trim() === selectedFolder.name
+                    }
+                    title="Save folder name"
+                    type="submit"
+                  >
+                    <Save size={13} />
+                  </button>
+                  <button
+                    aria-label="Delete folder"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:border-gray-200 disabled:text-gray-300 disabled:hover:bg-white"
+                    disabled={isSubmitting || !canDeleteSelectedFolder}
+                    onClick={() => {
+                      if (!selectedProject || !selectedFolder || !canDeleteSelectedFolder) return
+                      onDeleteFolder(selectedProject.id, selectedFolder.id)
+                    }}
+                    title={canDeleteSelectedFolder ? 'Delete empty folder' : 'Only empty folders can be deleted'}
+                    type="button"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </form>
+              ) : null}
+
+              <form
+                className="mt-2 flex gap-1.5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const trimmedName = newFolderName.trim()
+                  if (!trimmedName) return
+                  onCreateFolder(selectedProject.id, trimmedName)
+                  setNewFolderName('')
+                }}
+              >
+                <input
+                  aria-label="New folder name"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none placeholder:text-gray-400"
+                  onChange={(event) => setNewFolderName(event.target.value)}
+                  placeholder="New folder"
+                  value={newFolderName}
+                />
+                <button
+                  aria-label="Create folder"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-slate-50 disabled:opacity-50"
+                  disabled={isSubmitting || !newFolderName.trim()}
+                  title="Create folder"
+                  type="submit"
+                >
+                  <Plus size={14} />
+                </button>
+              </form>
+            </section>
+          ) : null}
+
           <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-[12px] font-extrabold text-ink">Lifecycle</p>
@@ -1283,6 +1250,7 @@ export function RawNoteEditorPage({
           </section>
         </div>
       </aside>
+      </div>
       </div>
     </section>
   )

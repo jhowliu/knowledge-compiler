@@ -1,11 +1,13 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   ExternalLink,
   FileText,
   RotateCw,
 } from 'lucide-react'
+import { useState } from 'react'
 import { isRecord, payloadLabel } from '../../lib/knowledge'
 import type { AgentRun, Proposal, RawNote, RawSource } from '../../types/domain'
 import { agentRunLabel, agentRunOutputText, shortTimestamp } from './agentRunView'
@@ -141,25 +143,31 @@ function ActivityRow({
   rawSources: RawSource[]
 }) {
   return (
-    <article className="rounded-lg border border-gray-200 bg-white p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-extrabold text-ink">
+    <article className="grid gap-3 border-t border-gray-200 px-4 py-3 first:border-t-0 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-violet" />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-extrabold text-ink">
             {agentRunLabel(agentRun.runType)} · {sourceTitleForRun(agentRun, rawNotes, rawSources)}
-          </p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{runStep(agentRun, proposal)}</p>
-          {proposal ? (
-            <p className="mt-1 line-clamp-1 text-[11px] font-bold text-gray-400">
-              {payloadLabel(proposal.items[0]?.payload ?? {})}
             </p>
-          ) : null}
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{runStep(agentRun, proposal)}</p>
+            {proposal ? (
+              <p className="mt-1 line-clamp-1 text-[11px] font-bold text-gray-400">
+                {payloadLabel(proposal.items[0]?.payload ?? {})}
+              </p>
+            ) : null}
+          </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 md:justify-end">
         <span className="shrink-0 rounded-full border border-gray-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-600">
           {agentRun.status}
         </span>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="text-[11px] font-semibold text-gray-400">
+          {shortTimestamp(agentRun.startedAt ?? agentRun.createdAt)}
+        </span>
         {proposal?.status === 'pending' ? (
           <button
             className="inline-flex h-8 items-center gap-1.5 rounded-md bg-violet px-2.5 text-xs font-bold text-white"
@@ -187,9 +195,6 @@ function ActivityRow({
         >
           Details
         </button>
-        <span className="ml-auto self-center text-[11px] font-semibold text-gray-400">
-          {shortTimestamp(agentRun.startedAt ?? agentRun.createdAt)}
-        </span>
       </div>
     </article>
   )
@@ -201,6 +206,8 @@ function ActivityGroupSection({
   onOpenProposal,
   onRetry,
   onSelectAgentRun,
+  isOpen,
+  onToggle,
   rawNotes,
   rawSources,
 }: {
@@ -209,6 +216,8 @@ function ActivityGroupSection({
   onOpenProposal: (proposalId: string) => void
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
+  isOpen: boolean
+  onToggle: () => void
   rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
@@ -216,36 +225,55 @@ function ActivityGroupSection({
   const Icon = copy.icon
 
   return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="inline-flex items-center gap-2 text-sm font-extrabold text-ink">
-          <span className={`grid h-7 w-7 place-items-center rounded-lg border ${copy.className}`}>
-            <Icon size={14} />
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <button
+        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50"
+        onClick={onToggle}
+        type="button"
+      >
+        <span className="inline-flex min-w-0 items-center gap-3">
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${copy.className}`}>
+            <Icon size={15} />
           </span>
-          {copy.label}
-        </h3>
-        <span className="text-xs font-bold text-gray-400">{items.length}</span>
-      </div>
-      {items.length ? (
-        <div className="space-y-2">
-          {items.map(({ agentRun, proposal }) => (
-            <ActivityRow
-              agentRun={agentRun}
-              key={agentRun.id}
-              onOpenProposal={onOpenProposal}
-              onRetry={onRetry}
-              onSelectAgentRun={onSelectAgentRun}
-              proposal={proposal}
-              rawNotes={rawNotes}
-              rawSources={rawSources}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
-          {copy.empty}
-        </p>
-      )}
+          <span className="min-w-0">
+            <span className="block text-sm font-extrabold text-ink">{copy.label}</span>
+            <span className="block text-xs leading-5 text-gray-500">
+              {items.length ? `${items.length} runs` : copy.empty}
+            </span>
+          </span>
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-3">
+          <span className="rounded-full border border-gray-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-gray-500">
+            {items.length}
+          </span>
+          <ChevronDown
+            className={`text-gray-400 transition ${isOpen ? 'rotate-180' : ''}`}
+            size={17}
+          />
+        </span>
+      </button>
+      {isOpen ? (
+        items.length ? (
+          <div className="border-t border-gray-200">
+            {items.map(({ agentRun, proposal }) => (
+              <ActivityRow
+                agentRun={agentRun}
+                key={agentRun.id}
+                onOpenProposal={onOpenProposal}
+                onRetry={onRetry}
+                onSelectAgentRun={onSelectAgentRun}
+                proposal={proposal}
+                rawNotes={rawNotes}
+                rawSources={rawSources}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="border-t border-gray-200 bg-slate-50 px-4 py-4 text-xs leading-5 text-gray-500">
+            {copy.empty}
+          </p>
+        )
+      ) : null}
     </section>
   )
 }
@@ -269,6 +297,13 @@ export function AgentActivityPage({
 }) {
   const groups = groupRuns(agentRuns, proposals)
   const summary = summarizeAgentActivity(agentRuns, proposals)
+  const [openGroups, setOpenGroups] = useState<Record<ActivityGroup, boolean>>({
+    running: true,
+    needsReview: true,
+    failed: true,
+    completed: false,
+  })
+  const groupOrder: ActivityGroup[] = ['running', 'needsReview', 'failed', 'completed']
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-canvas">
@@ -297,12 +332,14 @@ export function AgentActivityPage({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-        <div className="grid gap-6 xl:grid-cols-2">
-          {(['running', 'needsReview', 'failed', 'completed'] as ActivityGroup[]).map((group) => (
+        <div className="mx-auto flex max-w-5xl flex-col gap-3">
+          {groupOrder.map((group) => (
             <ActivityGroupSection
               group={group}
               items={groups[group]}
+              isOpen={openGroups[group]}
               key={group}
+              onToggle={() => setOpenGroups((current) => ({ ...current, [group]: !current[group] }))}
               onOpenProposal={onOpenProposal}
               onRetry={onRetry}
               onSelectAgentRun={onSelectAgentRun}

@@ -65,13 +65,13 @@ function connectedNoteId(link: NoteLink, noteId: string) {
   return null
 }
 
-function edgePath(start: { x: number; y: number }, end: { x: number; y: number }) {
+function edgePath(start: { x: number; y: number }, end: { x: number; y: number }, laneOffset = 0) {
   const dx = end.x - start.x
   const bend = Math.max(8, Math.min(22, Math.abs(dx) * 0.45))
   const direction = dx >= 0 ? 1 : -1
   const c1x = start.x + bend * direction
   const c2x = end.x - bend * direction
-  return `M ${start.x} ${start.y} C ${c1x} ${start.y}, ${c2x} ${end.y}, ${end.x} ${end.y}`
+  return `M ${start.x} ${start.y} C ${c1x} ${start.y + laneOffset}, ${c2x} ${end.y + laneOffset}, ${end.x} ${end.y}`
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -148,6 +148,12 @@ export function KnowledgeCanvas({
     sourceNoteId: string
     start: { x: number; y: number }
     current: { x: number; y: number }
+  } | null>(null)
+  const [pendingConnection, setPendingConnection] = useState<{
+    sourceNoteId: string
+    targetNoteId: string
+    midpoint: { x: number; y: number }
+    relationType: string
   } | null>(null)
   const persistedNodePositions = useMemo(() => {
     return Object.fromEntries(
@@ -269,7 +275,7 @@ export function KnowledgeCanvas({
     link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
   const graphNodeById = new globalThis.Map(graphNodes.map((node) => [node.note.id, node]))
-  const graphEdges = data.noteLinks
+  const baseGraphEdges = data.noteLinks
     .filter(
       (link) =>
         link.sourceNoteType === 'compiled_note' &&
@@ -302,6 +308,26 @@ export function KnowledgeCanvas({
         midpoint: { x: number; y: number }
       } => Boolean(edge),
     )
+  const edgeVisualGroups = new globalThis.Map<string, typeof baseGraphEdges>()
+  for (const edge of baseGraphEdges) {
+    const [leftId, rightId] = [edge.link.sourceNoteId, edge.link.targetNoteId].sort()
+    const key = `${leftId}:${rightId}`
+    edgeVisualGroups.set(key, [...(edgeVisualGroups.get(key) ?? []), edge])
+  }
+  const graphEdges = baseGraphEdges.map((edge) => {
+    const [leftId, rightId] = [edge.link.sourceNoteId, edge.link.targetNoteId].sort()
+    const visualGroup = edgeVisualGroups.get(`${leftId}:${rightId}`) ?? [edge]
+    const laneIndex = visualGroup.findIndex((item) => item.id === edge.id)
+    const laneOffset = (laneIndex - (visualGroup.length - 1) / 2) * 4.6
+    return {
+      ...edge,
+      laneOffset,
+      midpoint: {
+        x: edge.midpoint.x,
+        y: edge.midpoint.y + laneOffset,
+      },
+    }
+  })
   const selectedEdge = graphEdges.find((edge) => edge.id === selectedEdgeId) ?? null
   const duplicateRelationTypesForSelectedEdge = new Set(
     selectedEdge
@@ -317,6 +343,9 @@ export function KnowledgeCanvas({
           .map((edge) => edge.link.relationType)
       : [],
   )
+  const pendingConnectionRelationOptions = pendingConnection
+    ? relationOptions.filter(([value]) => !relationTypesForPair(pendingConnection.sourceNoteId, pendingConnection.targetNoteId).has(value))
+    : []
   const evidenceSummaryCount =
     knowledgeTimeline?.sourceEvidenceReferences.length ??
     knowledgeTimeline?.versions.find((version) => version.isCurrent)?.evidenceReferences.length ??
@@ -376,9 +405,30 @@ export function KnowledgeCanvas({
     onResetBoardLayout()
   }
 
+  function relationTypesForPair(sourceNoteId: string, targetNoteId: string) {
+    return new Set(
+      data.noteLinks
+        .filter(
+          (link) =>
+            linkVisibleStatuses.has(link.status) &&
+            link.sourceNoteType === 'compiled_note' &&
+            link.targetNoteType === 'compiled_note' &&
+            link.sourceNoteId === sourceNoteId &&
+            link.targetNoteId === targetNoteId,
+        )
+        .map((link) => link.relationType),
+    )
+  }
+
+  function preferredRelationTypeForPair(sourceNoteId: string, targetNoteId: string) {
+    const usedRelationTypes = relationTypesForPair(sourceNoteId, targetNoteId)
+    const availableOptions = relationOptions.filter(([value]) => !usedRelationTypes.has(value))
+    return availableOptions.find(([value]) => value === 'related_concept')?.[0] ?? availableOptions[0]?.[0] ?? ''
+  }
+
   function startPan(event: React.PointerEvent) {
     const target = event.target as HTMLElement
-    if (target.closest('[data-note-id], [data-edge-toolbar], button, input, select, textarea')) {
+    if (target.closest('[data-note-id], [data-edge-toolbar], [data-link-draft], button, input, select, textarea')) {
       return
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -448,10 +498,20 @@ export function KnowledgeCanvas({
       const targetCard = target?.closest('[data-note-id]') as HTMLElement | null
       const targetNoteId = targetCard?.dataset.noteId
       if (targetNoteId && targetNoteId !== connectState.sourceNoteId) {
-        onCreateNoteLink({
+        const sourceNode = graphNodeById.get(connectState.sourceNoteId)
+        const targetNode = graphNodeById.get(targetNoteId)
+        const midpoint =
+          sourceNode && targetNode
+            ? {
+                x: (sourceNode.position.x + targetNode.position.x) / 2,
+                y: (sourceNode.position.y + targetNode.position.y) / 2,
+              }
+            : connectState.current
+        setPendingConnection({
           sourceNoteId: connectState.sourceNoteId,
           targetNoteId,
-          relationType: 'related_concept',
+          midpoint,
+          relationType: preferredRelationTypeForPair(connectState.sourceNoteId, targetNoteId),
         })
       }
     } else if (dragState) {
@@ -551,7 +611,7 @@ export function KnowledgeCanvas({
                   return (
                     <g key={edge.id}>
                       <path
-                        d={edgePath(edge.sourceNode.position, edge.targetNode.position)}
+                        d={edgePath(edge.sourceNode.position, edge.targetNode.position, edge.laneOffset)}
                         fill="none"
                         onClick={(event) => {
                           event.stopPropagation()
@@ -573,7 +633,7 @@ export function KnowledgeCanvas({
                         vectorEffect="non-scaling-stroke"
                       />
                       <path
-                        d={edgePath(edge.sourceNode.position, edge.targetNode.position)}
+                        d={edgePath(edge.sourceNode.position, edge.targetNode.position, edge.laneOffset)}
                         fill="none"
                         pointerEvents="none"
                         stroke={
@@ -620,6 +680,7 @@ export function KnowledgeCanvas({
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedEdgeId(edge.id)
+                  setPendingConnection(null)
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
                 style={{
@@ -722,6 +783,85 @@ export function KnowledgeCanvas({
             </div>
           ) : null}
 
+          {pendingConnection ? (
+            <div
+              className="absolute z-30 w-[224px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white p-2 text-left shadow-xl"
+              data-link-draft="true"
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{
+                left: `${pendingConnection.midpoint.x}%`,
+                top: `${pendingConnection.midpoint.y}%`,
+                transform: `translate(-50%, calc(-100% - 20px)) scale(${1 / canvasZoom})`,
+                transformOrigin: 'center bottom',
+              }}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                    New link
+                  </p>
+                  <p className="mt-1 truncate text-[13px] font-extrabold text-ink">
+                    Choose relation
+                  </p>
+                </div>
+                <button
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-ink"
+                  onClick={() => setPendingConnection(null)}
+                  title="Close"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {pendingConnectionRelationOptions.length ? (
+                <>
+                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                    Relation
+                  </label>
+                  <select
+                    className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-ink outline-none focus:border-violet"
+                    onChange={(event) =>
+                      setPendingConnection({
+                        ...pendingConnection,
+                        relationType: event.target.value,
+                      })
+                    }
+                    value={pendingConnection.relationType}
+                  >
+                    {pendingConnectionRelationOptions.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-violet px-3 text-xs font-bold text-white hover:bg-violet-dark disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                      disabled={!pendingConnection.relationType}
+                      onClick={() => {
+                        if (!pendingConnection.relationType) return
+                        onCreateNoteLink({
+                          sourceNoteId: pendingConnection.sourceNoteId,
+                          targetNoteId: pendingConnection.targetNoteId,
+                          relationType: pendingConnection.relationType,
+                        })
+                        setPendingConnection(null)
+                      }}
+                      type="button"
+                    >
+                      <Check size={13} />
+                      Create
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs font-semibold text-gray-500">All relation types are already linked.</p>
+              )}
+              <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-gray-200 bg-white" />
+            </div>
+          ) : null}
+
           {graphNodes.length ? (
             graphNodes.map((node) => {
               const isSelected = node.note.id === selectedNote?.id
@@ -736,6 +876,7 @@ export function KnowledgeCanvas({
                     setSelectedNoteId(node.note.id)
                     setSelectedNoteModalId(node.note.id)
                     setSelectedEdgeId(null)
+                    setPendingConnection(null)
                   }}
                   onPointerDown={(event) => startDrag(event, node.note.id, node.position)}
                   style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
@@ -748,6 +889,8 @@ export function KnowledgeCanvas({
                       event.preventDefault()
                       event.stopPropagation()
                       setSelectedNoteId(node.note.id)
+                      setSelectedEdgeId(null)
+                      setPendingConnection(null)
                       setConnectState({
                         sourceNoteId: node.note.id,
                         start: { x: node.position.x + 4.8, y: node.position.y },

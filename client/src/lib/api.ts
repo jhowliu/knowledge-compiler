@@ -48,6 +48,10 @@ export async function requestVoid(path: string, init?: RequestInit): Promise<voi
   }
 }
 
+export function createAgentRunEventSource() {
+  return new EventSource(`${apiBaseUrl}/agent-runs/stream`)
+}
+
 const workspaceDataRequests = new Map<string, Promise<WorkspaceData>>()
 
 export async function loadWorkspaceData(): Promise<WorkspaceData> {

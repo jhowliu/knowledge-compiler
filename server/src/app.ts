@@ -52,6 +52,7 @@ import { RawSourceService } from "./services/rawSource.service.js";
 import { TopicService } from "./services/topic.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { AskService, type AskAnswerer } from "./services/ask.service.js";
+import { AgentRunEventStreamService } from "./services/agentRunEventStream.service.js";
 import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 
 export type AppDependencies = {
@@ -111,6 +112,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const embeddingService =
     dependencies.embeddingService ??
     (usingDefaultRepositories ? new OpenAIEmbeddingService() : new NoopEmbeddingService());
+  const agentRunEventStreamService = new AgentRunEventStreamService();
   const enablePhaseOneWorkflow = dependencies.enablePhaseOneWorkflow ?? true;
   const phaseOneWorkflowService = enablePhaseOneWorkflow
     ? new PhaseOneWorkflowService(
@@ -146,6 +148,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     rawSourceRepository,
     extractionEvalRepository,
     agentToolReadRepository,
+    agentRunEventStreamService,
   );
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(
@@ -184,6 +187,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         agentRunRepository,
         agentRunQueueService,
         extractionEvalRepository,
+        agentRunEventStreamService,
       ),
     );
   }

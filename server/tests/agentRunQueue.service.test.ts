@@ -91,6 +91,52 @@ const llmWikiIndexer = {
 };
 
 describe("agent run queue service", () => {
+  test("publishes SSE-friendly stream events when a run is queued", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const publishedEvents: Array<{ name: string; payload: unknown }> = [];
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      new InMemoryKnowledgeRepository(),
+      new InMemoryNoteLinkRepository(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        publish(name, payload) {
+          publishedEvents.push({ name, payload });
+          return {
+            id: `${publishedEvents.length}`,
+            name,
+            payload,
+            createdAt: new Date().toISOString(),
+          };
+        },
+      },
+    );
+
+    const agentRun = await service.enqueue({ runType: "reindex_links" });
+
+    expect(agentRunRepository.events).toEqual([
+      expect.objectContaining({
+        agentRunId: agentRun.id,
+        category: "lifecycle",
+        name: "queued",
+      }),
+    ]);
+    expect(publishedEvents.map((event) => event.name)).toEqual([
+      "agent-run.event",
+      "agent-run.queued",
+    ]);
+    expect(publishedEvents[0].payload).toMatchObject({
+      agentRunId: agentRun.id,
+      category: "lifecycle",
+      name: "queued",
+    });
+  });
+
   test("drafts generalized LLM wiki proposal items only", async () => {
     const wikiIndexer = new WikiIndexerService();
     const rawNote = {

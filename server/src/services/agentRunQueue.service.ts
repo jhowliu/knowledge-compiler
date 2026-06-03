@@ -8,7 +8,11 @@ import type { ProposalRepository } from "../repositories/proposal.repository.js"
 import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { RawSourceWithChunks } from "../domain/rawSource.js";
-import { agentRunEvents } from "../domain/agentRunEvents.js";
+import {
+  agentRunEvents,
+  type AgentRunEventCategory,
+  type AgentRunEventName,
+} from "../domain/agentRunEvents.js";
 import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "./wikiIndexer.service.js";
 import { compileRunMetadata } from "../agents/versions.js";
 import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
@@ -17,6 +21,11 @@ import type { AgentToolReadRepository } from "../repositories/agentTool.reposito
 import { NoopAgentToolReadRepository } from "../repositories/agentTool.repository.js";
 import { AgentToolService } from "./agentTool.service.js";
 import { normalizeKnowledgeStructuredData } from "./knowledgeFacets.service.js";
+import {
+  NoopAgentRunEventPublisher,
+  type AgentRunEventPublisher,
+  type AgentRunStreamEventName,
+} from "./agentRunEventStream.service.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
@@ -57,6 +66,23 @@ function scorePair(left: CompiledNote, right: CompiledNote) {
   };
 }
 
+function streamEventNameForTimelineEvent(
+  category: AgentRunEventCategory,
+  name: AgentRunEventName,
+): AgentRunStreamEventName | null {
+  if (category !== "lifecycle") {
+    return null;
+  }
+
+  if (name === "queued") return "agent-run.queued";
+  if (name === "started") return "agent-run.started";
+  if (name === "completed") return "agent-run.completed";
+  if (name === "failed") return "agent-run.failed";
+  if (name === "retry_queued") return "agent-run.retry-queued";
+
+  return null;
+}
+
 export class AgentRunQueueService {
   constructor(
     private readonly agentRunRepository: AgentRunRepository,
@@ -68,6 +94,7 @@ export class AgentRunQueueService {
     private readonly rawSourceRepository?: RawSourceRepository | null,
     private readonly extractionEvalRepository: ExtractionEvalRepository = new NoopExtractionEvalRepository(),
     private readonly agentToolReadRepository: AgentToolReadRepository = new NoopAgentToolReadRepository(),
+    private readonly agentRunEventPublisher: AgentRunEventPublisher = new NoopAgentRunEventPublisher(),
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
@@ -88,7 +115,7 @@ export class AgentRunQueueService {
       runType: input.runType,
       input: runInput,
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId: agentRun.id,
       ...agentRunEvents.lifecycle.queued,
       payload: { runType: input.runType },
@@ -118,12 +145,12 @@ export class AgentRunQueueService {
         retryOfAgentRunId: originalRun.id,
       },
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId: originalRun.id,
       ...agentRunEvents.lifecycle.retryQueued,
       payload: { retryAgentRunId: retryRun.id },
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId: retryRun.id,
       ...agentRunEvents.lifecycle.retryOf,
       payload: { originalAgentRunId: originalRun.id },
@@ -139,7 +166,7 @@ export class AgentRunQueueService {
     }
 
     await this.agentRunRepository.start(agentRun.id);
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId: agentRun.id,
       ...agentRunEvents.lifecycle.started,
       payload: { runType: agentRun.runType },
@@ -157,7 +184,7 @@ export class AgentRunQueueService {
           rawSourceId: typeof input.rawSourceId === "string" ? input.rawSourceId : null,
         });
         await this.agentRunRepository.complete(agentRun.id, output);
-        await this.agentRunRepository.addEvent({
+        await this.recordEvent({
           agentRunId: agentRun.id,
           ...agentRunEvents.lifecycle.completed,
           payload: output,
@@ -171,7 +198,7 @@ export class AgentRunQueueService {
 
       const output = await this.reindexLinks(agentRun.id);
       await this.agentRunRepository.complete(agentRun.id, output);
-      await this.agentRunRepository.addEvent({
+      await this.recordEvent({
         agentRunId: agentRun.id,
         ...agentRunEvents.lifecycle.completed,
         payload: output,
@@ -179,7 +206,7 @@ export class AgentRunQueueService {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown agent run error";
       await this.agentRunRepository.fail(agentRun.id, message);
-      await this.agentRunRepository.addEvent({
+      await this.recordEvent({
         agentRunId: agentRun.id,
         ...agentRunEvents.lifecycle.failed,
         payload: { error: message },
@@ -188,9 +215,33 @@ export class AgentRunQueueService {
     }
   }
 
+  private async recordEvent(input: {
+    agentRunId: string;
+    category: AgentRunEventCategory;
+    name: AgentRunEventName;
+    payload: unknown;
+  }) {
+    const event = await this.agentRunRepository.addEvent(input);
+    const streamPayload = {
+      agentRunId: input.agentRunId,
+      event,
+      category: input.category,
+      name: input.name,
+      payload: input.payload,
+    };
+    this.agentRunEventPublisher.publish("agent-run.event", streamPayload);
+
+    const lifecycleStreamEvent = streamEventNameForTimelineEvent(input.category, input.name);
+    if (lifecycleStreamEvent) {
+      this.agentRunEventPublisher.publish(lifecycleStreamEvent, streamPayload);
+    }
+
+    return event;
+  }
+
   private async reindexLinks(agentRunId: string) {
     const notes = await this.knowledgeRepository.listCompiledNotes(maxNotesToScan);
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.source.notesLoaded,
       payload: { count: notes.length },
@@ -209,7 +260,7 @@ export class AgentRunQueueService {
     }
 
     candidates.sort((left, right) => right.score - left.score);
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.linking.scored,
       payload: { candidateCount: candidates.length },
@@ -232,7 +283,7 @@ export class AgentRunQueueService {
       });
       if (noteLink) {
         suggestionsCreated += 1;
-        await this.agentRunRepository.addEvent({
+        await this.recordEvent({
           agentRunId,
           ...agentRunEvents.linking.suggestionCreated,
           payload: { noteLinkId: noteLink.id },
@@ -258,7 +309,7 @@ export class AgentRunQueueService {
     const { rawNote, rawSource, source } = await this.resolveIndexingSource(input);
     const agentToolService = this.createAgentToolService();
 
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.source.rawNoteLoaded,
       payload: {
@@ -269,7 +320,7 @@ export class AgentRunQueueService {
       },
     });
     if (rawSource) {
-      await this.agentRunRepository.addEvent({
+      await this.recordEvent({
         agentRunId,
         ...agentRunEvents.source.rawSourceLoaded,
         payload: {
@@ -284,7 +335,7 @@ export class AgentRunQueueService {
     let round = 1;
     let sourceToolOutput: Awaited<ReturnType<AgentToolService["getSource"]>> | null = null;
     if (agentToolService) {
-      await this.agentRunRepository.addEvent({
+      await this.recordEvent({
         agentRunId,
         ...agentRunEvents.indexing.reactLoopStarted,
         payload: { maxRounds: 8, maxCallsPerTool: 3 },
@@ -304,7 +355,7 @@ export class AgentRunQueueService {
     if (rawSource && this.rawSourceRepository) {
       await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
     }
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.indexing.detected,
       payload: {
@@ -346,7 +397,7 @@ export class AgentRunQueueService {
       });
     }
 
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.indexing.drafted,
       payload: {
@@ -362,7 +413,7 @@ export class AgentRunQueueService {
       conceptNames: extractedConcepts.map((concept) => concept.name),
       limit: 8,
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.indexing.relatedFound,
       payload: { relatedNotes },
@@ -375,7 +426,7 @@ export class AgentRunQueueService {
         rawNoteId: rawNote.id,
         draft,
       });
-      await this.agentRunRepository.addEvent({
+      await this.recordEvent({
         agentRunId,
         ...agentRunEvents.proposal.created,
         payload: { proposalId: proposal.id },
@@ -480,17 +531,17 @@ export class AgentRunQueueService {
         },
       ),
     );
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.eval.completed,
       payload: { proposalId: draftProposalOutput.proposal_id },
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.proposal.created,
       payload: { proposalId: draftProposalOutput.proposal_id },
     });
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.indexing.loopExited,
       payload: { reason: "draft_proposal" },
@@ -529,13 +580,13 @@ export class AgentRunQueueService {
     input: unknown,
     action: () => Promise<T>,
   ) {
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.tool.called,
       payload: { tool, input, round },
     });
     const output = await action();
-    await this.agentRunRepository.addEvent({
+    await this.recordEvent({
       agentRunId,
       ...agentRunEvents.tool.result,
       payload: { tool, outputSummary: summarizeToolOutput(output), round },

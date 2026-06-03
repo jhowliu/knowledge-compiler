@@ -20,6 +20,7 @@ import {
   requestJson,
   requestVoid,
   searchKnowledgeBlocks,
+  subscribeToAgentRunEvents,
 } from './lib/api'
 import { emptyWorkspaceData, graphBoardKey } from './lib/constants'
 import type {
@@ -66,6 +67,9 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const selectedRawNoteIdRef = useRef<string | null>(null)
+  const selectedAgentRunIdRef = useRef<string | null>(null)
+  const eventRefreshTimerRef = useRef<number | null>(null)
 
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
   const latestAgentRun = workspaceData.agentRuns[0] ?? null
@@ -166,12 +170,54 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!isAgentRunning) return undefined
-    const interval = window.setInterval(() => {
-      void refresh({ showLoading: false })
-    }, 3000)
-    return () => window.clearInterval(interval)
-  }, [isAgentRunning])
+    selectedRawNoteIdRef.current = selectedRawNoteId
+  }, [selectedRawNoteId])
+
+  useEffect(() => {
+    selectedAgentRunIdRef.current = selectedAgentRunDetail?.agentRun?.id ?? null
+  }, [selectedAgentRunDetail?.agentRun?.id])
+
+  useEffect(() => {
+    const scheduleRefresh = (delayMs: number) => {
+      if (eventRefreshTimerRef.current !== null) {
+        window.clearTimeout(eventRefreshTimerRef.current)
+      }
+
+      eventRefreshTimerRef.current = window.setTimeout(() => {
+        eventRefreshTimerRef.current = null
+        void (async () => {
+          await refresh({ showLoading: false })
+          if (selectedRawNoteIdRef.current) {
+            await refreshSelectedRawNoteTrace(selectedRawNoteIdRef.current)
+          }
+          if (selectedAgentRunIdRef.current) {
+            try {
+              setSelectedAgentRunDetail(await loadAgentRunDetail(selectedAgentRunIdRef.current))
+            } catch {
+              // The workspace refresh above will still keep the global activity state current.
+            }
+          }
+        })()
+      }, delayMs)
+    }
+
+    const unsubscribe = subscribeToAgentRunEvents((event) => {
+      if (event.name === 'agent-stream.connected' || event.name === 'agent-stream.heartbeat') {
+        return
+      }
+
+      const isTerminal = event.name === 'agent-run.completed' || event.name === 'agent-run.failed'
+      scheduleRefresh(isTerminal ? 150 : 700)
+    })
+
+    return () => {
+      unsubscribe()
+      if (eventRefreshTimerRef.current !== null) {
+        window.clearTimeout(eventRefreshTimerRef.current)
+        eventRefreshTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
@@ -327,20 +373,6 @@ function App() {
       }
       if (nextRawNoteId) {
         await refreshSelectedRawNoteTrace(nextRawNoteId)
-        window.setTimeout(() => {
-          void (async () => {
-            const delayedData = await refresh()
-            const delayedProposal = delayedData?.proposals.find(
-              (proposal) => proposal.rawNoteId === nextRawNoteId,
-            )
-            if (delayedProposal) {
-              setSelectedProposalId(delayedProposal.id)
-              setActiveView('update_proposals')
-              setNotice('Agent finished wiki indexing. Review the proposed incremental updates.')
-            }
-            await refreshSelectedRawNoteTrace(nextRawNoteId)
-          })()
-        }, 900)
       } else {
         setSelectedRawNoteTrace(null)
       }
@@ -694,9 +726,6 @@ function App() {
       }))
       setNotice('Agent re-index started.')
       setError(null)
-      window.setTimeout(() => {
-        void refresh()
-      }, 900)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to start agent run')
       setNotice(null)
@@ -716,9 +745,6 @@ function App() {
       setNotice('Agent retry started.')
       setError(null)
       await openAgentRunDetail(result.agentRun.id)
-      window.setTimeout(() => {
-        void refresh()
-      }, 900)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to retry agent run')
       setNotice(null)

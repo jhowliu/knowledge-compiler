@@ -574,18 +574,6 @@ export function KnowledgeCanvas({
                         strokeWidth={isSelected ? '1.35' : isPending ? '0.85' : '1'}
                         vectorEffect="non-scaling-stroke"
                       />
-                      <text
-                        dominantBaseline="middle"
-                        fill={isPending ? 'rgba(126, 34, 206, 0.9)' : 'rgba(29, 78, 216, 0.95)'}
-                        fontSize="2.3"
-                        fontWeight="700"
-                        pointerEvents="none"
-                        textAnchor="middle"
-                        x={edge.midpoint.x}
-                        y={edge.midpoint.y}
-                      >
-                        {relationOptionLabel(edge.link.relationType)}
-                      </text>
                     </g>
                   )
                 })}
@@ -602,6 +590,29 @@ export function KnowledgeCanvas({
               ) : null}
             </svg>
           ) : null}
+
+          {graphEdges.map((edge) => {
+            const isPending = edge.link.status === 'pending'
+            const isSelected = edge.id === selectedEdgeId
+            return (
+              <div
+                className={`pointer-events-none absolute z-[5] rounded-full border px-2.5 py-1 text-xs font-extrabold shadow-sm ${
+                  isPending
+                    ? 'border-violet/20 bg-white/90 text-violet'
+                    : 'border-blue-200 bg-white/90 text-blue-700'
+                } ${isSelected ? 'ring-4 ring-violet/10' : ''}`}
+                data-edge-label="true"
+                key={`${edge.id}-label`}
+                style={{
+                  left: `${edge.midpoint.x}%`,
+                  top: `${edge.midpoint.y}%`,
+                  transform: `translate(-50%, -50%) scale(${1 / canvasZoom})`,
+                }}
+              >
+                {relationOptionLabel(edge.link.relationType)}
+              </div>
+            )
+          })}
 
           {selectedEdge ? (
             <div

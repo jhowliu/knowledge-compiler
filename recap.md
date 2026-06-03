@@ -216,6 +216,7 @@
 - Normalized agent event validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run test --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check` pass. `npm run migrate --workspace=server` was attempted but failed at database authentication for user `admin` before migration SQL ran.
 - Global Agent Activity Center validation: `npm run typecheck --workspace=client`, `npm run typecheck --workspace=server`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5175/` opened the global Agent Activity Center and the Sources activity shortcut with no console warnings or errors.
 - Agent Activity page validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://127.0.0.1:5173/` opened Agent Activity from the sidebar and from the Notes Graph shortcut with no console warnings or errors.
+- Source page Agent Activity removal validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://localhost:5173/` confirmed the Sources page no longer exposes Agent Activity text/buttons, while the dedicated Agent Activity page still opens from the global sidebar with no console warnings or errors.
 
 ## Next Target
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.

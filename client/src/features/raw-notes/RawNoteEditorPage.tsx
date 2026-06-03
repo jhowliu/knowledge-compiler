@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  Activity,
   BookOpen,
   CheckCircle2,
   ChevronDown,
@@ -22,7 +21,6 @@ import {
   X,
 } from 'lucide-react'
 import { MarkdownPreview } from '../../components/MarkdownPreview'
-import type { AgentActivitySummary } from '../agent-runs/AgentActivityCenter'
 import type {
   AgentRun,
   Proposal,
@@ -187,7 +185,6 @@ function SourceSidebarItem({
   isSelected,
   lifecycle,
   note,
-  onLifecycleClick,
   onSelect,
   source,
   topics,
@@ -195,7 +192,6 @@ function SourceSidebarItem({
   isSelected: boolean
   lifecycle: SourceLifecycle
   note: RawNote
-  onLifecycleClick: () => void
   onSelect: () => void
   source: RawSource | null
   topics: Topic[]
@@ -232,19 +228,6 @@ function SourceSidebarItem({
             </span>
             <span
               className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                onLifecycleClick()
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  onLifecycleClick()
-                }
-              }}
-              role="button"
-              tabIndex={0}
             >
               {lifecycle.label}
             </span>
@@ -309,8 +292,6 @@ export function RawNoteEditorPage({
   onMoveSource,
   onApplyTopics,
   onCreateTopic,
-  agentActivitySummary,
-  onOpenAgentActivity,
   onOpenKnowledgeMap,
   onOpenReviewQueue,
   onThemeToggle,
@@ -351,8 +332,6 @@ export function RawNoteEditorPage({
   onMoveSource: (rawSourceId: string, input: { projectId: string; folderId: string | null }) => void
   onApplyTopics: (rawSourceId: string, topicIds: string[]) => void
   onCreateTopic: (name: string) => Promise<Topic | null>
-  agentActivitySummary: AgentActivitySummary
-  onOpenAgentActivity: () => void
   onOpenKnowledgeMap?: () => void
   onOpenReviewQueue?: () => void
   onThemeToggle: () => void
@@ -528,31 +507,6 @@ export function RawNoteEditorPage({
           </button>
         </nav>
 
-        <button
-          className="mt-[18px] rounded-lg border border-gray-200 bg-slate-50 p-3 text-left hover:border-violet/40"
-          onClick={onOpenAgentActivity}
-          type="button"
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <Activity size={15} className="text-violet" />
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Agent</p>
-          </div>
-          <div className="space-y-1 text-[12px] font-semibold text-ink">
-            <div className="flex items-center justify-between">
-              <span>Running</span>
-              <span>{agentActivitySummary.running}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Needs review</span>
-              <span>{agentActivitySummary.needsReview}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Failed</span>
-              <span>{agentActivitySummary.failed}</span>
-            </div>
-          </div>
-        </button>
-
         <div className="mt-[18px] px-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Workspace</p>
           <h1 className="mt-1 text-lg font-extrabold text-ink">Knowledge sources</h1>
@@ -606,7 +560,6 @@ export function RawNoteEditorPage({
                     key={note.id}
                     lifecycle={lifecycle}
                     note={note}
-                    onLifecycleClick={onOpenAgentActivity}
                     onSelect={() => onSelectRawNote(note)}
                     source={source}
                     topics={topics}
@@ -667,7 +620,6 @@ export function RawNoteEditorPage({
                               key={note.id}
                               lifecycle={lifecycle}
                               note={note}
-                              onLifecycleClick={onOpenAgentActivity}
                               onSelect={() => onSelectRawNote(note)}
                               source={source}
                               topics={topics}
@@ -709,7 +661,6 @@ export function RawNoteEditorPage({
                                     key={note.id}
                                     lifecycle={lifecycle}
                                     note={note}
-                                    onLifecycleClick={onOpenAgentActivity}
                                     onSelect={() => onSelectRawNote(note)}
                                     source={source}
                                     topics={topics}
@@ -921,13 +872,11 @@ export function RawNoteEditorPage({
               <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
                 {selectedRawNote ? (isDirty ? 'Unsaved changes' : 'Saved source') : 'New source'}
               </p>
-              <button
+              <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(selectedLifecycle.tone)}`}
-                onClick={onOpenAgentActivity}
-                type="button"
               >
                 {indexingTrace?.status ?? selectedLifecycle.label}
-              </button>
+              </span>
             </div>
             <p className="mt-1 truncate text-sm font-extrabold text-ink">
               {selectedRawNote ? sourceTitle(selectedRawNote, selectedRawSource) : 'Capture source evidence'}
@@ -1062,13 +1011,11 @@ export function RawNoteEditorPage({
           <section className="rounded-lg border border-gray-200 bg-slate-50 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-[12px] font-extrabold text-ink">Lifecycle</p>
-              <button
+              <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(selectedLifecycle.tone)}`}
-                onClick={onOpenAgentActivity}
-                type="button"
               >
                 {selectedLifecycle.label}
-              </button>
+              </span>
             </div>
             <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold uppercase">
               {([

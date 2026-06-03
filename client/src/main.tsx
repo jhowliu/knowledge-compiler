@@ -809,7 +809,6 @@ function App() {
           />
         ) : (
           <RawNoteEditorPage
-            agentActivitySummary={agentActivitySummary}
             agentRuns={workspaceData.agentRuns}
             bodyMarkdown={bodyMarkdown}
             error={error}
@@ -827,7 +826,6 @@ function App() {
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
-            onOpenAgentActivity={openAgentActivityView}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}

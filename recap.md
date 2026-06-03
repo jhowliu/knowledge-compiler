@@ -1,6 +1,7 @@
 # Recap
 
 ## Summary
+- Started issue #96 on `codex/redesign-app-navigation-96`: redesigned the Sources navigation shell so the left sidebar is app navigation plus a scrollable project/source tree, moved source role/state filters into the main Sources header, moved theme and Agent Activity controls into topbars, removed the sidebar Index status/mode cards, and moved project/folder rename tools into the right Context panel.
 - Started Agent Run detail receipt UI on `codex/agent-run-detail-receipt`: widened the drawer, replaced raw event-card timelines with a human-readable progress tracker, added output summaries for proposals/concepts/related cards/generated links/eval results, and moved JSON payloads into a collapsed Technical details section.
 - Updated the Agent Activity page on the same branch from a 2x2 status grid to a single-column collapsible listing view with compact rows and expandable status sections.
 - Added agent-run SSE wiring on the same branch: `/agent-runs/stream` now streams `agent-run.event` messages from backend event writes, and the client refreshes workspace data plus the open drawer detail when matching events arrive. The old 3s polling path remains only as a fallback when `EventSource` is unavailable.
@@ -87,6 +88,7 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- App shell navigation should keep global actions discoverable without turning the Sources tree into a settings panel: sidebar is navigation/tree, topbar is page context plus Agent/theme controls, and main content owns filters/empty states.
 - Agent run details should read like an agent work receipt first: current state, progress, outputs, eval/errors, and only then debug JSON behind an explicit disclosure.
 - General facets are now the source of truth for LLM wiki proposals; markdown is a server-rendered view of the facets, not a separate LLM-authored narrative.
 - Legacy deterministic coding extraction still keeps coding-specific fields for compatibility, but the LLM wiki indexing path no longer emits those fields.
@@ -225,8 +227,10 @@
 - Agent Run detail receipt validation: `npm run typecheck --workspace=client` and `npm run build --workspace=client` pass. Browser smoke on `http://localhost:5174/` opened a completed Agent Activity run and confirmed the drawer shows Summary, Progress, Output, Eval, Generated links, and collapsed Technical details with no console errors beyond the React DevTools info message.
 - Agent Activity listing validation: `npm run typecheck --workspace=client`, `npm run build --workspace=client`, and `git diff --check` pass. Browser smoke on `http://localhost:5175/` confirmed the Agent Activity page is a single-column listing, Failed can collapse, Completed can expand, and no console errors appeared beyond the React DevTools info message.
 - Agent run SSE wiring validation: `npm run typecheck --workspace=server`, `npm run typecheck --workspace=client`, `npm run build --workspace=server`, `npm run build --workspace=client`, and `git diff --check` pass. Endpoint smoke against the already-running dev server was inconclusive because port 4000 was serving a different worktree's SSE shape.
+- App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
+- Implement #97 indexing outcome routing so the agent can keep one-off sources searchable without promoting every source into a Knowledge Note.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.
 - Consider adding a stronger LLM-backed entailment judge for claim-to-span support and a visible eval baseline in CI.

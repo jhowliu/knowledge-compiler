@@ -800,24 +800,31 @@ function App() {
           onKnowledgeMapClick={() => setActiveView('knowledge_map')}
           onRawNotesClick={openRawNotesView}
           onUpdateProposalsClick={openUpdateProposalsView}
-          onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
           pendingCount={pendingCount}
           themeMode={themeMode}
         />
       )}
       <section className="flex min-w-0 flex-1 flex-col">
+        {activeView !== 'raw_note_editor' ? (
+          <TopToolbar
+            activeView={activeView}
+            agentActivitySummary={agentActivitySummary}
+            agentRunStatus={latestAgentRun?.status ?? 'idle'}
+            compiledCount={workspaceData.compiledNotes.length}
+            isAgentRunning={isAgentRunning}
+            noteCount={workspaceData.rawSources.length || workspaceData.rawNotes.length}
+            onAgentActivityClick={openAgentActivityView}
+            onReindexLinks={() => void startReindexLinksRun()}
+            onSearchQueryChange={setSearchQuery}
+            onSearchSubmit={() => void runKnowledgeSearch()}
+            onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
+            pendingCount={pendingCount}
+            searchQuery={searchQuery}
+            themeMode={themeMode}
+          />
+        ) : null}
         {activeView === 'knowledge_map' ? (
           <>
-            <TopToolbar
-              agentRunStatus={latestAgentRun?.status ?? 'idle'}
-              compiledCount={workspaceData.compiledNotes.length}
-              isAgentRunning={isAgentRunning}
-              noteCount={workspaceData.rawSources.length || workspaceData.rawNotes.length}
-              onReindexLinks={() => void startReindexLinksRun()}
-              onSearchQueryChange={setSearchQuery}
-              onSearchSubmit={() => void runKnowledgeSearch()}
-              searchQuery={searchQuery}
-            />
             {error ? (
               <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                 {error}
@@ -871,6 +878,7 @@ function App() {
           />
         ) : (
           <RawNoteEditorPage
+            agentActivitySummary={agentActivitySummary}
             agentRuns={workspaceData.agentRuns}
             bodyMarkdown={bodyMarkdown}
             error={error}
@@ -888,6 +896,7 @@ function App() {
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
             onNewNote={openNewRawNoteEditor}
+            onOpenAgentActivity={openAgentActivityView}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}

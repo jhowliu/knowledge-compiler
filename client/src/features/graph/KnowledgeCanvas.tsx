@@ -132,6 +132,7 @@ export function KnowledgeCanvas({
   const [canvasZoom, setCanvasZoom] = useState(1)
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 })
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [edgeOffsets, setEdgeOffsets] = useState<Record<string, number>>({})
   const [knowledgeTimeline, setKnowledgeTimeline] = useState<KnowledgeSourceTimeline | null>(null)
   const [timelineStatus, setTimelineStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing'>('idle')
   const [panState, setPanState] = useState<{
@@ -144,6 +145,11 @@ export function KnowledgeCanvas({
     startClientX: number
     startClientY: number
     origin: { x: number; y: number }
+  } | null>(null)
+  const [edgeDragState, setEdgeDragState] = useState<{
+    edgeId: string
+    startClientY: number
+    originOffset: number
   } | null>(null)
   const [connectState, setConnectState] = useState<{
     sourceNoteId: string
@@ -319,7 +325,8 @@ export function KnowledgeCanvas({
     const [leftId, rightId] = [edge.link.sourceNoteId, edge.link.targetNoteId].sort()
     const visualGroup = edgeVisualGroups.get(`${leftId}:${rightId}`) ?? [edge]
     const laneIndex = visualGroup.findIndex((item) => item.id === edge.id)
-    const laneOffset = (laneIndex - (visualGroup.length - 1) / 2) * 4.6
+    const automaticLaneOffset = (laneIndex - (visualGroup.length - 1) / 2) * 4.6
+    const laneOffset = automaticLaneOffset + (edgeOffsets[edge.id] ?? 0)
     return {
       ...edge,
       laneOffset,
@@ -403,7 +410,21 @@ export function KnowledgeCanvas({
     resetCanvasView()
     latestNodePositionsRef.current = {}
     setNodePositions({})
+    setEdgeOffsets({})
     onResetBoardLayout()
+  }
+
+  function startEdgeDrag(event: React.PointerEvent, edgeId: string) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectedEdgeId(edgeId)
+    setPendingConnection(null)
+    setEdgeDragState({
+      edgeId,
+      startClientY: event.clientY,
+      originOffset: edgeOffsets[edgeId] ?? 0,
+    })
   }
 
   function relationTypesForPair(sourceNoteId: string, targetNoteId: string) {
@@ -467,6 +488,17 @@ export function KnowledgeCanvas({
       return
     }
 
+    if (edgeDragState) {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const deltaY = ((event.clientY - edgeDragState.startClientY) / (rect.height * canvasZoom)) * 100
+      setEdgeOffsets((offsets) => ({
+        ...offsets,
+        [edgeDragState.edgeId]: clampNumber(edgeDragState.originOffset + deltaY, -18, 18),
+      }))
+      return
+    }
+
     if (panState) {
       setCanvasPan({
         x: panState.origin.x + event.clientX - panState.startClientX,
@@ -515,6 +547,8 @@ export function KnowledgeCanvas({
           relationType: preferredRelationTypeForPair(connectState.sourceNoteId, targetNoteId),
         })
       }
+    } else if (edgeDragState) {
+      setEdgeDragState(null)
     } else if (dragState) {
       const position = latestNodePositionsRef.current[dragState.noteId]
       if (position) {
@@ -523,6 +557,7 @@ export function KnowledgeCanvas({
     }
     setConnectState(null)
     setDragState(null)
+    setEdgeDragState(null)
     setPanState(null)
   }
 
@@ -618,7 +653,7 @@ export function KnowledgeCanvas({
                           event.stopPropagation()
                           setSelectedEdgeId(edge.id)
                         }}
-                        onPointerDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => startEdgeDrag(event, edge.id)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
@@ -629,7 +664,7 @@ export function KnowledgeCanvas({
                         stroke="transparent"
                         strokeLinecap="round"
                         strokeWidth="4"
-                        style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+                        style={{ cursor: edgeDragState?.edgeId === edge.id ? 'grabbing' : 'grab', pointerEvents: 'stroke' }}
                         tabIndex={0}
                         vectorEffect="non-scaling-stroke"
                       />
@@ -675,7 +710,7 @@ export function KnowledgeCanvas({
                   isPending
                     ? 'border-violet/20 bg-white/90 text-violet'
                     : 'border-blue-200 bg-white/90 text-blue-700'
-                } ${isSelected ? 'ring-4 ring-violet/10' : ''}`}
+                } ${isSelected ? 'ring-4 ring-violet/10' : ''} ${edgeDragState?.edgeId === edge.id ? 'cursor-grabbing' : 'cursor-grab'}`}
                 data-edge-label="true"
                 key={`${edge.id}-label`}
                 onClick={(event) => {
@@ -683,7 +718,7 @@ export function KnowledgeCanvas({
                   setSelectedEdgeId(edge.id)
                   setPendingConnection(null)
                 }}
-                onPointerDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => startEdgeDrag(event, edge.id)}
                 style={{
                   left: `${edge.midpoint.x}%`,
                   top: `${edge.midpoint.y}%`,

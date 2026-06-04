@@ -230,9 +230,12 @@ function toDraftUpdateProposal(
         const targetBlock = item.target_block_id
           ? existingBlocksContext.find((block) => block.block_id === item.target_block_id) ?? null
           : null;
-        const bodyMarkdown = item.structured_facets
-          ? renderKnowledgeFacetsMarkdown(item.structured_facets, item.body_markdown)
-          : item.body_markdown;
+        // Display body is the model-authored readable note (#119); facets stay
+        // canonical in structuredData below. Fall back to the facet render only
+        // when the model wrote no prose.
+        const bodyMarkdown = item.body_markdown?.trim()
+          ? item.body_markdown
+          : renderKnowledgeFacetsMarkdown(item.structured_facets ?? {}, "");
         const structuredData = item.structured_facets
           ? normalizeKnowledgeStructuredData(item.structured_facets)
           : {};

@@ -45,16 +45,22 @@ export type OutcomeClassificationInput = {
   conceptMatches: string[];
 };
 
+export type ConflictResolution = "update" | "keep_both" | "needs_user_decision";
+
 /**
  * The outcome decision made AFTER the knowledge base has been searched.
  * `targetBlockId` is the block the agent chose to update (only for
- * `update_existing_knowledge`).
+ * `update_existing_knowledge`). Conflict detection is part of this reasoned
+ * decision rather than a keyword heuristic over the source text.
  */
 export type OutcomeClassification = {
   outcome: IndexingOutcome;
   outcomeReason: string;
   targetBlockId: string | null;
   confidence: Confidence;
+  conflictDetected: boolean;
+  conflictSummary: string | null;
+  conflictResolution: ConflictResolution | null;
 };
 
 export type WikiIndexer = {
@@ -181,7 +187,15 @@ const extractionSchema = {
 const outcomeClassificationSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["outcome", "outcomeReason", "targetBlockId", "confidence"],
+  required: [
+    "outcome",
+    "outcomeReason",
+    "targetBlockId",
+    "confidence",
+    "conflictDetected",
+    "conflictSummary",
+    "conflictResolution",
+  ],
   properties: {
     outcome: {
       type: "string",
@@ -190,6 +204,12 @@ const outcomeClassificationSchema = {
     outcomeReason: { type: "string" },
     targetBlockId: { type: ["string", "null"] },
     confidence: { type: "string", enum: ["low", "medium", "high"] },
+    conflictDetected: { type: "boolean" },
+    conflictSummary: { type: ["string", "null"] },
+    conflictResolution: {
+      type: ["string", "null"],
+      enum: ["update", "keep_both", "needs_user_decision", null],
+    },
   },
 };
 
@@ -224,7 +244,7 @@ export class WikiIndexerService {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
-    return { extraction: applySourceOnlyOutcomeGuard(source, await this.extractWithOpenAI(source)), provider: "openai" };
+    return { extraction: await this.extractWithOpenAI(source), provider: "openai" };
   }
 
   async classifyOutcome(input: OutcomeClassificationInput): Promise<OutcomeClassification> {
@@ -256,7 +276,7 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "You are the LLM wiki editor deciding what to do with a source AFTER searching the existing knowledge base. Decide one outcome: keep_searchable when the source is not reusable knowledge (interview drafts, self-introductions, pitches, meeting notes, TODOs, one-off personal artifacts); update_existing_knowledge when one of the provided candidate blocks already covers this concept and should be revised/merged rather than duplicated; create_knowledge only when the source teaches reusable knowledge that no candidate block already covers. Prefer update_existing_knowledge over creating a near-duplicate. When you choose update_existing_knowledge you MUST set targetBlockId to the Block ID of the block to update; otherwise set targetBlockId to null. Base the decision only on the provided extraction, candidate blocks, concept matches, and topics.",
+              "You are the LLM wiki editor deciding what to do with a source AFTER searching the existing knowledge base. Decide one outcome: keep_searchable when the source is not reusable knowledge (interview drafts, self-introductions, pitches, meeting notes, TODOs, one-off personal artifacts); update_existing_knowledge when one of the provided candidate blocks already covers this concept and should be revised/merged rather than duplicated; create_knowledge only when the source teaches reusable knowledge that no candidate block already covers. Judge meaning, not keywords, and apply the same rules regardless of the language the source is written in. Prefer update_existing_knowledge over creating a near-duplicate. When you choose update_existing_knowledge you MUST set targetBlockId to the Block ID of the block to update; otherwise set targetBlockId to null. Also assess whether the source contradicts the targeted block: set conflictDetected true only when it genuinely contradicts or revises that block, and then provide a conflictSummary describing the contradiction and a conflictResolution of update, keep_both, or needs_user_decision. When there is no contradiction set conflictDetected false, conflictSummary null, and conflictResolution null. Base the decision only on the provided extraction, candidate blocks, concept matches, and topics.",
           },
           {
             role: "user",
@@ -293,7 +313,8 @@ export class WikiIndexerService {
   }
 
   draftProposal(source: WikiIndexingSource, extraction: GeneralKnowledgeExtraction, relatedNotes: SearchResult[]) {
-    const routedExtraction = applySourceOnlyOutcomeGuard(source, extraction);
+    // The outcome (keep/create/update) is decided by the LLM in extract/classifyOutcome.
+    const routedExtraction = extraction;
     const title = knowledgeTitle(source, routedExtraction);
     const structuredData = normalizeKnowledgeStructuredData({
       ...routedExtraction.structuredData,
@@ -503,45 +524,40 @@ function normalizeOutcomeClassification(
       ? proposedTargetId
       : null;
 
+  const finalOutcome: IndexingOutcome =
+    outcome === "update_existing_knowledge" && !targetBlockId ? "create_knowledge" : outcome;
+
+  // Conflict only applies to an update against a real target block, and the
+  // contract requires a summary + resolution whenever it is flagged.
+  const conflictResolution: ConflictResolution | null =
+    record.conflictResolution === "update" ||
+    record.conflictResolution === "keep_both" ||
+    record.conflictResolution === "needs_user_decision"
+      ? record.conflictResolution
+      : null;
+  const conflictSummary =
+    typeof record.conflictSummary === "string" && record.conflictSummary.trim()
+      ? record.conflictSummary.trim()
+      : null;
+  const conflictDetected =
+    record.conflictDetected === true &&
+    finalOutcome === "update_existing_knowledge" &&
+    Boolean(targetBlockId) &&
+    Boolean(conflictSummary) &&
+    Boolean(conflictResolution);
+
   return {
-    outcome: outcome === "update_existing_knowledge" && !targetBlockId ? "create_knowledge" : outcome,
+    outcome: finalOutcome,
     outcomeReason:
       typeof record.outcomeReason === "string" && record.outcomeReason.trim()
         ? record.outcomeReason.trim()
         : extraction.outcomeReason,
     targetBlockId,
     confidence,
+    conflictDetected,
+    conflictSummary: conflictDetected ? conflictSummary : null,
+    conflictResolution: conflictDetected ? conflictResolution : null,
   };
-}
-
-export function applySourceOnlyOutcomeGuard(
-  source: Pick<WikiIndexingSource, "bodyMarkdown" | "sourceRole" | "title">,
-  extraction: GeneralKnowledgeExtraction,
-): GeneralKnowledgeExtraction {
-  if (extraction.outcome === "keep_searchable" || !isSourceOnlyPersonalArtifact(source)) {
-    return extraction;
-  }
-
-  return {
-    ...extraction,
-    outcome: "keep_searchable",
-    outcomeReason:
-      "This source looks like a personal draft or one-off artifact. Keep it searchable and visible as a Source card, but do not promote it into reusable Knowledge.",
-  };
-}
-
-function isSourceOnlyPersonalArtifact(source: Pick<WikiIndexingSource, "bodyMarkdown" | "sourceRole" | "title">) {
-  const text = `${source.title ?? ""}\n${source.bodyMarkdown}`.toLowerCase();
-  const personalPronounSignal = /\b(i|me|my|myself|i'm|i am|should mention|want to emphasize)\b/.test(text);
-  const interviewDraftSignal = /tell me about yourself|self[-\s]?introduction|self intro|interview answer|interview draft|behavioral interview/.test(text);
-  const pitchDraftSignal = /resume pitch|project pitch|elevator pitch|personal pitch|on my resume|representative project/.test(text);
-  const oneOffSignal = /meeting notes?|todo|one[-\s]?off|scratch note|draft script/.test(text);
-
-  if (interviewDraftSignal || pitchDraftSignal) {
-    return true;
-  }
-
-  return source.sourceRole === "personal_note" && personalPronounSignal && oneOffSignal;
 }
 
 function normalizeExtraction(value: unknown): GeneralKnowledgeExtraction {

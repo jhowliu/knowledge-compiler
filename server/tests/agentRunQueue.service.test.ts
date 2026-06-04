@@ -8,6 +8,8 @@ import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repositor
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
+import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
+import type { AgentToolReadRepository } from "../src/repositories/agentTool.repository.js";
 
 const llmWikiIndexer = {
   async extract() {
@@ -703,5 +705,123 @@ describe("agent run queue service", () => {
         process.env.OPENAI_API_KEY = originalOpenAIKey;
       }
     }
+  });
+
+  test("classifies the indexing outcome after searching knowledge blocks and uses the chosen target", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+
+    let classifyCandidateCount: number | null = null;
+    const reclassifyingIndexer = {
+      extract: llmWikiIndexer.extract,
+      draftProposal: llmWikiIndexer.draftProposal,
+      async classifyOutcome(input: { candidateBlocks: unknown[] }) {
+        classifyCandidateCount = input.candidateBlocks.length;
+        return {
+          outcome: "update_existing_knowledge" as const,
+          outcomeReason: "This source revises an existing knowledge block.",
+          targetBlockId: "block-existing-1",
+          confidence: "high" as const,
+        };
+      },
+    };
+    const readRepository: AgentToolReadRepository = {
+      async getBlock(blockId: string) {
+        return {
+          block: {
+            id: blockId,
+            knowledge_source_id: "ks-1",
+            knowledge_version_id: "kv-1",
+            compiled_note_id: "cn-1",
+            title: "Existing block",
+            heading: null,
+            body_markdown: "Existing body",
+            status: "active",
+          },
+          evidence: [],
+          links: [],
+        };
+      },
+      async getBlockHistory() {
+        return { versions: [] };
+      },
+      async lookupConcepts(concepts: string[]) {
+        return {
+          matches: concepts.map((concept) => ({
+            input: concept,
+            concept_id: null,
+            canonical_label: null,
+            match_type: "none" as const,
+            linked_block_ids: [],
+          })),
+        };
+      },
+    };
+
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      reclassifyingIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      readRepository,
+    );
+
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "RAG eval revision",
+        sourceRole: "reference",
+        sourceType: "markdown",
+        bodyMarkdown: "# RAG eval\n\nThis revises the retrieval evaluation loop.",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: "RAG eval",
+          bodyMarkdown: "This revises the retrieval evaluation loop.",
+          tokenEstimate: 8,
+        },
+      ],
+    );
+
+    const agentRun = await service.enqueue({
+      runType: "compile_raw_note",
+      input: { rawSourceId: rawSource.id },
+    });
+    await service.process(agentRun.id);
+
+    const completedRun = await agentRunRepository.getById(agentRun.id);
+    expect(completedRun?.status).toBe("completed");
+    // The provisional extraction outcome was create_knowledge; classification ran
+    // after search and changed it to update_existing_knowledge.
+    expect(completedRun?.output).toMatchObject({ indexingOutcome: "update_existing_knowledge" });
+    expect(classifyCandidateCount).not.toBeNull();
+
+    // The proposal carries the agent-chosen target block (bridge to #104).
+    expect(proposalRepository.proposals).toHaveLength(1);
+    const upsertItem = proposalRepository.proposals[0].items.find(
+      (item) => item.actionType === "upsert_knowledge",
+    );
+    expect((upsertItem?.payload as Record<string, unknown>).targetBlockId).toBe("block-existing-1");
+
+    // The outcome decision is emitted only AFTER search_blocks has run (#103).
+    const eventKeys = agentRunRepository.events.map((event) => {
+      if (event.category === "tool" && event.name === "called") {
+        return `tool.called:${(event.payload as { tool?: string }).tool}`;
+      }
+      return `${event.category}.${event.name}`;
+    });
+    const searchIndex = eventKeys.indexOf("tool.called:search_blocks");
+    const outcomeIndex = eventKeys.indexOf("indexing.outcome_classified");
+    expect(searchIndex).toBeGreaterThanOrEqual(0);
+    expect(outcomeIndex).toBeGreaterThan(searchIndex);
   });
 });

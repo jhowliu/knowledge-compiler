@@ -304,20 +304,10 @@ export class AgentRunQueueService {
     }
 
     const { extraction: extractedResult, provider } = await this.wikiIndexerService.extract(source);
-    const extraction = applySourceOnlyOutcomeGuard(source, extractedResult);
+    // Provisional outcome from extraction. The authoritative outcome is decided
+    // below, AFTER the knowledge base has been searched (see #103).
+    let extraction = applySourceOnlyOutcomeGuard(source, extractedResult);
     const extractedConcepts = extraction.structuredData.concepts;
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.indexing.outcomeClassified,
-      payload: {
-        outcome: extraction.outcome,
-        reason: extraction.outcomeReason,
-      },
-    });
-    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
-    if (rawSource && this.rawSourceRepository) {
-      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
-    }
     await this.agentRunRepository.addEvent({
       agentRunId,
       ...agentRunEvents.indexing.detected,
@@ -374,6 +364,62 @@ export class AgentRunQueueService {
       },
     });
 
+    // Retrieve candidate knowledge blocks BEFORE finalizing the outcome, so the
+    // decision (keep vs create vs update, and which block to update) is made with
+    // knowledge-base context rather than blind (#103, #104).
+    let blockSearch: Awaited<ReturnType<AgentToolService["searchBlocks"]>> | null = null;
+    let targetBlockId: string | null = null;
+    if (agentToolService) {
+      blockSearch = await this.callTool(
+        agentRunId,
+        round,
+        "search_blocks",
+        { query: source.bodyMarkdown.slice(0, 500), limit: 8 },
+        () => agentToolService.searchBlocks({ query: source.bodyMarkdown.slice(0, 500), limit: 8 }),
+      );
+      round += 1;
+
+      if (extraction.outcome !== "keep_searchable" && this.wikiIndexerService.classifyOutcome) {
+        const classification = await this.wikiIndexerService.classifyOutcome({
+          source,
+          extraction,
+          candidateBlocks: blockSearch.results.map((result) => ({
+            block_id: result.block_id,
+            title: result.title,
+            heading: result.heading,
+            body_markdown_preview: result.body_markdown_preview,
+          })),
+          conceptMatches: conceptLookup.matches
+            .filter((match) => match.match_type !== "none")
+            .map((match) => match.canonical_label ?? match.input),
+        });
+        extraction = applySourceOnlyOutcomeGuard(source, {
+          ...extraction,
+          outcome: classification.outcome,
+          outcomeReason: classification.outcomeReason,
+          confidence: classification.confidence,
+        });
+        targetBlockId = extraction.outcome === "update_existing_knowledge" ? classification.targetBlockId : null;
+      } else if (extraction.outcome === "update_existing_knowledge") {
+        // Fallback when the indexer cannot reclassify: use the top search hit.
+        targetBlockId = blockSearch.results[0]?.block_id ?? null;
+      }
+    }
+
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      ...agentRunEvents.indexing.outcomeClassified,
+      payload: {
+        outcome: extraction.outcome,
+        reason: extraction.outcomeReason,
+        targetBlockId,
+      },
+    });
+    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
+    if (rawSource && this.rawSourceRepository) {
+      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
+    }
+
     const relatedNotes = await this.knowledgeRepository.searchRelated({
       query: source.bodyMarkdown,
       conceptNames: extractedConcepts.map((concept) => concept.name),
@@ -412,34 +458,27 @@ export class AgentRunQueueService {
       };
     }
 
-    const blockSearch = await this.callTool(
-      agentRunId,
-      round,
-      "search_blocks",
-      { query: source.bodyMarkdown.slice(0, 500), limit: 8 },
-      () => agentToolService.searchBlocks({ query: source.bodyMarkdown.slice(0, 500), limit: 8 }),
-    );
-    round += 1;
-
-    const firstBlock = blockSearch.results[0]
+    const candidateBlocks = blockSearch?.results ?? [];
+    // Read the block the agent chose to update (only set for update_existing_knowledge).
+    const targetBlock = targetBlockId
       ? await this.callTool(
           agentRunId,
           round,
           "get_block",
-          { block_id: blockSearch.results[0].block_id },
-          () => agentToolService.getBlock({ block_id: blockSearch.results[0]!.block_id }),
+          { block_id: targetBlockId },
+          () => agentToolService.getBlock({ block_id: targetBlockId! }),
         )
       : null;
-    if (firstBlock) round += 1;
+    if (targetBlock) round += 1;
 
-    const conflictDetected = firstBlock ? hasConflictSignal(source.bodyMarkdown) : false;
-    if (conflictDetected && firstBlock) {
+    const conflictDetected = targetBlock ? hasConflictSignal(source.bodyMarkdown) : false;
+    if (conflictDetected && targetBlock) {
       await this.callTool(
         agentRunId,
         round,
         "get_block_history",
-        { block_id: firstBlock.block.id, limit: 5 },
-        () => agentToolService.getBlockHistory({ block_id: firstBlock.block.id, limit: 5 }),
+        { block_id: targetBlock.block.id, limit: 5 },
+        () => agentToolService.getBlockHistory({ block_id: targetBlock.block.id, limit: 5 }),
       );
       round += 1;
     }
@@ -459,7 +498,7 @@ export class AgentRunQueueService {
           userId: rawNote.userId,
           sourceText: source.bodyMarkdown,
           chunks: proposalChunks,
-          existingBlocksContext: blockSearch.results,
+          existingBlocksContext: candidateBlocks,
         },
         {
           indexing_outcome: extraction.outcome,
@@ -474,7 +513,7 @@ export class AgentRunQueueService {
                 action: item.actionType === "keep_source_searchable"
                   ? ("keep_source_searchable" as const)
                   : ("upsert_knowledge" as const),
-                target_block_id: item.actionType === "keep_source_searchable" ? null : firstBlock?.block.id ?? null,
+                target_block_id: item.actionType === "keep_source_searchable" ? null : targetBlockId,
                 title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
                 body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
                 structured_facets: normalizeKnowledgeStructuredData(
@@ -498,7 +537,7 @@ export class AgentRunQueueService {
             }),
           suggested_links: extraction.outcome === "keep_searchable"
             ? []
-            : blockSearch.results.slice(0, 2).map((result) => ({
+            : candidateBlocks.slice(0, 2).map((result) => ({
                 source_block_id: null,
                 target_block_id: result.block_id,
                 relation_type: "related_concept",

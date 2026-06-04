@@ -4,7 +4,7 @@ import type {
   GeneralKnowledgeExtraction,
   IndexingOutcome,
 } from "../domain/compiler.js";
-import type { SearchResult } from "../domain/knowledge.js";
+import type { Confidence, SearchResult } from "../domain/knowledge.js";
 import type { RawNote } from "../domain/rawNote.js";
 import type { RawSourceChunk, RawSourceRole } from "../domain/rawSource.js";
 import {
@@ -21,12 +21,40 @@ export type WikiIndexingSource = {
   sourceType: string;
   title: string | null;
   bodyMarkdown: string;
+  topicNames?: string[];
   chunks: RawSourceChunk[];
 };
 
 export type WikiIndexingResult = {
   extraction: GeneralKnowledgeExtraction;
   provider: "openai";
+};
+
+/** A knowledge block the agent retrieved before deciding the indexing outcome. */
+export type OutcomeCandidateBlock = {
+  block_id: string;
+  title: string;
+  heading: string | null;
+  body_markdown_preview: string;
+};
+
+export type OutcomeClassificationInput = {
+  source: WikiIndexingSource;
+  extraction: GeneralKnowledgeExtraction;
+  candidateBlocks: OutcomeCandidateBlock[];
+  conceptMatches: string[];
+};
+
+/**
+ * The outcome decision made AFTER the knowledge base has been searched.
+ * `targetBlockId` is the block the agent chose to update (only for
+ * `update_existing_knowledge`).
+ */
+export type OutcomeClassification = {
+  outcome: IndexingOutcome;
+  outcomeReason: string;
+  targetBlockId: string | null;
+  confidence: Confidence;
 };
 
 export type WikiIndexer = {
@@ -36,6 +64,12 @@ export type WikiIndexer = {
     extraction: GeneralKnowledgeExtraction,
     relatedNotes: SearchResult[],
   ): DraftUpdateProposal;
+  /**
+   * Re-decides the indexing outcome once candidate blocks are known. Optional so
+   * that lightweight/test indexers can omit it and fall back to the provisional
+   * outcome from {@link extract}.
+   */
+  classifyOutcome?(input: OutcomeClassificationInput): Promise<OutcomeClassification>;
 };
 
 const knowledgeStructuredDataSchema = {
@@ -144,6 +178,21 @@ const extractionSchema = {
   },
 };
 
+const outcomeClassificationSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["outcome", "outcomeReason", "targetBlockId", "confidence"],
+  properties: {
+    outcome: {
+      type: "string",
+      enum: ["keep_searchable", "create_knowledge", "update_existing_knowledge"],
+    },
+    outcomeReason: { type: "string" },
+    targetBlockId: { type: ["string", "null"] },
+    confidence: { type: "string", enum: ["low", "medium", "high"] },
+  },
+};
+
 function outputText(response: unknown) {
   if (!response || typeof response !== "object") {
     return null;
@@ -176,6 +225,71 @@ export class WikiIndexerService {
     }
 
     return { extraction: applySourceOnlyOutcomeGuard(source, await this.extractWithOpenAI(source)), provider: "openai" };
+  }
+
+  async classifyOutcome(input: OutcomeClassificationInput): Promise<OutcomeClassification> {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is required for indexing outcome classification");
+    }
+
+    const { source, extraction, candidateBlocks, conceptMatches } = input;
+    const candidateContext = candidateBlocks.length
+      ? candidateBlocks
+          .map(
+            (block) =>
+              `Block ID: ${block.block_id}\nTitle: ${block.title}${
+                block.heading ? ` (${block.heading})` : ""
+              }\nPreview: ${block.body_markdown_preview}`,
+          )
+          .join("\n\n---\n\n")
+      : "No existing knowledge blocks matched this source.";
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: env.INDEXER_MODEL,
+        input: [
+          {
+            role: "system",
+            content:
+              "You are the LLM wiki editor deciding what to do with a source AFTER searching the existing knowledge base. Decide one outcome: keep_searchable when the source is not reusable knowledge (interview drafts, self-introductions, pitches, meeting notes, TODOs, one-off personal artifacts); update_existing_knowledge when one of the provided candidate blocks already covers this concept and should be revised/merged rather than duplicated; create_knowledge only when the source teaches reusable knowledge that no candidate block already covers. Prefer update_existing_knowledge over creating a near-duplicate. When you choose update_existing_knowledge you MUST set targetBlockId to the Block ID of the block to update; otherwise set targetBlockId to null. Base the decision only on the provided extraction, candidate blocks, concept matches, and topics.",
+          },
+          {
+            role: "user",
+            content: `Provisional outcome from extraction: ${extraction.outcome}\nProvisional reason: ${extraction.outcomeReason}\nSource title: ${
+              source.title ?? "Untitled"
+            }\nTopics: ${(source.topicNames ?? []).join(", ") || "none"}\nExtraction summary: ${
+              extraction.structuredData.summary
+            }\nExtracted concepts: ${extraction.structuredData.concepts
+              .map((concept) => concept.name)
+              .join(", ") || "none"}\nConcept index matches: ${conceptMatches.join(", ") || "none"}\n\nCandidate knowledge blocks:\n${candidateContext}`,
+          },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "indexing_outcome_classification",
+            strict: true,
+            schema: outcomeClassificationSchema,
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI outcome classification request failed with ${response.status}`);
+    }
+
+    const text = outputText(await response.json());
+    if (!text) {
+      throw new Error("OpenAI outcome classification response did not include output text");
+    }
+
+    return normalizeOutcomeClassification(JSON.parse(text), extraction, candidateBlocks);
   }
 
   draftProposal(source: WikiIndexingSource, extraction: GeneralKnowledgeExtraction, relatedNotes: SearchResult[]) {
@@ -317,9 +431,9 @@ export class WikiIndexerService {
             role: "user",
             content: `Source role: ${source.sourceRole}\nSource type: ${source.sourceType}\nTitle: ${
               source.title ?? "Untitled"
-            }\nRaw source id: ${source.rawSourceId ?? "none"}\nRaw note id: ${
-              source.rawNoteId ?? "none"
-            }\n\n${chunkContext}`,
+            }\nTopics: ${(source.topicNames ?? []).join(", ") || "none"}\nRaw source id: ${
+              source.rawSourceId ?? "none"
+            }\nRaw note id: ${source.rawNoteId ?? "none"}\n\n${chunkContext}`,
           },
         ],
         text: {
@@ -363,6 +477,41 @@ function outcomeLabel(outcome: IndexingOutcome) {
   if (outcome === "keep_searchable") return "Keep searchable";
   if (outcome === "update_existing_knowledge") return "Update existing knowledge";
   return "Create knowledge note";
+}
+
+function normalizeOutcomeClassification(
+  value: unknown,
+  extraction: GeneralKnowledgeExtraction,
+  candidateBlocks: OutcomeCandidateBlock[],
+): OutcomeClassification {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const outcome: IndexingOutcome =
+    record.outcome === "keep_searchable" ||
+    record.outcome === "create_knowledge" ||
+    record.outcome === "update_existing_knowledge"
+      ? record.outcome
+      : extraction.outcome;
+  const confidence: Confidence =
+    record.confidence === "low" || record.confidence === "medium" || record.confidence === "high"
+      ? record.confidence
+      : extraction.confidence;
+  const candidateIds = new Set(candidateBlocks.map((block) => block.block_id));
+  const proposedTargetId = typeof record.targetBlockId === "string" ? record.targetBlockId : null;
+  // Only trust a target the model could actually see; otherwise drop to create.
+  const targetBlockId =
+    outcome === "update_existing_knowledge" && proposedTargetId && candidateIds.has(proposedTargetId)
+      ? proposedTargetId
+      : null;
+
+  return {
+    outcome: outcome === "update_existing_knowledge" && !targetBlockId ? "create_knowledge" : outcome,
+    outcomeReason:
+      typeof record.outcomeReason === "string" && record.outcomeReason.trim()
+        ? record.outcomeReason.trim()
+        : extraction.outcomeReason,
+    targetBlockId,
+    confidence,
+  };
 }
 
 export function applySourceOnlyOutcomeGuard(

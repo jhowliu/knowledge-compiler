@@ -31,7 +31,7 @@ import {
 } from "@knowledge-compiler/agent-contracts";
 import { env } from "../config/env.js";
 import type { AgentRunner, LoopTranscriptEntry, LoopView } from "./agentLoop.js";
-import type { CompileAgentRunnerContext } from "./agentRunQueue.service.js";
+import type { CompileAgentRunnerContext } from "./agentRun/compileRunner.types.js";
 
 export type CompileToolSpec = {
   /** Tool name the model must echo back when it decides to call it. */

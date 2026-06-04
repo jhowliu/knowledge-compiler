@@ -2,7 +2,10 @@ import {
   AgentRunQueueService,
   type CompileAgentRunnerFactory,
 } from "../src/services/agentRunQueue.service.js";
-import { WikiIndexerService, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
+import type { AgentRunHandler } from "../src/services/agentRun/agentRunHandler.js";
+import { CompileRawNoteHandler } from "../src/services/agentRun/compileRawNoteHandler.js";
+import { ReindexLinksHandler } from "../src/services/agentRun/reindexLinksHandler.js";
+import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import {
   createLlmCompileAgentRunner,
   type CompileModelClient,
@@ -18,6 +21,46 @@ import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 import type { AgentToolReadRepository } from "../src/repositories/agentTool.repository.js";
+import type { AgentRunRepository } from "../src/repositories/agentRun.repository.js";
+import type { KnowledgeRepository } from "../src/repositories/knowledge.repository.js";
+import type { NoteLinkRepository } from "../src/repositories/noteLink.repository.js";
+import type { ProposalRepository } from "../src/repositories/proposal.repository.js";
+import type { RawNoteRepository } from "../src/repositories/rawNote.repository.js";
+import type { RawSourceRepository } from "../src/repositories/rawSource.repository.js";
+import type { ExtractionEvalRepository } from "../src/repositories/extractionEval.repository.js";
+
+function createAgentRunQueueService(input: {
+  agentRunRepository: AgentRunRepository;
+  knowledgeRepository: KnowledgeRepository;
+  noteLinkRepository: NoteLinkRepository;
+  rawNoteRepository?: RawNoteRepository;
+  proposalRepository?: ProposalRepository;
+  wikiIndexer?: WikiIndexer;
+  rawSourceRepository?: RawSourceRepository | null;
+  extractionEvalRepository?: ExtractionEvalRepository;
+  agentToolReadRepository?: AgentToolReadRepository;
+  compileAgentRunnerFactory?: CompileAgentRunnerFactory;
+}) {
+  const handlers: AgentRunHandler[] = [
+    new ReindexLinksHandler(input.agentRunRepository, input.knowledgeRepository, input.noteLinkRepository),
+  ];
+  if (input.rawNoteRepository && input.proposalRepository) {
+    handlers.push(
+      new CompileRawNoteHandler(
+        input.agentRunRepository,
+        input.knowledgeRepository,
+        input.rawNoteRepository,
+        input.proposalRepository,
+        input.wikiIndexer,
+        input.rawSourceRepository,
+        input.extractionEvalRepository,
+        input.agentToolReadRepository,
+        input.compileAgentRunnerFactory,
+      ),
+    );
+  }
+  return new AgentRunQueueService(input.agentRunRepository, handlers);
+}
 
 const llmWikiIndexer = {
   async extract() {
@@ -362,11 +405,11 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-    );
+    });
 
     await knowledgeRepository.upsertCompiledNote({
       domain: "coding",
@@ -430,14 +473,14 @@ describe("agent run queue service", () => {
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawNoteRepository = new InMemoryRawNoteRepository();
     const proposalRepository = new InMemoryProposalRepository();
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      llmWikiIndexer,
-    );
+      wikiIndexer: llmWikiIndexer,
+    });
     const rawNote = await rawNoteRepository.create({
       title: "Review notes",
       bodyMarkdown:
@@ -523,14 +566,14 @@ describe("agent run queue service", () => {
       },
       draftProposal: new WikiIndexerService().draftProposal,
     };
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      keepSearchableIndexer,
-    );
+      wikiIndexer: keepSearchableIndexer,
+    });
     const rawNote = await rawNoteRepository.create({
       title: "自我介紹",
       bodyMarkdown: "我是一個產品導向的工程師,這是我的面試自我介紹草稿。",
@@ -586,15 +629,15 @@ describe("agent run queue service", () => {
       },
       draftProposal: llmWikiIndexer.draftProposal,
     };
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      sourceAwareIndexer,
+      wikiIndexer: sourceAwareIndexer,
       rawSourceRepository,
-    );
+    });
     const rawSource = await rawSourceRepository.create(
       {
         title: "K stops source",
@@ -717,18 +760,17 @@ describe("agent run queue service", () => {
       };
     };
 
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      llmWikiIndexer,
+      wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
       extractionEvalRepository,
-      undefined,
-      runnerFactory,
-    );
+      compileAgentRunnerFactory: runnerFactory,
+    });
     const rawSource = await rawSourceRepository.create(
       {
         title: "Runner source",
@@ -809,18 +851,17 @@ describe("agent run queue service", () => {
       return { toolName: "draft_proposal", arguments: draftInput };
     };
 
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      llmWikiIndexer,
+      wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
       extractionEvalRepository,
-      undefined,
-      (context) => createLlmCompileAgentRunner(context, { modelClient }),
-    );
+      compileAgentRunnerFactory: (context) => createLlmCompileAgentRunner(context, { modelClient }),
+    });
     const rawSource = await rawSourceRepository.create(
       {
         title: "Graph state",
@@ -867,18 +908,17 @@ describe("agent run queue service", () => {
         },
       };
     };
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      llmWikiIndexer,
+      wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
       extractionEvalRepository,
-      undefined,
-      loopingRunnerFactory,
-    );
+      compileAgentRunnerFactory: loopingRunnerFactory,
+    });
     const rawSource = await rawSourceRepository.create(
       {
         title: "Looping source",
@@ -933,13 +973,13 @@ describe("agent run queue service", () => {
       const noteLinkRepository = new InMemoryNoteLinkRepository();
       const rawNoteRepository = new InMemoryRawNoteRepository();
       const proposalRepository = new InMemoryProposalRepository();
-      const service = new AgentRunQueueService(
+      const service = createAgentRunQueueService({
         agentRunRepository,
         knowledgeRepository,
         noteLinkRepository,
         rawNoteRepository,
         proposalRepository,
-      );
+      });
       const rawNote = await rawNoteRepository.create({
         title: "Not shortest path",
         bodyMarkdown: "This is about binary search on answer and monotonic feasibility.",
@@ -1030,17 +1070,17 @@ describe("agent run queue service", () => {
       },
     };
 
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      reclassifyingIndexer,
+      wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,
       extractionEvalRepository,
-      readRepository,
-    );
+      agentToolReadRepository: readRepository,
+    });
 
     const rawSource = await rawSourceRepository.create(
       {
@@ -1162,17 +1202,17 @@ describe("agent run queue service", () => {
       },
     };
 
-    const service = new AgentRunQueueService(
+    const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      reclassifyingIndexer,
+      wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,
       extractionEvalRepository,
-      readRepository,
-    );
+      agentToolReadRepository: readRepository,
+    });
 
     const rawSource = await rawSourceRepository.create(
       {

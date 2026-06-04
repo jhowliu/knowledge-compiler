@@ -40,6 +40,8 @@ import {
   AgentRunQueueService,
   type CompileAgentRunnerFactory,
 } from "./services/agentRunQueue.service.js";
+import { CompileRawNoteHandler } from "./services/agentRun/compileRawNoteHandler.js";
+import { ReindexLinksHandler } from "./services/agentRun/reindexLinksHandler.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import {
   NoopEmbeddingService,
@@ -142,10 +144,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     undefined,
     dependencies.askAnswerer,
   );
-  const agentRunQueueService = new AgentRunQueueService(
+  const compileRawNoteHandler = new CompileRawNoteHandler(
     agentRunRepository,
     knowledgeRepository,
-    noteLinkRepository,
     rawNoteRepository,
     proposalRepository,
     dependencies.wikiIndexer,
@@ -153,6 +154,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     extractionEvalRepository,
     agentToolReadRepository,
     dependencies.compileAgentRunnerFactory,
+  );
+  const reindexLinksHandler = new ReindexLinksHandler(
+    agentRunRepository,
+    knowledgeRepository,
+    noteLinkRepository,
+  );
+  const agentRunQueueService = new AgentRunQueueService(
+    agentRunRepository,
+    [compileRawNoteHandler, reindexLinksHandler],
   );
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(

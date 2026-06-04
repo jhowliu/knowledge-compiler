@@ -38,7 +38,7 @@ import {
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
 
-type CompileAgentRunnerContext = {
+export type CompileAgentRunnerContext = {
   source: WikiIndexingSource;
   extraction: GeneralCompileExtraction;
   extractedConceptNames: string[];
@@ -118,7 +118,7 @@ export class AgentRunQueueService {
     private readonly rawSourceRepository?: RawSourceRepository | null,
     private readonly extractionEvalRepository: ExtractionEvalRepository = new NoopExtractionEvalRepository(),
     private readonly agentToolReadRepository: AgentToolReadRepository = new NoopAgentToolReadRepository(),
-    private readonly compileAgentRunnerFactory: CompileAgentRunnerFactory = createDefaultCompileAgentRunner,
+    private readonly compileAgentRunnerFactory: CompileAgentRunnerFactory = createScriptedCompileAgentRunner,
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
@@ -885,7 +885,13 @@ function blockSummaryFromBlock(
   };
 }
 
-function createDefaultCompileAgentRunner(context: CompileAgentRunnerContext): AgentRunner {
+/**
+ * Deterministic, no-LLM runner that reproduces the historical fixed tool order.
+ * It is the safe default (used by tests and any caller that does not opt in to
+ * the LLM runner); production wires {@link createLlmCompileAgentRunner} via
+ * {@link createApp}'s dependencies instead.
+ */
+function createScriptedCompileAgentRunner(context: CompileAgentRunnerContext): AgentRunner {
   const fetchedConceptLinkedBlockIds = new Set<string>();
   let classifiedTarget: { targetBlockId: string | null; conflictDetected: boolean } | null = null;
 

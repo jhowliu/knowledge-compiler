@@ -36,7 +36,10 @@ import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawNoteRoutes } from "./routes/rawNote.routes.js";
 import { createRawSourceRoutes } from "./routes/rawSource.routes.js";
 import { createTopicRoutes } from "./routes/topic.routes.js";
-import { AgentRunQueueService } from "./services/agentRunQueue.service.js";
+import {
+  AgentRunQueueService,
+  type CompileAgentRunnerFactory,
+} from "./services/agentRunQueue.service.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import {
   NoopEmbeddingService,
@@ -66,6 +69,9 @@ export type AppDependencies = {
   agentToolReadRepository?: AgentToolReadRepository;
   topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
+  /** Compile loop runner factory. Defaults to the deterministic scripted runner;
+   * production wires the LLM-backed runner here. */
+  compileAgentRunnerFactory?: CompileAgentRunnerFactory;
   askAnswerer?: AskAnswerer;
   embeddingService?: EmbeddingService;
   enablePhaseOneWorkflow?: boolean;
@@ -146,6 +152,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     rawSourceRepository,
     extractionEvalRepository,
     agentToolReadRepository,
+    dependencies.compileAgentRunnerFactory,
   );
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(

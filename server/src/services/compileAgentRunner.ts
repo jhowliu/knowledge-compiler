@@ -10,9 +10,17 @@
  *
  * The model call is behind an injectable {@link CompileModelClient} seam so the
  * runner can be unit-tested deterministically without hitting the network. The
- * default client talks to the OpenAI Responses API with function tools.
+ * default client uses the OpenAI Agents SDK with a one-tool policy; the harness
+ * still executes the real tools and owns guardrails/event persistence.
  */
 import { z } from "zod";
+import {
+  Agent,
+  run,
+  tool,
+  type AgentOutputType,
+  type RunResult,
+} from "@openai/agents";
 import {
   draftProposalInputSchema,
   getBlockHistoryInputSchema,
@@ -51,11 +59,20 @@ export type CompileModelResponse = {
 
 export type CompileModelClient = (request: CompileModelRequest) => Promise<CompileModelResponse>;
 
+type CompileAgent = Agent<unknown, AgentOutputType>;
+export type AgentsSdkRun = (
+  agent: CompileAgent,
+  input: string,
+  options: { maxTurns: number },
+) => Promise<Pick<RunResult<unknown, CompileAgent>, "finalOutput">>;
+
 export type LlmCompileRunnerDeps = {
-  /** Override the model call (default = OpenAI Responses API). */
+  /** Override the model call (default = OpenAI Agents SDK). */
   modelClient?: CompileModelClient;
   /** Override the model id (default = {@link env.COMPILE_AGENT_MODEL}). */
   model?: string;
+  /** Test seam for the Agents SDK run call; production uses `run` from `@openai/agents`. */
+  agentRun?: AgentsSdkRun;
 };
 
 /** Per-tool argument JSON Schemas, derived from the shared agent contracts so
@@ -109,8 +126,31 @@ function parametersForTool(name: string): Record<string, unknown> {
   return z.toJSONSchema(schema) as Record<string, unknown>;
 }
 
+function sdkToolParameters(schema: Record<string, unknown>): SdkToolParameters {
+  const properties =
+    schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+      ? (schema.properties as Record<string, Record<string, unknown>>)
+      : {};
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((key): key is string => typeof key === "string")
+    : Object.keys(properties);
+  return {
+    ...schema,
+    type: "object",
+    properties,
+    required,
+    additionalProperties: true,
+  };
+}
+
 const maxOutputChars = 2400;
 const maxSourcePreviewChars = 4000;
+type SdkToolParameters = {
+  type: "object";
+  properties: Record<string, Record<string, unknown>>;
+  required: string[];
+  additionalProperties: true;
+};
 
 function truncate(value: string, max: number) {
   if (value.length <= max) return value;
@@ -199,54 +239,6 @@ function buildInput(context: CompileAgentRunnerContext, view: LoopView) {
   return lines.join("\n");
 }
 
-function extractText(response: unknown) {
-  if (!response || typeof response !== "object") return null;
-  const record = response as Record<string, unknown>;
-  if (typeof record.output_text === "string") return record.output_text;
-  const output = Array.isArray(record.output) ? record.output : [];
-  for (const item of output) {
-    if (!item || typeof item !== "object") continue;
-    const content = (item as Record<string, unknown>).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      if (part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string") {
-        return (part as Record<string, unknown>).text as string;
-      }
-    }
-  }
-  return null;
-}
-
-function parseFunctionCall(response: unknown): CompileModelResponse {
-  const record = response && typeof response === "object" ? (response as Record<string, unknown>) : {};
-  const output = Array.isArray(record.output) ? record.output : [];
-  for (const item of output) {
-    if (!item || typeof item !== "object") continue;
-    const candidate = item as Record<string, unknown>;
-    if (candidate.type !== "function_call") continue;
-    const name = typeof candidate.name === "string" ? candidate.name : null;
-    if (!name) continue;
-    return { toolName: name, arguments: parseArguments(candidate.arguments) };
-  }
-  // Some responses nest a function_call inside message content parts.
-  for (const item of output) {
-    if (!item || typeof item !== "object") continue;
-    const content = (item as Record<string, unknown>).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      if (part && typeof part === "object" && (part as Record<string, unknown>).type === "function_call") {
-        const candidate = part as Record<string, unknown>;
-        const name = typeof candidate.name === "string" ? candidate.name : null;
-        if (name) return { toolName: name, arguments: parseArguments(candidate.arguments) };
-      }
-    }
-  }
-  const text = extractText(response);
-  throw new Error(
-    `Compile model did not return a tool call${text ? `; got text instead: ${truncate(text, 200)}` : ""}`,
-  );
-}
-
 function parseArguments(value: unknown): unknown {
   if (typeof value !== "string") return value ?? {};
   if (!value.trim()) return {};
@@ -257,35 +249,40 @@ function parseArguments(value: unknown): unknown {
   }
 }
 
-function createOpenAiModelClient(): CompileModelClient {
+function parseSdkToolChoice(value: unknown): CompileModelResponse {
+  const parsed = typeof value === "string" ? parseArguments(value) : value;
+  const record = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  const toolName = typeof record.toolName === "string" ? record.toolName : null;
+  if (!toolName) {
+    throw new Error(`Agents SDK compile runner did not return a tool choice: ${truncate(String(value), 200)}`);
+  }
+  return { toolName, arguments: record.arguments ?? {} };
+}
+
+function createAgentsSdkModelClient(agentRun: AgentsSdkRun = run as AgentsSdkRun): CompileModelClient {
   return async (request) => {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for the LLM compile runner");
     }
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: request.model,
-        instructions: request.instructions,
-        input: request.input,
-        tools: request.tools.map((tool) => ({
-          type: "function",
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-          strict: false,
-        })),
-        tool_choice: "required",
+
+    const tools = request.tools.map((spec) =>
+      tool<SdkToolParameters, unknown, string>({
+        name: spec.name,
+        description: spec.description,
+        parameters: sdkToolParameters(spec.parameters),
+        strict: false,
+        execute: async (input: unknown) => JSON.stringify({ toolName: spec.name, arguments: input ?? {} }),
       }),
+    );
+    const agent = new Agent({
+      name: "Knowledge compile policy",
+      instructions: request.instructions,
+      model: request.model,
+      tools,
+      toolUseBehavior: "stop_on_first_tool",
     });
-    if (!response.ok) {
-      throw new Error(`OpenAI compile runner request failed with ${response.status}`);
-    }
-    return parseFunctionCall(await response.json());
+    const result = await agentRun(agent, request.input, { maxTurns: 1 });
+    return parseSdkToolChoice(result.finalOutput);
   };
 }
 
@@ -298,7 +295,7 @@ export function createLlmCompileAgentRunner(
   context: CompileAgentRunnerContext,
   deps: LlmCompileRunnerDeps = {},
 ): AgentRunner {
-  const modelClient = deps.modelClient ?? createOpenAiModelClient();
+  const modelClient = deps.modelClient ?? createAgentsSdkModelClient(deps.agentRun);
   const model = deps.model ?? env.COMPILE_AGENT_MODEL;
   const instructions = buildInstructions();
 

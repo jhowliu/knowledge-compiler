@@ -1,5 +1,6 @@
 import {
   createLlmCompileAgentRunner,
+  type AgentsSdkRun,
   type CompileModelClient,
   type CompileModelRequest,
 } from "../src/services/compileAgentRunner.js";
@@ -139,64 +140,58 @@ test("passes a model-authored draft_proposal payload straight through", async ()
   expect(step.input).toEqual(draft);
 });
 
-test("default client calls the Responses API with function tools and parses the call", async () => {
+test("default client uses the Agents SDK as a single-tool policy and parses the call", async () => {
   const originalKey = process.env.OPENAI_API_KEY;
-  const originalFetch = global.fetch;
   process.env.OPENAI_API_KEY = "test-key";
-  let requestBody: any = null;
-  global.fetch = (async (_url: unknown, init: { body: string }) => {
-    requestBody = JSON.parse(init.body);
+  let capturedAgent: { model: unknown; tools: Array<{ name: string }>; toolUseBehavior: unknown } | null = null;
+  let capturedInput = "";
+  let capturedOptions: { maxTurns?: number } | null = null;
+  const agentRun: AgentsSdkRun = async (agent, input, options) => {
+    capturedAgent = {
+      model: agent.model,
+      tools: agent.tools.map((agentTool) => ({ name: agentTool.name })),
+      toolUseBehavior: agent.toolUseBehavior,
+    };
+    capturedInput = input;
+    capturedOptions = options;
     return {
-      ok: true,
-      async json() {
-        return {
-          output: [
-            {
-              type: "function_call",
-              name: "search_blocks",
-              arguments: JSON.stringify({ query: "graph state", limit: 8 }),
-            },
-          ],
-        };
-      },
-    } as unknown as Response;
-  }) as typeof fetch;
+      finalOutput: JSON.stringify({
+        toolName: "search_blocks",
+        arguments: { query: "graph state", limit: 8 },
+      }),
+    } as Awaited<ReturnType<AgentsSdkRun>>;
+  };
 
   try {
-    const runner = createLlmCompileAgentRunner(makeContext());
+    const runner = createLlmCompileAgentRunner(makeContext(), { agentRun });
     const step = await runner.nextStep(view());
 
     expect(step).toEqual({ tool: "search_blocks", input: { query: "graph state", limit: 8 } });
-    expect(requestBody.tool_choice).toBe("required");
-    expect(requestBody.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      "get_source",
-      "search_blocks",
-    ]);
-    expect(requestBody.tools[0]).toMatchObject({ type: "function", strict: false });
+    expect(capturedAgent).toMatchObject({
+      model: "gpt-5-mini",
+      toolUseBehavior: "stop_on_first_tool",
+      tools: [{ name: "get_source" }, { name: "search_blocks" }],
+    });
+    expect(capturedInput).toContain("Available tools this round: get_source, search_blocks");
+    expect(capturedOptions).toEqual({ maxTurns: 1 });
   } finally {
-    global.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
   }
 });
 
-test("default client throws a clear error when the model returns no tool call", async () => {
+test("default client throws a clear error when the Agents SDK returns no tool choice", async () => {
   const originalKey = process.env.OPENAI_API_KEY;
-  const originalFetch = global.fetch;
   process.env.OPENAI_API_KEY = "test-key";
-  global.fetch = (async () =>
+  const agentRun: AgentsSdkRun = async () =>
     ({
-      ok: true,
-      async json() {
-        return { output_text: "I think we should search first." };
-      },
-    } as unknown as Response)) as typeof fetch;
+      finalOutput: "I think we should search first.",
+    }) as Awaited<ReturnType<AgentsSdkRun>>;
 
   try {
-    const runner = createLlmCompileAgentRunner(makeContext());
-    await expect(runner.nextStep(view())).rejects.toThrow("did not return a tool call");
+    const runner = createLlmCompileAgentRunner(makeContext(), { agentRun });
+    await expect(runner.nextStep(view())).rejects.toThrow("did not return a tool choice");
   } finally {
-    global.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
   }

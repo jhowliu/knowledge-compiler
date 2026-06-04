@@ -1019,19 +1019,6 @@ function conceptLinkedBlockIds(view: LoopView) {
   return [...new Set(blockIds)];
 }
 
-function allowedBlockIds(view: LoopView) {
-  const blockIds = searchResultBlockIds(view);
-  for (const blockId of conceptLinkedBlockIds(view)) {
-    blockIds.add(blockId);
-  }
-  for (const entry of view.transcript) {
-    if (entry.tool === "get_block" && entry.result.ok) {
-      blockIds.add(((entry.result.output as Awaited<ReturnType<AgentToolService["getBlock"]>>).block.id));
-    }
-  }
-  return blockIds;
-}
-
 function allowedBlockIdsFromState(loopState: CompileLoopState) {
   const blockIds = new Set(loopState.candidateBlocks.map((block) => block.block_id));
   for (const blockId of loopState.conceptLookup?.matches.flatMap((match) => match.linked_block_ids) ?? []) {

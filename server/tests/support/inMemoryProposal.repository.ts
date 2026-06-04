@@ -18,6 +18,7 @@ export class InMemoryProposalRepository implements ProposalRepository {
       id: `proposal-${this.proposals.length + 1}`,
       userId: input.userId ?? null,
       rawNoteId: input.rawNoteId,
+      appliedIndexingOutcome: null,
       detectedDomain: input.draft.detectedDomain,
       detectedKnowledgeType: input.draft.detectedKnowledgeType,
       impactLevel: input.draft.impactLevel,
@@ -76,5 +77,28 @@ export class InMemoryProposalRepository implements ProposalRepository {
     });
   }
 
-  async recordDecision(): Promise<void> {}
+  async recordDecision(input: {
+    proposalId: string;
+    userId?: string | null;
+    decision: ProposalStatus;
+    comment?: string | null;
+  }): Promise<void> {
+    const proposal = await this.getById(input.proposalId);
+    if (!proposal || input.decision !== "approved" || !input.comment) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(input.comment) as unknown;
+      const record = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+      const outcome = record.appliedIndexingOutcome;
+      proposal.appliedIndexingOutcome =
+        outcome === "keep_searchable" ||
+        outcome === "create_knowledge" ||
+        outcome === "update_existing_knowledge"
+          ? outcome
+          : null;
+    } catch {
+      proposal.appliedIndexingOutcome = null;
+    }
+  }
 }

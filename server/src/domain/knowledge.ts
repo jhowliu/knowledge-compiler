@@ -120,11 +120,16 @@ export type KnowledgeSourceTimeline = {
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
 export type NoteLinkStatus = "pending" | "approved" | "rejected";
+export type AppliedIndexingOutcome =
+  | "keep_searchable"
+  | "create_knowledge"
+  | "update_existing_knowledge";
 
 export type UpdateProposal = {
   id: string;
   userId: string | null;
   rawNoteId: string | null;
+  appliedIndexingOutcome: AppliedIndexingOutcome | null;
   detectedDomain: string | null;
   detectedKnowledgeType: string | null;
   impactLevel: number;

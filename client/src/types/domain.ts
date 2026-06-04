@@ -99,6 +99,7 @@ export type ProposalItem = {
 export type Proposal = {
   id: string
   rawNoteId: string | null
+  appliedIndexingOutcome: 'keep_searchable' | 'create_knowledge' | 'update_existing_knowledge' | null
   detectedDomain: string | null
   detectedKnowledgeType: string | null
   impactLevel: number

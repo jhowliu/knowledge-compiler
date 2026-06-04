@@ -43,6 +43,7 @@ describe("ProposalService", () => {
     const approved = await service.approveProposal(proposal.id);
 
     expect(approved.status).toBe("approved");
+    expect(approved.appliedIndexingOutcome).toBe("keep_searchable");
     expect(knowledge.compiledNotes).toHaveLength(0);
     expect(knowledge.knowledgeSources).toHaveLength(0);
     expect(knowledge.knowledgeVersions).toHaveLength(0);
@@ -84,8 +85,9 @@ describe("ProposalService", () => {
       },
     });
 
-    await service.approveProposal(proposal.id, { indexingOutcomeOverride: "create_knowledge" });
+    const approved = await service.approveProposal(proposal.id, { indexingOutcomeOverride: "create_knowledge" });
 
+    expect(approved.appliedIndexingOutcome).toBe("create_knowledge");
     expect(knowledge.compiledNotes).toHaveLength(1);
     expect(knowledge.knowledgeSources).toHaveLength(1);
     expect(knowledge.compiledNotes[0]).toMatchObject({

@@ -1,6 +1,8 @@
 # Recap
 
 ## Summary
+- Fixed approval override outcome tracking: approving a keep-searchable recommendation with `Create knowledge instead` now records `appliedIndexingOutcome=create_knowledge`, and the graph suppresses the source-only card. Approving with `Keep source only` records `keep_searchable` so graph source cards are based on the user-applied outcome rather than inferred proposal item shape.
+- Approval override validation: `npm run typecheck`, `npm run test --workspace=server -- proposal.service.test.ts`, `npm run test --workspace=server`, `npm run build`, and `git diff --check` pass.
 - Fixed keep-searchable source cards on the graph: the graph now treats an approved `keep_source_searchable` proposal as the source-card signal, falling back through `proposal.rawNoteId -> rawNote.rawSourceId` when older/newer proposal payloads do not include `rawSourceId`. New agent-tool proposals now include `rawSourceId` and `rawNoteId` on keep-source items.
 - Keep-searchable graph validation: `npm run typecheck --workspace=client`, `npm run typecheck --workspace=server`, `npm run build --workspace=client`, and `git diff --check` pass.
 - Adjusted the Agent Run drawer progress tracker so compile steps read in the actual source-aware order: queued, loaded source, extracted knowledge, searched related knowledge, classified outcome, drafted proposal. The drawer duration now live-counts every second while a run is actively running.

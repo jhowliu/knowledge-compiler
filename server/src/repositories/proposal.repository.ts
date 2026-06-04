@@ -1,5 +1,6 @@
 import { query } from "../db/postgres.js";
 import type {
+  AppliedIndexingOutcome,
   ProposalItem,
   ProposalStatus,
   ProposalWithItems,
@@ -39,11 +40,35 @@ type ProposalItemRow = {
   created_at: Date;
 };
 
-function mapProposal(row: ProposalRow): UpdateProposal {
+type ApprovalDecisionRow = {
+  comment: string | null;
+};
+
+function appliedIndexingOutcome(value: unknown): AppliedIndexingOutcome | null {
+  return value === "keep_searchable" ||
+    value === "create_knowledge" ||
+    value === "update_existing_knowledge"
+    ? value
+    : null;
+}
+
+function appliedIndexingOutcomeFromComment(comment: string | null): AppliedIndexingOutcome | null {
+  if (!comment) return null;
+  try {
+    const parsed = JSON.parse(comment) as unknown;
+    const record = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    return appliedIndexingOutcome(record.appliedIndexingOutcome);
+  } catch {
+    return null;
+  }
+}
+
+function mapProposal(row: ProposalRow, appliedOutcome: AppliedIndexingOutcome | null = null): UpdateProposal {
   return {
     id: row.id,
     userId: row.user_id,
     rawNoteId: row.raw_note_id,
+    appliedIndexingOutcome: appliedOutcome,
     detectedDomain: row.detected_domain,
     detectedKnowledgeType: row.detected_knowledge_type,
     impactLevel: row.impact_level,
@@ -182,9 +207,23 @@ export class PostgresProposalRepository implements ProposalRepository {
       `,
       [id],
     );
+    const decisionResult = await query<ApprovalDecisionRow>(
+      `
+        select comment
+        from approval_decisions
+        where proposal_id = $1
+          and decision = 'approved'
+        order by created_at desc
+        limit 1
+      `,
+      [id],
+    );
 
     return {
-      ...mapProposal(proposalResult.rows[0]),
+      ...mapProposal(
+        proposalResult.rows[0],
+        appliedIndexingOutcomeFromComment(decisionResult.rows[0]?.comment ?? null),
+      ),
       items: itemResult.rows.map(mapProposalItem),
     };
   }

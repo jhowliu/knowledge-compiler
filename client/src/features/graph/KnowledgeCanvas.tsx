@@ -126,22 +126,36 @@ function buildSourceGraphCards(data: WorkspaceData): SourceGraphCard[] {
   const sourceReasons = new globalThis.Map<string, string | null>()
   const noteReasons = new globalThis.Map<string, string | null>()
   const rawNoteById = new globalThis.Map(data.rawNotes.map((note) => [note.id, note]))
+  const addSourceSignal = (rawNoteId: string | null, rawSourceId: string | null, reason: string | null) => {
+    const resolvedRawSourceId = rawSourceId ?? (rawNoteId ? rawNoteById.get(rawNoteId)?.rawSourceId ?? null : null)
+    if (resolvedRawSourceId) {
+      approvedRawSourceIds.add(resolvedRawSourceId)
+      sourceReasons.set(resolvedRawSourceId, reason)
+    }
+    if (rawNoteId) {
+      approvedRawNoteIds.add(rawNoteId)
+      noteReasons.set(rawNoteId, reason)
+    }
+  }
   for (const proposal of data.proposals) {
     if (proposal.status !== 'approved') continue
-    for (const item of proposal.items) {
-      if (item.actionType !== 'keep_source_searchable') continue
+
+    if (proposal.appliedIndexingOutcome && proposal.appliedIndexingOutcome !== 'keep_searchable') {
+      continue
+    }
+
+    const keepItems = proposal.items.filter((item) => item.actionType === 'keep_source_searchable')
+    if (proposal.appliedIndexingOutcome === 'keep_searchable' && keepItems.length === 0) {
+      addSourceSignal(proposal.rawNoteId, null, proposal.rationale)
+      continue
+    }
+
+    for (const item of keepItems) {
       const payload = recordValue(item.payload)
       const rawNoteId = stringValue(payload.rawNoteId) ?? proposal.rawNoteId
-      const rawSourceId = stringValue(payload.rawSourceId) ?? (rawNoteId ? rawNoteById.get(rawNoteId)?.rawSourceId ?? null : null)
+      const rawSourceId = stringValue(payload.rawSourceId)
       const reason = stringValue(payload.outcomeReason) ?? item.rationale ?? proposal.rationale
-      if (rawSourceId) {
-        approvedRawSourceIds.add(rawSourceId)
-        sourceReasons.set(rawSourceId, reason)
-      }
-      if (rawNoteId) {
-        approvedRawNoteIds.add(rawNoteId)
-        noteReasons.set(rawNoteId, reason)
-      }
+      addSourceSignal(rawNoteId, rawSourceId, reason)
     }
   }
 

@@ -1,4 +1,10 @@
-import type { CompiledNote, Confidence, ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
+import type {
+  AppliedIndexingOutcome,
+  CompiledNote,
+  Confidence,
+  ProposalItem,
+  ProposalWithItems,
+} from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
@@ -30,11 +36,35 @@ function normalizedTitle(value: string) {
   return value.trim().toLowerCase();
 }
 
+function validAppliedOutcome(value: unknown): AppliedIndexingOutcome | null {
+  return value === "keep_searchable" ||
+    value === "create_knowledge" ||
+    value === "update_existing_knowledge"
+    ? value
+    : null;
+}
+
 type ApplyContext = {
   compiledNoteByTitle: Map<string, CompiledNote>;
 };
 
 type IndexingOutcomeOverride = "keep_searchable" | "create_knowledge" | null;
+
+function appliedOutcomeFor(
+  proposal: ProposalWithItems,
+  indexingOutcomeOverride: IndexingOutcomeOverride,
+): AppliedIndexingOutcome {
+  if (indexingOutcomeOverride) {
+    return indexingOutcomeOverride;
+  }
+  for (const item of proposal.items) {
+    const outcome = validAppliedOutcome(asRecord(item.payload).outcome);
+    if (outcome) return outcome;
+  }
+  return proposal.items.some((item) => item.actionType === "keep_source_searchable")
+    ? "keep_searchable"
+    : "create_knowledge";
+}
 
 export class ProposalService {
   constructor(
@@ -72,6 +102,9 @@ export class ProposalService {
       proposalId: id,
       userId: proposal.userId,
       decision: "approved",
+      comment: JSON.stringify({
+        appliedIndexingOutcome: appliedOutcomeFor(proposal, options.indexingOutcomeOverride ?? null),
+      }),
     });
     await this.proposalRepository.setStatus(id, "approved");
 

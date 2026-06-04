@@ -1,7 +1,11 @@
-import { AgentRunQueueService } from "../src/services/agentRunQueue.service.js";
+import {
+  AgentRunQueueService,
+  type CompileAgentRunnerFactory,
+} from "../src/services/agentRunQueue.service.js";
 import { WikiIndexerService, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import type { GeneralKnowledgeExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
+import type { DraftProposalInput } from "@knowledge-compiler/agent-contracts";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
@@ -646,6 +650,189 @@ describe("agent run queue service", () => {
     expect(proposalRepository.proposals).toHaveLength(1);
     expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
       expect.arrayContaining(["source.raw_source_loaded", "proposal.created", "lifecycle.completed"]),
+    );
+  });
+
+  test("accepts draft_proposal content supplied by the compile runner", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+    const sourceText = "Runner-authored proposal payload proves the model supplied the draft.";
+
+    const runnerFactory: CompileAgentRunnerFactory = () => {
+      let step = 0;
+      return {
+        async nextStep() {
+          step += 1;
+          if (step === 1) return { tool: "get_source", input: { source_id: "raw-source-1" } };
+          if (step === 2) return { tool: "search_blocks", input: { query: "runner authored", limit: 8 } };
+          const draftInput: DraftProposalInput = {
+            indexing_outcome: "create_knowledge",
+            outcome_reason: "The runner decided this should become reusable knowledge.",
+            reasoning_summary: "The runner authored the proposal payload after observing the source and search.",
+            incomplete_reasoning: false,
+            items: [
+              {
+                action: "upsert_knowledge",
+                target_block_id: null,
+                title: "Runner Authored Knowledge",
+                body_markdown: sourceText,
+                structured_facets: {
+                  summary: sourceText,
+                  concepts: [],
+                  claims: [{ text: sourceText, confidence: "high", evidenceChunkIds: ["raw-source-chunk-1"] }],
+                  methods: [],
+                  examples: [],
+                  constraints: [],
+                  inferredSuggestions: [],
+                },
+                source_concept_ids: [],
+                source_spans: [{ chunk_index: 0, char_start: 0, char_end: sourceText.length, text: sourceText }],
+                confidence: "high",
+                conflict_detected: false,
+                conflict_summary: null,
+                conflict_resolution: null,
+              },
+            ],
+            suggested_links: [
+              {
+                source_block_id: null,
+                target_block_id: "knowledge-block-1",
+                relation_type: "related_concept",
+                confidence: "medium",
+                rationale: "Runner judged this link from observations.",
+              },
+            ],
+          };
+          return { tool: "draft_proposal", input: draftInput };
+        },
+      };
+    };
+
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      llmWikiIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      undefined,
+      runnerFactory,
+    );
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "Runner source",
+        sourceRole: "reference",
+        sourceType: "markdown",
+        bodyMarkdown: sourceText,
+      },
+      [{ chunkIndex: 0, heading: null, bodyMarkdown: sourceText, tokenEstimate: 12 }],
+    );
+
+    const agentRun = await service.enqueue({ runType: "compile_raw_note", input: { rawSourceId: rawSource.id } });
+    await service.process(agentRun.id);
+
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actionType: "upsert_knowledge",
+          payload: expect.objectContaining({ title: "Runner Authored Knowledge" }),
+          rationale: "The runner authored the proposal payload after observing the source and search.",
+        }),
+        expect.objectContaining({
+          actionType: "create_link",
+          rationale: "Runner judged this link from observations.",
+        }),
+      ]),
+    );
+    const calledTools = agentRunRepository.events
+      .filter((event) => event.category === "tool" && event.name === "called")
+      .map((event) => (event.payload as { tool?: string }).tool);
+    expect(calledTools).toEqual(["get_source", "search_blocks", "draft_proposal"]);
+  });
+
+  test("creates an incomplete proposal when the compile runner exceeds loop guardrails", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+
+    const loopingRunnerFactory: CompileAgentRunnerFactory = () => {
+      let first = true;
+      return {
+        async nextStep() {
+          if (first) {
+            first = false;
+            return { tool: "get_source", input: { source_id: "raw-source-1" } };
+          }
+          return { tool: "search_blocks", input: { query: "repeat search", limit: 8 } };
+        },
+      };
+    };
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      llmWikiIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      undefined,
+      loopingRunnerFactory,
+    );
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "Looping source",
+        sourceRole: "reference",
+        sourceType: "markdown",
+        bodyMarkdown: "Looping source still needs a safe incomplete proposal.",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: null,
+          bodyMarkdown: "Looping source still needs a safe incomplete proposal.",
+          tokenEstimate: 10,
+        },
+      ],
+    );
+
+    const agentRun = await service.enqueue({ runType: "compile_raw_note", input: { rawSourceId: rawSource.id } });
+    await service.process(agentRun.id);
+
+    const completedRun = await agentRunRepository.getById(agentRun.id);
+    expect(completedRun?.status).toBe("completed");
+    expect(completedRun?.output).toMatchObject({ indexingOutcome: "keep_searchable" });
+    expect(proposalRepository.proposals[0].items[0]).toMatchObject({
+      actionType: "keep_source_searchable",
+      incompleteReasoning: true,
+    });
+    const searchCalls = agentRunRepository.events.filter(
+      (event) =>
+        event.category === "tool" &&
+        event.name === "called" &&
+        (event.payload as { tool?: string }).tool === "search_blocks",
+    );
+    expect(searchCalls).toHaveLength(3);
+    expect(agentRunRepository.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "indexing",
+          name: "loop_exited",
+          payload: expect.objectContaining({ reason: "max_rounds" }),
+        }),
+      ]),
     );
   });
 

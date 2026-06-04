@@ -9,6 +9,12 @@ import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { RawSourceWithChunks } from "../domain/rawSource.js";
 import { agentRunEvents } from "../domain/agentRunEvents.js";
+import type {
+  DraftProposalInput,
+  GetSourceOutput,
+  LookupConceptsOutput,
+  SearchBlocksOutput,
+} from "@knowledge-compiler/agent-contracts";
 import {
   WikiIndexerService,
   type WikiIndexer,
@@ -21,9 +27,49 @@ import type { AgentToolReadRepository } from "../repositories/agentTool.reposito
 import { NoopAgentToolReadRepository } from "../repositories/agentTool.repository.js";
 import { AgentToolService } from "./agentTool.service.js";
 import { normalizeKnowledgeStructuredData } from "./knowledgeFacets.service.js";
+import {
+  runAgentLoop,
+  type AgentRunner,
+  type LoopEvent,
+  type LoopTool,
+  type LoopView,
+} from "./agentLoop.js";
 
 const maxNotesToScan = 80;
 const maxSuggestions = 12;
+
+type CompileAgentRunnerContext = {
+  source: WikiIndexingSource;
+  extraction: GeneralCompileExtraction;
+  extractedConceptNames: string[];
+  classifyOutcome(view: LoopView): Promise<{
+    targetBlockId: string | null;
+    conflictDetected: boolean;
+  }>;
+  buildDraftInput(view: LoopView, options?: { incompleteReasoning?: boolean; reason?: string }): DraftProposalInput;
+};
+
+type GeneralCompileExtraction = Awaited<ReturnType<WikiIndexer["extract"]>>["extraction"];
+
+export type CompileAgentRunnerFactory = (context: CompileAgentRunnerContext) => AgentRunner;
+
+type CompileLoopState = {
+  sourceToolOutput: GetSourceOutput | null;
+  extraction: GeneralCompileExtraction;
+  outcomeClassified: boolean;
+  targetBlockId: string | null;
+  conflict: {
+    detected: boolean;
+    summary: string | null;
+    resolution: "update" | "keep_both" | "needs_user_decision" | null;
+  };
+  conceptLookup: LookupConceptsOutput | null;
+  candidateBlocks: SearchBlocksOutput["results"];
+  fetchedBlocks: Map<string, Awaited<ReturnType<AgentToolService["getBlock"]>>>;
+  proposalOutput: Awaited<ReturnType<AgentToolService["draftProposal"]>> | null;
+  conceptIds: string[];
+  conceptsIndexed: boolean;
+};
 
 function keywordsFor(note: CompiledNote) {
   const words = `${note.title} ${note.noteType} ${note.bodyMarkdown}`
@@ -72,6 +118,7 @@ export class AgentRunQueueService {
     private readonly rawSourceRepository?: RawSourceRepository | null,
     private readonly extractionEvalRepository: ExtractionEvalRepository = new NoopExtractionEvalRepository(),
     private readonly agentToolReadRepository: AgentToolReadRepository = new NoopAgentToolReadRepository(),
+    private readonly compileAgentRunnerFactory: CompileAgentRunnerFactory = createDefaultCompileAgentRunner,
   ) {}
 
   async enqueue(input: { userId?: string | null; runType: string; input?: unknown }) {
@@ -258,6 +305,8 @@ export class AgentRunQueueService {
     if (!this.rawNoteRepository || !this.proposalRepository) {
       throw new Error("compile_raw_note worker is not configured");
     }
+    const rawNoteRepository = this.rawNoteRepository;
+    const proposalRepository = this.proposalRepository;
 
     const { rawNote, rawSource, source } = await this.resolveIndexingSource(input);
     const agentToolService = this.createAgentToolService();
@@ -285,71 +334,21 @@ export class AgentRunQueueService {
       });
     }
 
-    let round = 1;
-    let sourceToolOutput: Awaited<ReturnType<AgentToolService["getSource"]>> | null = null;
-    if (agentToolService) {
-      await this.agentRunRepository.addEvent({
-        agentRunId,
-        ...agentRunEvents.indexing.reactLoopStarted,
-        payload: { maxRounds: 8, maxCallsPerTool: 3 },
-      });
-
-      if (source.rawSourceId) {
-        sourceToolOutput = await this.callTool(agentRunId, round, "get_source", { source_id: source.rawSourceId }, () =>
-          agentToolService.getSource({ source_id: source.rawSourceId! }),
-        );
-        round += 1;
-      }
-    }
-
     const { extraction: extractedResult, provider } = await this.wikiIndexerService.extract(source);
     // Provisional outcome from the LLM extraction. The authoritative outcome is
     // decided below, AFTER the knowledge base has been searched (see #103).
-    let extraction = extractedResult;
-    const extractedConcepts = extraction.structuredData.concepts;
+    const extractedConcepts = extractedResult.structuredData.concepts;
     await this.agentRunRepository.addEvent({
       agentRunId,
       ...agentRunEvents.indexing.detected,
       payload: {
         provider,
-        outcome: extraction.outcome,
-        outcomeReason: extraction.outcomeReason,
-        knowledgeType: extraction.knowledgeType,
+        outcome: extractedResult.outcome,
+        outcomeReason: extractedResult.outcomeReason,
+        knowledgeType: extractedResult.knowledgeType,
         concepts: extractedConcepts,
       },
     });
-
-    const conceptLookup =
-      agentToolService && extractedConcepts.length
-        ? await this.callTool(
-            agentRunId,
-            round,
-            "lookup_concepts",
-            { concepts: extractedConcepts.map((concept) => concept.name), fuzzy: true },
-            () => agentToolService.lookupConcepts({
-              concepts: extractedConcepts.map((concept) => concept.name),
-              fuzzy: true,
-            }),
-          )
-        : { matches: [] };
-    if (agentToolService && extractedConcepts.length) round += 1;
-
-    for (const concept of extractedConcepts) {
-      const savedConcept = await this.knowledgeRepository.upsertConcept({
-        userId: rawNote.userId,
-        name: concept.name,
-        conceptType: concept.type,
-      });
-      await this.knowledgeRepository.indexConcept({
-        userId: rawNote.userId,
-        conceptId: savedConcept.id,
-        targetType: source.rawSourceId ? "raw_source" : "raw_note",
-        targetId: source.rawSourceId ?? rawNote.id,
-        relationType: "mentions",
-        confidence: concept.confidence,
-        source: "openai_wiki_indexer",
-      });
-    }
 
     await this.agentRunRepository.addEvent({
       agentRunId,
@@ -357,105 +356,11 @@ export class AgentRunQueueService {
       payload: {
         provider,
         conceptCount: extractedConcepts.length,
-        claimCount: extraction.structuredData.claims.length,
-        methodCount: extraction.structuredData.methods.length,
-        outcome: extraction.outcome,
+        claimCount: extractedResult.structuredData.claims.length,
+        methodCount: extractedResult.structuredData.methods.length,
+        outcome: extractedResult.outcome,
       },
     });
-
-    // Retrieve candidate knowledge blocks BEFORE finalizing the outcome, so the
-    // decision (keep vs create vs update, and which block to update) is made with
-    // knowledge-base context rather than blind (#103, #104).
-    let blockSearch: Awaited<ReturnType<AgentToolService["searchBlocks"]>> | null = null;
-    let targetBlockId: string | null = null;
-    // Merged candidate set: full-text search hits PLUS blocks linked to matched
-    // concepts in the concept index, so genuine duplicates surface even when FTS
-    // misses (e.g. the same idea phrased differently or in another language) (#104).
-    let candidateBlocks: Awaited<ReturnType<AgentToolService["searchBlocks"]>>["results"] = [];
-    const fetchedBlocks = new Map<string, Awaited<ReturnType<AgentToolService["getBlock"]>>>();
-    // Conflict detection is part of the LLM's reasoned decision (#105), not a
-    // keyword scan of the source text.
-    let conflict: {
-      detected: boolean;
-      summary: string | null;
-      resolution: "update" | "keep_both" | "needs_user_decision" | null;
-    } = { detected: false, summary: null, resolution: null };
-    if (agentToolService) {
-      blockSearch = await this.callTool(
-        agentRunId,
-        round,
-        "search_blocks",
-        { query: source.bodyMarkdown.slice(0, 500), limit: 8 },
-        () => agentToolService.searchBlocks({ query: source.bodyMarkdown.slice(0, 500), limit: 8 }),
-      );
-      round += 1;
-
-      candidateBlocks = [...blockSearch.results];
-      const seenBlockIds = new Set(candidateBlocks.map((block) => block.block_id));
-      const conceptLinkedIds = Array.from(
-        new Set(conceptLookup.matches.flatMap((match) => match.linked_block_ids)),
-      )
-        .filter((blockId) => !seenBlockIds.has(blockId))
-        .slice(0, 3);
-      for (const blockId of conceptLinkedIds) {
-        const fetched = await this.callTool(
-          agentRunId,
-          round,
-          "get_block",
-          { block_id: blockId },
-          () => agentToolService.getBlock({ block_id: blockId }),
-        );
-        round += 1;
-        fetchedBlocks.set(blockId, fetched);
-        candidateBlocks.push(blockSummaryFromBlock(fetched));
-        seenBlockIds.add(blockId);
-      }
-
-      if (extraction.outcome !== "keep_searchable" && this.wikiIndexerService.classifyOutcome) {
-        const classification = await this.wikiIndexerService.classifyOutcome({
-          source,
-          extraction,
-          candidateBlocks: candidateBlocks.map((result) => ({
-            block_id: result.block_id,
-            title: result.title,
-            heading: result.heading,
-            body_markdown_preview: result.body_markdown_preview,
-          })),
-          conceptMatches: conceptLookup.matches
-            .filter((match) => match.match_type !== "none")
-            .map((match) => match.canonical_label ?? match.input),
-        });
-        extraction = {
-          ...extraction,
-          outcome: classification.outcome,
-          outcomeReason: classification.outcomeReason,
-          confidence: classification.confidence,
-        };
-        targetBlockId = extraction.outcome === "update_existing_knowledge" ? classification.targetBlockId : null;
-        conflict = {
-          detected: classification.conflictDetected,
-          summary: classification.conflictSummary,
-          resolution: classification.conflictResolution,
-        };
-      } else if (extraction.outcome === "update_existing_knowledge") {
-        // Fallback when the indexer cannot reclassify: use the top candidate.
-        targetBlockId = candidateBlocks[0]?.block_id ?? null;
-      }
-    }
-
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.indexing.outcomeClassified,
-      payload: {
-        outcome: extraction.outcome,
-        reason: extraction.outcomeReason,
-        targetBlockId,
-      },
-    });
-    await this.rawNoteRepository.updateExtraction(rawNote.id, extraction, extraction.domain);
-    if (rawSource && this.rawSourceRepository) {
-      await this.rawSourceRepository.updateExtraction(rawSource.id, extraction);
-    }
 
     const relatedNotes = await this.knowledgeRepository.searchRelated({
       query: source.bodyMarkdown,
@@ -468,9 +373,38 @@ export class AgentRunQueueService {
       payload: { relatedNotes },
     });
 
-    const draft = this.wikiIndexerService.draftProposal(source, extraction, relatedNotes);
     if (!agentToolService) {
-      const proposal = await this.proposalRepository.create({
+      for (const concept of extractedConcepts) {
+        const savedConcept = await this.knowledgeRepository.upsertConcept({
+          userId: rawNote.userId,
+          name: concept.name,
+          conceptType: concept.type,
+        });
+        await this.knowledgeRepository.indexConcept({
+          userId: rawNote.userId,
+          conceptId: savedConcept.id,
+          targetType: source.rawSourceId ? "raw_source" : "raw_note",
+          targetId: source.rawSourceId ?? rawNote.id,
+          relationType: "mentions",
+          confidence: concept.confidence,
+          source: "openai_wiki_indexer",
+        });
+      }
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.indexing.outcomeClassified,
+        payload: {
+          outcome: extractedResult.outcome,
+          reason: extractedResult.outcomeReason,
+          targetBlockId: null,
+        },
+      });
+      await rawNoteRepository.updateExtraction(rawNote.id, extractedResult, extractedResult.domain);
+      if (rawSource && this.rawSourceRepository) {
+        await this.rawSourceRepository.updateExtraction(rawSource.id, extractedResult);
+      }
+      const draft = this.wikiIndexerService.draftProposal(source, extractedResult, relatedNotes);
+      const proposal = await proposalRepository.create({
         userId: rawNote.userId,
         rawNoteId: rawNote.id,
         draft,
@@ -488,119 +422,226 @@ export class AgentRunQueueService {
         chunkCount: source.chunks.length,
         proposalId: proposal.id,
         provider,
-        indexingOutcome: extraction.outcome,
-        detectedKnowledgeType: extraction.knowledgeType,
+        indexingOutcome: extractedResult.outcome,
+        detectedKnowledgeType: extractedResult.knowledgeType,
         conceptCount: extractedConcepts.length,
         relatedNoteCount: relatedNotes.length,
       };
     }
 
-    // Read the block the agent chose to update (only set for update_existing_knowledge),
-    // reusing a candidate already fetched during concept-index recall.
-    let targetBlock: Awaited<ReturnType<AgentToolService["getBlock"]>> | null = null;
-    if (targetBlockId) {
-      targetBlock = fetchedBlocks.get(targetBlockId) ?? null;
-      if (!targetBlock) {
-        targetBlock = await this.callTool(
-          agentRunId,
-          round,
-          "get_block",
-          { block_id: targetBlockId },
-          () => agentToolService.getBlock({ block_id: targetBlockId! }),
-        );
-        round += 1;
+    const loopState: CompileLoopState = {
+      sourceToolOutput: null,
+      extraction: extractedResult,
+      outcomeClassified: false,
+      targetBlockId: null,
+      conflict: { detected: false, summary: null, resolution: null },
+      conceptLookup: null,
+      candidateBlocks: [],
+      fetchedBlocks: new Map(),
+      proposalOutput: null,
+      conceptIds: [],
+      conceptsIndexed: false,
+    };
+
+    const indexConcepts = async () => {
+      if (loopState.conceptsIndexed) return;
+      for (const concept of loopState.extraction.structuredData.concepts) {
+        const savedConcept = await this.knowledgeRepository.upsertConcept({
+          userId: rawNote.userId,
+          name: concept.name,
+          conceptType: concept.type,
+        });
+        loopState.conceptIds.push(savedConcept.id);
+        await this.knowledgeRepository.indexConcept({
+          userId: rawNote.userId,
+          conceptId: savedConcept.id,
+          targetType: source.rawSourceId ? "raw_source" : "raw_note",
+          targetId: source.rawSourceId ?? rawNote.id,
+          relationType: "mentions",
+          confidence: concept.confidence,
+          source: "openai_wiki_indexer",
+        });
       }
-    }
+      loopState.conceptsIndexed = true;
+    };
 
-    const conflictDetected = Boolean(targetBlock) && conflict.detected;
-    if (conflictDetected && targetBlock) {
-      await this.callTool(
-        agentRunId,
-        round,
-        "get_block_history",
-        { block_id: targetBlock.block.id, limit: 5 },
-        () => agentToolService.getBlockHistory({ block_id: targetBlock.block.id, limit: 5 }),
-      );
-      round += 1;
-    }
+    const classifyOutcome = async (view: LoopView) => {
+      refreshLoopObservations(loopState, view);
+      if (!loopState.outcomeClassified) {
+        if (loopState.extraction.outcome !== "keep_searchable" && this.wikiIndexerService.classifyOutcome) {
+          const classification = await this.wikiIndexerService.classifyOutcome({
+            source,
+            extraction: loopState.extraction,
+            candidateBlocks: loopState.candidateBlocks.map((result) => ({
+              block_id: result.block_id,
+              title: result.title,
+              heading: result.heading,
+              body_markdown_preview: result.body_markdown_preview,
+            })),
+            conceptMatches: (loopState.conceptLookup?.matches ?? [])
+              .filter((match) => match.match_type !== "none")
+              .map((match) => match.canonical_label ?? match.input),
+          });
+          loopState.extraction = {
+            ...loopState.extraction,
+            outcome: classification.outcome,
+            outcomeReason: classification.outcomeReason,
+            confidence: classification.confidence,
+          };
+          loopState.targetBlockId = classification.outcome === "update_existing_knowledge"
+            ? classification.targetBlockId
+            : null;
+          loopState.conflict = {
+            detected: classification.conflictDetected,
+            summary: classification.conflictSummary,
+            resolution: classification.conflictResolution,
+          };
+        } else if (loopState.extraction.outcome === "update_existing_knowledge") {
+          // Fallback when the indexer cannot reclassify: use the top candidate.
+          loopState.targetBlockId = loopState.candidateBlocks[0]?.block_id ?? null;
+        }
+        loopState.outcomeClassified = true;
+        await this.agentRunRepository.addEvent({
+          agentRunId,
+          ...agentRunEvents.indexing.outcomeClassified,
+          payload: {
+            outcome: loopState.extraction.outcome,
+            reason: loopState.extraction.outcomeReason,
+            targetBlockId: loopState.targetBlockId,
+          },
+        });
+      }
+      return {
+        targetBlockId: loopState.targetBlockId,
+        conflictDetected: loopState.conflict.detected,
+      };
+    };
 
-    const proposalChunks = sourceToolOutput?.chunks ?? contractChunks(source);
-    const sourceSpan = firstSourceSpan(proposalChunks);
-    const draftProposalOutput = await this.callTool(
-      agentRunId,
-      round,
-      "draft_proposal",
-      { itemCount: draft.items.length },
-      () => agentToolService.draftProposal(
+    const buildDraftInput = (
+      view: LoopView,
+      options: { incompleteReasoning?: boolean; reason?: string } = {},
+    ): DraftProposalInput => {
+      refreshLoopObservations(loopState, view);
+      const draft = this.wikiIndexerService.draftProposal(source, loopState.extraction, relatedNotes);
+      const proposalChunks = loopState.sourceToolOutput?.chunks ?? contractChunks(source);
+      const sourceSpan = firstSourceSpan(proposalChunks);
+      const incompleteReasoning = options.incompleteReasoning ?? false;
+      const fallbackReason = options.reason ? `${loopState.extraction.outcomeReason} ${options.reason}` : loopState.extraction.outcomeReason;
+      const items = draft.items
+        .filter((item) => item.actionType === "upsert_knowledge" || item.actionType === "keep_source_searchable")
+        .map((item) => {
+          const payload = item.payload as Record<string, unknown>;
+          const keepOnly = item.actionType === "keep_source_searchable" || incompleteReasoning;
+          return {
+            action: keepOnly ? ("keep_source_searchable" as const) : ("upsert_knowledge" as const),
+            target_block_id: keepOnly ? null : loopState.targetBlockId,
+            title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
+            body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
+            structured_facets: normalizeKnowledgeStructuredData(
+              payload.structuredData ?? loopState.extraction.structuredData,
+            ),
+            source_concept_ids: [...new Set([
+              ...loopState.conceptIds,
+              ...(loopState.conceptLookup?.matches ?? [])
+                .map((match) => match.concept_id)
+                .filter((id): id is string => Boolean(id)),
+            ])],
+            source_spans: sourceSpan ? [sourceSpan] : [],
+            confidence: loopState.extraction.confidence,
+            conflict_detected: keepOnly ? false : loopState.conflict.detected,
+            conflict_summary: keepOnly || !loopState.conflict.detected ? null : loopState.conflict.summary,
+            conflict_resolution: keepOnly || !loopState.conflict.detected ? null : loopState.conflict.resolution,
+          };
+        });
+
+      return {
+        indexing_outcome: incompleteReasoning ? "keep_searchable" : loopState.extraction.outcome,
+        outcome_reason: incompleteReasoning ? fallbackReason : loopState.extraction.outcomeReason,
+        reasoning_summary: draft.rationale,
+        incomplete_reasoning: incompleteReasoning,
+        items,
+        suggested_links: [],
+      };
+    };
+
+    const runDraftProposal = async (input: DraftProposalInput, view: LoopView) => {
+      refreshLoopObservations(loopState, view);
+      await indexConcepts();
+      loopState.extraction = {
+        ...loopState.extraction,
+        outcome: input.indexing_outcome,
+        outcomeReason: input.outcome_reason,
+      };
+      await rawNoteRepository.updateExtraction(rawNote.id, loopState.extraction, loopState.extraction.domain);
+      if (rawSource && this.rawSourceRepository) {
+        await this.rawSourceRepository.updateExtraction(rawSource.id, loopState.extraction);
+      }
+      const proposalOutput = await agentToolService.draftProposal(
         {
           agentRunId,
           rawNoteId: rawNote.id,
           sourceId: source.rawSourceId ?? source.id,
           userId: rawNote.userId,
           sourceText: source.bodyMarkdown,
-          chunks: proposalChunks,
-          existingBlocksContext: candidateBlocks,
+          chunks: loopState.sourceToolOutput?.chunks ?? contractChunks(source),
+          existingBlocksContext: loopState.candidateBlocks,
         },
+        input,
+      );
+      loopState.proposalOutput = proposalOutput;
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.eval.completed,
+        payload: { proposalId: proposalOutput.proposal_id },
+      });
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.proposal.created,
+        payload: { proposalId: proposalOutput.proposal_id },
+      });
+      return proposalOutput;
+    };
+
+    const tools = this.createCompileLoopTools({
+      agentRunId,
+      source,
+      loopState,
+      agentToolService,
+      runDraftProposal,
+      buildDraftInput,
+      classifyOutcome,
+    });
+    const runner = this.compileAgentRunnerFactory({
+      source,
+      extraction: extractedResult,
+      extractedConceptNames: extractedConcepts.map((concept) => concept.name),
+      classifyOutcome,
+      buildDraftInput,
+    });
+    const loopOutcome = await runAgentLoop({
+      runner,
+      tools,
+      maxRounds: 8,
+      maxCallsPerTool: 3,
+      onEvent: (event) => this.recordLoopEvent(agentRunId, event),
+    });
+
+    if (!loopState.proposalOutput) {
+      const incompleteInput = buildDraftInput(
+        { round: loopOutcome.rounds + 1, availableTools: [], transcript: loopOutcome.transcript },
         {
-          indexing_outcome: extraction.outcome,
-          outcome_reason: extraction.outcomeReason,
-          reasoning_summary: draft.rationale,
-          incomplete_reasoning: false,
-          items: draft.items
-            .filter((item) => item.actionType === "upsert_knowledge" || item.actionType === "keep_source_searchable")
-            .map((item) => {
-              const payload = item.payload as Record<string, unknown>;
-              return {
-                action: item.actionType === "keep_source_searchable"
-                  ? ("keep_source_searchable" as const)
-                  : ("upsert_knowledge" as const),
-                target_block_id: item.actionType === "keep_source_searchable" ? null : targetBlockId,
-                title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
-                body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
-                structured_facets: normalizeKnowledgeStructuredData(
-                  payload.structuredData ?? extraction.structuredData,
-                ),
-                source_concept_ids: conceptLookup.matches
-                  .map((match) => match.concept_id)
-                  .filter((id): id is string => Boolean(id)),
-                source_spans: sourceSpan ? [sourceSpan] : [],
-                confidence: extraction.confidence,
-                conflict_detected: item.actionType === "keep_source_searchable" ? false : conflictDetected,
-                conflict_summary: item.actionType === "keep_source_searchable" || !conflictDetected
-                  ? null
-                  : conflict.summary,
-                conflict_resolution: item.actionType === "keep_source_searchable" || !conflictDetected
-                  ? null
-                  : conflict.resolution,
-              };
-            }),
-          suggested_links: extraction.outcome === "keep_searchable"
-            ? []
-            : candidateBlocks.slice(0, 2).map((result) => ({
-                source_block_id: null,
-                target_block_id: result.block_id,
-                relation_type: "related_concept",
-                confidence: "medium" as const,
-                rationale: `Search found related block: ${result.title}.`,
-              })),
+          incompleteReasoning: true,
+          reason: `Agent loop exited before a complete proposal (${loopOutcome.exitReason}).`,
         },
-      ),
-    );
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.eval.completed,
-      payload: { proposalId: draftProposalOutput.proposal_id },
-    });
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.proposal.created,
-      payload: { proposalId: draftProposalOutput.proposal_id },
-    });
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.indexing.loopExited,
-      payload: { reason: "draft_proposal" },
-    });
+      );
+      await runDraftProposal(incompleteInput, {
+        round: loopOutcome.rounds + 1,
+        availableTools: [],
+        transcript: loopOutcome.transcript,
+      });
+    }
+
+    const draftProposalOutput = loopState.proposalOutput!;
 
     return {
       rawNoteId: rawNote.id,
@@ -609,9 +650,9 @@ export class AgentRunQueueService {
       chunkCount: source.chunks.length,
       proposalId: draftProposalOutput.proposal_id,
       provider,
-      indexingOutcome: extraction.outcome,
-      detectedKnowledgeType: extraction.knowledgeType,
-      conceptCount: extractedConcepts.length,
+      indexingOutcome: loopState.extraction.outcome,
+      detectedKnowledgeType: loopState.extraction.knowledgeType,
+      conceptCount: loopState.extraction.structuredData.concepts.length,
       relatedNoteCount: relatedNotes.length,
     };
   }
@@ -629,25 +670,170 @@ export class AgentRunQueueService {
     );
   }
 
-  private async callTool<T>(
+  private createCompileLoopTools(input: {
+    agentRunId: string;
+    source: WikiIndexingSource;
+    loopState: CompileLoopState;
+    agentToolService: AgentToolService;
+    runDraftProposal: (
+      input: DraftProposalInput,
+      view: LoopView,
+    ) => Promise<Awaited<ReturnType<AgentToolService["draftProposal"]>>>;
+    buildDraftInput: (
+      view: LoopView,
+      options?: { incompleteReasoning?: boolean; reason?: string },
+    ) => DraftProposalInput;
+    classifyOutcome: (view: LoopView) => Promise<{ targetBlockId: string | null; conflictDetected: boolean }>;
+  }): LoopTool[] {
+    const { source, loopState, agentToolService, runDraftProposal, buildDraftInput, classifyOutcome } = input;
+    const requiresSourceTool = Boolean(source.rawSourceId);
+    const hasPrerequisiteSource = (view: LoopView) =>
+      !requiresSourceTool || hasSuccessfulTool(view, "get_source");
+    const hasSearch = (view: LoopView) => hasSuccessfulTool(view, "search_blocks");
+
+    return [
+      {
+        name: "get_source",
+        canRun: (view) => Boolean(source.rawSourceId) && !hasSuccessfulTool(view, "get_source"),
+        run: async (toolInput) => {
+          const output = await agentToolService.getSource(toolInput as { source_id: string });
+          loopState.sourceToolOutput = output;
+          return output;
+        },
+      },
+      {
+        name: "lookup_concepts",
+        canRun: (view) => hasPrerequisiteSource(view) && !hasSuccessfulTool(view, "lookup_concepts"),
+        run: async (toolInput) => {
+          const output = await agentToolService.lookupConcepts(toolInput as { concepts: string[]; fuzzy?: boolean });
+          loopState.conceptLookup = output;
+          return output;
+        },
+      },
+      {
+        name: "search_blocks",
+        canRun: (view) => hasPrerequisiteSource(view),
+        run: async (toolInput) => {
+          const output = await agentToolService.searchBlocks(toolInput as { query: string; limit?: number });
+          mergeCandidateBlocks(loopState, output.results);
+          return output;
+        },
+      },
+      {
+        name: "get_block",
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        run: async (toolInput) => {
+          const blockId = blockIdFromInput(toolInput);
+          if (!allowedBlockIdsFromState(loopState).has(blockId)) {
+            throw new Error(`Block id was not surfaced by prior tool results: ${blockId}`);
+          }
+          const output = await agentToolService.getBlock({ block_id: blockId });
+          loopState.fetchedBlocks.set(blockId, output);
+          mergeCandidateBlocks(loopState, [blockSummaryFromBlock(output)]);
+          return output;
+        },
+      },
+      {
+        name: "get_block_history",
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        run: async (toolInput) => {
+          const blockId = blockIdFromInput(toolInput);
+          if (!allowedBlockIdsFromState(loopState).has(blockId)) {
+            throw new Error(`Block id was not surfaced by prior tool results: ${blockId}`);
+          }
+          return agentToolService.getBlockHistory(toolInput as { block_id: string; limit?: number });
+        },
+      },
+      {
+        name: "draft_proposal",
+        terminal: true,
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        run: async (toolInput, view) => {
+          const draftInput = isDraftProposalInput(toolInput)
+            ? toolInput
+            : buildDraftInput(view);
+          if (!loopState.outcomeClassified) {
+            applyDraftOutcome(loopState, draftInput);
+          }
+          await this.recordOutcomeClassified(input.agentRunId, loopState);
+          return runDraftProposal(draftInput, view);
+        },
+      },
+      {
+        name: "finish_without_proposal",
+        terminal: true,
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        run: async (_toolInput, view) => {
+          await classifyOutcome(view);
+          const draftInput = buildDraftInput(view, {
+            incompleteReasoning: true,
+            reason: "The agent stopped before drafting a complete proposal.",
+          });
+          return runDraftProposal(draftInput, view);
+        },
+      },
+    ];
+  }
+
+  private async recordOutcomeClassified(
     agentRunId: string,
-    round: number,
-    tool: string,
-    input: unknown,
-    action: () => Promise<T>,
+    loopState: CompileLoopState,
   ) {
+    if (loopState.outcomeClassified) return;
+    loopState.outcomeClassified = true;
     await this.agentRunRepository.addEvent({
       agentRunId,
-      ...agentRunEvents.tool.called,
-      payload: { tool, input, round },
+      ...agentRunEvents.indexing.outcomeClassified,
+      payload: {
+        outcome: loopState.extraction.outcome,
+        reason: loopState.extraction.outcomeReason,
+        targetBlockId: loopState.targetBlockId,
+      },
     });
-    const output = await action();
+  }
+
+  private async recordLoopEvent(agentRunId: string, event: LoopEvent) {
+    if (event.type === "loop_started") {
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.indexing.reactLoopStarted,
+        payload: { maxRounds: event.maxRounds, maxCallsPerTool: event.maxCallsPerTool },
+      });
+      return;
+    }
+    if (event.type === "tool_called") {
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.tool.called,
+        payload: { tool: event.tool, input: event.input, round: event.round },
+      });
+      return;
+    }
+    if (event.type === "tool_result") {
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.tool.result,
+        payload: {
+          tool: event.tool,
+          outputSummary: event.result.ok ? summarizeToolOutput(event.result.output) : { error: event.result.error },
+          round: event.round,
+        },
+      });
+      return;
+    }
+    if (event.type === "tool_rejected") {
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.tool.result,
+        payload: { tool: event.tool, outputSummary: { rejected: true, reason: event.reason }, round: event.round },
+      });
+      return;
+    }
     await this.agentRunRepository.addEvent({
       agentRunId,
-      ...agentRunEvents.tool.result,
-      payload: { tool, outputSummary: summarizeToolOutput(output), round },
+      ...agentRunEvents.indexing.loopExited,
+      payload: { reason: event.reason, terminalTool: event.terminalTool },
     });
-    return output;
   }
 
   private async resolveIndexingSource(input: { rawNoteId: string | null; rawSourceId: string | null }) {
@@ -696,6 +882,200 @@ function blockSummaryFromBlock(
     body_markdown_preview: output.block.body_markdown.slice(0, 320),
     rank: 0,
     linked_block_ids: [],
+  };
+}
+
+function createDefaultCompileAgentRunner(context: CompileAgentRunnerContext): AgentRunner {
+  const fetchedConceptLinkedBlockIds = new Set<string>();
+  let classifiedTarget: { targetBlockId: string | null; conflictDetected: boolean } | null = null;
+
+  return {
+    async nextStep(view) {
+      if (context.source.rawSourceId && !hasSuccessfulTool(view, "get_source")) {
+        return { tool: "get_source", input: { source_id: context.source.rawSourceId } };
+      }
+
+      const shouldLookupConcepts =
+        context.extraction.outcome !== "keep_searchable" &&
+        context.extractedConceptNames.length > 0 &&
+        !hasSuccessfulTool(view, "lookup_concepts");
+      if (shouldLookupConcepts && view.availableTools.includes("lookup_concepts")) {
+        return {
+          tool: "lookup_concepts",
+          input: { concepts: context.extractedConceptNames, fuzzy: true },
+        };
+      }
+
+      if (!hasSuccessfulTool(view, "search_blocks")) {
+        return {
+          tool: "search_blocks",
+          input: { query: context.source.bodyMarkdown.slice(0, 500), limit: 8 },
+        };
+      }
+
+      const conceptLinkedBlockId = conceptLinkedBlockIds(view).find(
+        (blockId) => !searchResultBlockIds(view).has(blockId) && !fetchedConceptLinkedBlockIds.has(blockId),
+      );
+      if (conceptLinkedBlockId && fetchedConceptLinkedBlockIds.size < 3 && view.availableTools.includes("get_block")) {
+        fetchedConceptLinkedBlockIds.add(conceptLinkedBlockId);
+        return { tool: "get_block", input: { block_id: conceptLinkedBlockId } };
+      }
+
+      classifiedTarget ??= await context.classifyOutcome(view);
+      if (
+        classifiedTarget.targetBlockId &&
+        !hasSuccessfulGetBlock(view, classifiedTarget.targetBlockId) &&
+        view.availableTools.includes("get_block")
+      ) {
+        return { tool: "get_block", input: { block_id: classifiedTarget.targetBlockId } };
+      }
+      if (
+        classifiedTarget.targetBlockId &&
+        classifiedTarget.conflictDetected &&
+        !hasSuccessfulGetBlockHistory(view, classifiedTarget.targetBlockId) &&
+        view.availableTools.includes("get_block_history")
+      ) {
+        return { tool: "get_block_history", input: { block_id: classifiedTarget.targetBlockId, limit: 5 } };
+      }
+
+      return { tool: "draft_proposal", input: context.buildDraftInput(view) };
+    },
+  };
+}
+
+function hasSuccessfulTool(view: LoopView, toolName: string) {
+  return view.transcript.some((entry) => entry.tool === toolName && entry.result.ok);
+}
+
+function hasSuccessfulGetBlock(view: LoopView, blockId: string) {
+  return view.transcript.some(
+    (entry) =>
+      entry.tool === "get_block" &&
+      entry.result.ok &&
+      (entry.input as { block_id?: string }).block_id === blockId,
+  );
+}
+
+function hasSuccessfulGetBlockHistory(view: LoopView, blockId: string) {
+  return view.transcript.some(
+    (entry) =>
+      entry.tool === "get_block_history" &&
+      entry.result.ok &&
+      (entry.input as { block_id?: string }).block_id === blockId,
+  );
+}
+
+function refreshLoopObservations(loopState: CompileLoopState, view: LoopView) {
+  for (const entry of view.transcript) {
+    if (!entry.result.ok) continue;
+    if (entry.tool === "get_source") {
+      loopState.sourceToolOutput = entry.result.output as GetSourceOutput;
+    }
+    if (entry.tool === "lookup_concepts") {
+      loopState.conceptLookup = entry.result.output as LookupConceptsOutput;
+    }
+    if (entry.tool === "search_blocks") {
+      mergeCandidateBlocks(loopState, (entry.result.output as SearchBlocksOutput).results);
+    }
+    if (entry.tool === "get_block") {
+      const output = entry.result.output as Awaited<ReturnType<AgentToolService["getBlock"]>>;
+      loopState.fetchedBlocks.set(output.block.id, output);
+      mergeCandidateBlocks(loopState, [blockSummaryFromBlock(output)]);
+    }
+  }
+}
+
+function mergeCandidateBlocks(loopState: CompileLoopState, blocks: SearchBlocksOutput["results"]) {
+  const seen = new Set(loopState.candidateBlocks.map((block) => block.block_id));
+  for (const block of blocks) {
+    if (!seen.has(block.block_id)) {
+      loopState.candidateBlocks.push(block);
+      seen.add(block.block_id);
+    }
+  }
+}
+
+function searchResultBlockIds(view: LoopView) {
+  const blockIds = new Set<string>();
+  for (const entry of view.transcript) {
+    if (entry.tool === "search_blocks" && entry.result.ok) {
+      for (const block of (entry.result.output as SearchBlocksOutput).results) {
+        blockIds.add(block.block_id);
+      }
+    }
+  }
+  return blockIds;
+}
+
+function conceptLinkedBlockIds(view: LoopView) {
+  const blockIds: string[] = [];
+  for (const entry of view.transcript) {
+    if (entry.tool === "lookup_concepts" && entry.result.ok) {
+      for (const match of (entry.result.output as LookupConceptsOutput).matches) {
+        blockIds.push(...match.linked_block_ids);
+      }
+    }
+  }
+  return [...new Set(blockIds)];
+}
+
+function allowedBlockIds(view: LoopView) {
+  const blockIds = searchResultBlockIds(view);
+  for (const blockId of conceptLinkedBlockIds(view)) {
+    blockIds.add(blockId);
+  }
+  for (const entry of view.transcript) {
+    if (entry.tool === "get_block" && entry.result.ok) {
+      blockIds.add(((entry.result.output as Awaited<ReturnType<AgentToolService["getBlock"]>>).block.id));
+    }
+  }
+  return blockIds;
+}
+
+function allowedBlockIdsFromState(loopState: CompileLoopState) {
+  const blockIds = new Set(loopState.candidateBlocks.map((block) => block.block_id));
+  for (const blockId of loopState.conceptLookup?.matches.flatMap((match) => match.linked_block_ids) ?? []) {
+    blockIds.add(blockId);
+  }
+  for (const blockId of loopState.fetchedBlocks.keys()) {
+    blockIds.add(blockId);
+  }
+  if (loopState.targetBlockId) {
+    blockIds.add(loopState.targetBlockId);
+  }
+  return blockIds;
+}
+
+function blockIdFromInput(input: unknown) {
+  if (!input || typeof input !== "object" || typeof (input as { block_id?: unknown }).block_id !== "string") {
+    throw new Error("block_id is required");
+  }
+  return (input as { block_id: string }).block_id;
+}
+
+function isDraftProposalInput(input: unknown): input is DraftProposalInput {
+  return Boolean(
+    input &&
+      typeof input === "object" &&
+      typeof (input as { indexing_outcome?: unknown }).indexing_outcome === "string" &&
+      Array.isArray((input as { items?: unknown }).items) &&
+      Array.isArray((input as { suggested_links?: unknown }).suggested_links),
+  );
+}
+
+function applyDraftOutcome(loopState: CompileLoopState, input: DraftProposalInput) {
+  const firstItem = input.items.find((item) => item.action !== "keep_source_searchable") ?? null;
+  loopState.extraction = {
+    ...loopState.extraction,
+    outcome: input.indexing_outcome,
+    outcomeReason: input.outcome_reason,
+    confidence: firstItem?.confidence ?? loopState.extraction.confidence,
+  };
+  loopState.targetBlockId = firstItem?.target_block_id ?? null;
+  loopState.conflict = {
+    detected: firstItem?.conflict_detected ?? false,
+    summary: firstItem?.conflict_summary ?? null,
+    resolution: firstItem?.conflict_resolution ?? null,
   };
 }
 

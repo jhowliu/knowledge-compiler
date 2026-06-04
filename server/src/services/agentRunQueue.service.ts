@@ -368,6 +368,11 @@ export class AgentRunQueueService {
     // knowledge-base context rather than blind (#103, #104).
     let blockSearch: Awaited<ReturnType<AgentToolService["searchBlocks"]>> | null = null;
     let targetBlockId: string | null = null;
+    // Merged candidate set: full-text search hits PLUS blocks linked to matched
+    // concepts in the concept index, so genuine duplicates surface even when FTS
+    // misses (e.g. the same idea phrased differently or in another language) (#104).
+    let candidateBlocks: Awaited<ReturnType<AgentToolService["searchBlocks"]>>["results"] = [];
+    const fetchedBlocks = new Map<string, Awaited<ReturnType<AgentToolService["getBlock"]>>>();
     // Conflict detection is part of the LLM's reasoned decision (#105), not a
     // keyword scan of the source text.
     let conflict: {
@@ -385,11 +390,32 @@ export class AgentRunQueueService {
       );
       round += 1;
 
+      candidateBlocks = [...blockSearch.results];
+      const seenBlockIds = new Set(candidateBlocks.map((block) => block.block_id));
+      const conceptLinkedIds = Array.from(
+        new Set(conceptLookup.matches.flatMap((match) => match.linked_block_ids)),
+      )
+        .filter((blockId) => !seenBlockIds.has(blockId))
+        .slice(0, 3);
+      for (const blockId of conceptLinkedIds) {
+        const fetched = await this.callTool(
+          agentRunId,
+          round,
+          "get_block",
+          { block_id: blockId },
+          () => agentToolService.getBlock({ block_id: blockId }),
+        );
+        round += 1;
+        fetchedBlocks.set(blockId, fetched);
+        candidateBlocks.push(blockSummaryFromBlock(fetched));
+        seenBlockIds.add(blockId);
+      }
+
       if (extraction.outcome !== "keep_searchable" && this.wikiIndexerService.classifyOutcome) {
         const classification = await this.wikiIndexerService.classifyOutcome({
           source,
           extraction,
-          candidateBlocks: blockSearch.results.map((result) => ({
+          candidateBlocks: candidateBlocks.map((result) => ({
             block_id: result.block_id,
             title: result.title,
             heading: result.heading,
@@ -412,8 +438,8 @@ export class AgentRunQueueService {
           resolution: classification.conflictResolution,
         };
       } else if (extraction.outcome === "update_existing_knowledge") {
-        // Fallback when the indexer cannot reclassify: use the top search hit.
-        targetBlockId = blockSearch.results[0]?.block_id ?? null;
+        // Fallback when the indexer cannot reclassify: use the top candidate.
+        targetBlockId = candidateBlocks[0]?.block_id ?? null;
       }
     }
 
@@ -469,18 +495,22 @@ export class AgentRunQueueService {
       };
     }
 
-    const candidateBlocks = blockSearch?.results ?? [];
-    // Read the block the agent chose to update (only set for update_existing_knowledge).
-    const targetBlock = targetBlockId
-      ? await this.callTool(
+    // Read the block the agent chose to update (only set for update_existing_knowledge),
+    // reusing a candidate already fetched during concept-index recall.
+    let targetBlock: Awaited<ReturnType<AgentToolService["getBlock"]>> | null = null;
+    if (targetBlockId) {
+      targetBlock = fetchedBlocks.get(targetBlockId) ?? null;
+      if (!targetBlock) {
+        targetBlock = await this.callTool(
           agentRunId,
           round,
           "get_block",
           { block_id: targetBlockId },
           () => agentToolService.getBlock({ block_id: targetBlockId! }),
-        )
-      : null;
-    if (targetBlock) round += 1;
+        );
+        round += 1;
+      }
+    }
 
     const conflictDetected = Boolean(targetBlock) && conflict.detected;
     if (conflictDetected && targetBlock) {
@@ -652,6 +682,21 @@ export class AgentRunQueueService {
 
     return { rawNote, rawSource, source };
   }
+}
+
+function blockSummaryFromBlock(
+  output: Awaited<ReturnType<AgentToolService["getBlock"]>>,
+): Awaited<ReturnType<AgentToolService["searchBlocks"]>>["results"][number] {
+  return {
+    block_id: output.block.id,
+    knowledge_source_id: output.block.knowledge_source_id,
+    compiled_note_id: output.block.compiled_note_id,
+    title: output.block.title,
+    heading: output.block.heading,
+    body_markdown_preview: output.block.body_markdown.slice(0, 320),
+    rank: 0,
+    linked_block_ids: [],
+  };
 }
 
 function firstSourceSpan(chunks: Array<{ chunk_index: number; body_markdown: string }>) {

@@ -33,6 +33,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_WIKI_INDEX_MODEL: z.string().default("gpt-5-mini"),
   INDEXER_MODEL: z.string().default("gpt-5-mini"),
+  COMPILE_AGENT_MODEL: z.string().default("gpt-5-mini"),
   EVAL_JUDGE_MODEL: z.string().default("gpt-5-mini"),
   ASK_MODEL: z.string().default("gpt-5-mini"),
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),

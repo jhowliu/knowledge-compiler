@@ -3,6 +3,10 @@ import {
   type CompileAgentRunnerFactory,
 } from "../src/services/agentRunQueue.service.js";
 import { WikiIndexerService, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
+import {
+  createLlmCompileAgentRunner,
+  type CompileModelClient,
+} from "../src/services/compileAgentRunner.js";
 import type { GeneralKnowledgeExtraction } from "../src/domain/compiler.js";
 import type { SearchResult } from "../src/domain/knowledge.js";
 import type { DraftProposalInput } from "@knowledge-compiler/agent-contracts";
@@ -756,6 +760,90 @@ describe("agent run queue service", () => {
       .filter((event) => event.category === "tool" && event.name === "called")
       .map((event) => (event.payload as { tool?: string }).tool);
     expect(calledTools).toEqual(["get_source", "search_blocks", "draft_proposal"]);
+  });
+
+  test("drives the loop with the LLM runner, authoring the draft in a model-chosen order", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+    const sourceText = "Track remaining stops as part of the distance state.";
+
+    // The model picks search_blocks BEFORE lookup_concepts — the opposite of the
+    // scripted runner's fixed order — proving tool order follows the runner.
+    const modelClient: CompileModelClient = async (request) => {
+      const available = new Set(request.tools.map((tool) => tool.name));
+      if (available.has("get_source")) {
+        return { toolName: "get_source", arguments: { source_id: "raw-source-1" } };
+      }
+      if (request.input.includes("search_blocks(") === false && available.has("search_blocks")) {
+        return { toolName: "search_blocks", arguments: { query: "distance state", limit: 8 } };
+      }
+      if (request.input.includes("lookup_concepts(") === false && available.has("lookup_concepts")) {
+        return { toolName: "lookup_concepts", arguments: { concepts: ["Bounded Graph State"], fuzzy: true } };
+      }
+      const draftInput: DraftProposalInput = {
+        indexing_outcome: "create_knowledge",
+        outcome_reason: "The model judged this reusable after searching the base.",
+        reasoning_summary: "Model-authored proposal from observations.",
+        incomplete_reasoning: false,
+        items: [
+          {
+            action: "upsert_knowledge",
+            target_block_id: null,
+            title: "Bounded Graph State",
+            body_markdown: sourceText,
+            source_concept_ids: [],
+            source_spans: [{ chunk_index: 0, char_start: 0, char_end: sourceText.length, text: sourceText }],
+            confidence: "high",
+            conflict_detected: false,
+            conflict_summary: null,
+            conflict_resolution: null,
+          },
+        ],
+        suggested_links: [],
+      };
+      return { toolName: "draft_proposal", arguments: draftInput };
+    };
+
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      llmWikiIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      undefined,
+      (context) => createLlmCompileAgentRunner(context, { modelClient }),
+    );
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "Graph state",
+        sourceRole: "reference",
+        sourceType: "markdown",
+        bodyMarkdown: sourceText,
+      },
+      [{ chunkIndex: 0, heading: null, bodyMarkdown: sourceText, tokenEstimate: 10 }],
+    );
+
+    const agentRun = await service.enqueue({ runType: "compile_raw_note", input: { rawSourceId: rawSource.id } });
+    await service.process(agentRun.id);
+
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items[0]).toMatchObject({
+      actionType: "upsert_knowledge",
+      payload: expect.objectContaining({ title: "Bounded Graph State" }),
+      rationale: "Model-authored proposal from observations.",
+    });
+    const calledTools = agentRunRepository.events
+      .filter((event) => event.category === "tool" && event.name === "called")
+      .map((event) => (event.payload as { tool?: string }).tool);
+    expect(calledTools).toEqual(["get_source", "search_blocks", "lookup_concepts", "draft_proposal"]);
   });
 
   test("creates an incomplete proposal when the compile runner exceeds loop guardrails", async () => {

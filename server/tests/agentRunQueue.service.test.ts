@@ -243,8 +243,11 @@ describe("agent run queue service", () => {
       title: "Binary Search on Answer",
     });
     const knowledgePayload = draft.items[0].payload as { bodyMarkdown: string };
-    expect(knowledgePayload.bodyMarkdown).toContain("## Claims");
-    expect(knowledgePayload.bodyMarkdown).not.toContain("## Recognition signals");
+    // Readable source prose is the body, not a facet dump (#119).
+    expect(knowledgePayload.bodyMarkdown).toBe(
+      "This is about binary search on answer and monotonic feasibility.",
+    );
+    expect(knowledgePayload.bodyMarkdown).not.toContain("## Claims");
   });
 
   test("drafts keep-searchable proposal for one-off interview answer sources", async () => {

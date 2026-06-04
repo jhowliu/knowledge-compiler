@@ -310,7 +310,7 @@ describe("ProposalService", () => {
     expect(knowledge.embeddings.get("knowledge-block-1")).toEqual([1, 0, 0]);
   });
 
-  test("renders approved markdown from generalized facets instead of trusting payload markdown", async () => {
+  test("stores the model-authored readable note as the body, keeping facets as metadata (#119)", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();
     const noteLinks = new InMemoryNoteLinkRepository();
@@ -332,7 +332,8 @@ describe("ProposalService", () => {
               domain: "learning",
               knowledgeType: "knowledge_note",
               title: "Grounded note format",
-              bodyMarkdown: "LLM-written markdown that should not be trusted.",
+              bodyMarkdown:
+                "Ground approved knowledge in the source so the note stays trustworthy and easy to read.",
               structuredData: {
                 summary: "Facets should drive approved markdown.",
                 concepts: [
@@ -382,11 +383,14 @@ describe("ProposalService", () => {
 
     await service.approveProposal(proposal.id);
 
-    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("## Summary");
-    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("## Claims");
-    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("Facet-first approval");
-    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("LLM-written markdown");
-    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("authoring guidelines");
+    // Body is the readable model-authored note, not a facet dump (#119).
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toBe(
+      "Ground approved knowledge in the source so the note stays trustworthy and easy to read.",
+    );
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("## Summary");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("## Claims");
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("## Concepts");
+    // Facets are still preserved as metadata.
     expect(knowledge.compiledNotes[0].structuredData).toMatchObject({
       concepts: [expect.objectContaining({ name: "Facet rendering", type: "method" })],
       claims: [expect.objectContaining({ text: "Approved markdown is rendered from facets." })],
@@ -522,7 +526,11 @@ describe("ProposalService", () => {
       id: existing.id,
       title: "RAG Evaluation Loop Revision",
     });
-    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("RAG evaluation");
+    // Body is the readable revision prose; the concept name is metadata, not body (#119).
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toBe(
+      "Evaluate coverage, claim support, citation precision, and conflicts.",
+    );
+    expect(knowledge.compiledNotes[0].bodyMarkdown).not.toContain("## Concepts");
     expect(knowledge.knowledgeSources).toHaveLength(1);
     expect(knowledge.knowledgeSources[0]).toMatchObject({
       id: existingSnapshot.source.id,

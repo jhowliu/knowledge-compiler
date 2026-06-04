@@ -330,7 +330,11 @@ export class WikiIndexerService {
       })),
     });
     const knowledgeType = routedExtraction.knowledgeType || "knowledge_note";
-    const bodyMarkdown = renderKnowledgeFacetsMarkdown(structuredData, source.bodyMarkdown);
+    // Readable display body is the source prose (#119); facets stay canonical in
+    // structuredData. Facet render is only a fallback when the source is empty.
+    const bodyMarkdown = source.bodyMarkdown?.trim()
+      ? source.bodyMarkdown
+      : renderKnowledgeFacetsMarkdown(structuredData, "");
     const relatedCompiledNotes = relatedNotes
       .filter((note) => note.targetType === "compiled_note")
       .slice(0, 3);

@@ -7,10 +7,7 @@ import {
   NoopEmbeddingService,
   type EmbeddingService,
 } from "./embedding.service.js";
-import {
-  hasKnowledgeFacets,
-  renderKnowledgeFacetsMarkdown,
-} from "./knowledgeFacets.service.js";
+import { renderKnowledgeFacetsMarkdown } from "./knowledgeFacets.service.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -156,9 +153,13 @@ export class ProposalService {
     if (item.actionType === "upsert_compiled_note" || item.actionType === "upsert_knowledge") {
       const title = stringValue(payload, "title", "Untitled Note");
       const structuredData = payload.structuredData ?? {};
-      const bodyMarkdown = hasKnowledgeFacets(structuredData)
-        ? renderKnowledgeFacetsMarkdown(structuredData, stringValue(payload, "bodyMarkdown"))
-        : stringValue(payload, "bodyMarkdown");
+      // Store the model-authored readable note as the display body (#119); facets
+      // stay canonical in structuredData. Fall back to the facet render only when
+      // no prose was authored.
+      const authoredBody = stringValue(payload, "bodyMarkdown");
+      const bodyMarkdown = authoredBody.trim()
+        ? authoredBody
+        : renderKnowledgeFacetsMarkdown(structuredData, "");
       const noteType = stringValue(
         payload,
         "noteType",

@@ -33,6 +33,8 @@ export const agentRunEventNames = [
   "loop_exited",
   "created",
   "scored",
+  "candidates_found",
+  "judged",
   "suggestion_created",
   "unknown",
 ] as const;
@@ -82,6 +84,8 @@ export const agentRunEvents = {
   },
   linking: {
     scored: { category: "linking", name: "scored" },
+    candidatesFound: { category: "linking", name: "candidates_found" },
+    judged: { category: "linking", name: "judged" },
     suggestionCreated: { category: "linking", name: "suggestion_created" },
   },
   error: {

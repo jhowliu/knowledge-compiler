@@ -112,6 +112,10 @@ export const suggestedLinkSchema = z.object({
   relation_type: z.string().min(1),
   confidence: confidenceSchema,
   rationale: z.string().nullable(),
+  // Agent-judged evidence for the relationship (#98). Verbatim snippets the
+  // agent used to decide the link, surfaced in the Link Inbox.
+  source_evidence: z.array(z.string()).default([]),
+  target_evidence: z.array(z.string()).default([]),
 });
 
 export const getSourceInputSchema = z.object({

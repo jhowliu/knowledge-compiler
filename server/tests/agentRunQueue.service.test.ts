@@ -752,6 +752,8 @@ describe("agent run queue service", () => {
                 relation_type: "related_concept",
                 confidence: "medium",
                 rationale: "Runner judged this link from observations.",
+                source_evidence: ["bounded graph state"],
+                target_evidence: ["track remaining stops in the state"],
               },
             ],
           };

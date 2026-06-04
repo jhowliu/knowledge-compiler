@@ -1,6 +1,8 @@
 # Recap
 
 ## Summary
+- Implemented issue #115 on `codex/split-agent-run-handlers-115`: split `AgentRunQueueService` into a small lifecycle/handler-registry orchestrator, `CompileRawNoteHandler`, `ReindexLinksHandler`, `AgentRunHandler`, and dependency-free compile runner types; app/test construction now registers handlers instead of passing a 10-argument queue constructor.
+- Issue #115 validation passed: `npm run test --workspace=server`, `npm run typecheck --workspace=server`, `npm run build --workspace=server`, and `git diff --check`.
 - Implemented #107 P2 on `feat/llm-compile-runner-p2`: the production compile runner now uses the OpenAI Agents SDK (`Agent` + `tool` + `run`) as a one-tool policy inside the existing harness, so the SDK chooses the next legal tool while `runAgentLoop` still owns dynamic tool exposure, guardrails, event logging, validation, and persistence.
 - Updated `compileAgentRunner` tests to use a fake Agents SDK run seam instead of mocking raw Responses API fetches; targeted server tests, server typecheck, server build, and `git diff --check` pass.
 - Continued issue #107 on `feat/agent-loop-driver`: wired the existing `runAgentLoop` harness into `compile_raw_note`, added an injectable compile `AgentRunner`, mapped loop events to `agent_run_events`, enforced terminal `draft_proposal` / `finish_without_proposal` behavior, pinned concept indexing and eval/proposal persistence in the draft handler, and kept default scripted behavior compatible until the real OpenAI Agents SDK runner lands.

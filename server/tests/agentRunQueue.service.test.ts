@@ -235,44 +235,39 @@ describe("agent run queue service", () => {
     });
   });
 
-  test("guards personal interview drafts even when extraction proposes knowledge", async () => {
+  test("respects the LLM keep_searchable decision for non-English sources", async () => {
+    // No regex guard: a Chinese self-introduction draft is kept searchable purely
+    // because the LLM extraction said so (#105).
     const wikiIndexer = new WikiIndexerService();
     const draft = wikiIndexer.draftProposal(
       {
-        id: "source-interview-answer-guard",
-        rawNoteId: "raw-note-interview-answer-guard",
-        rawSourceId: "raw-source-interview-answer-guard",
+        id: "source-zh-self-intro",
+        rawNoteId: "raw-note-zh-self-intro",
+        rawSourceId: "raw-source-zh-self-intro",
         userId: null,
         sourceRole: "personal_note",
         sourceType: "markdown",
-        title: "Tell me about yourself draft",
-        bodyMarkdown:
-          "I am a product-minded engineer who likes turning ambiguous workflows into clear systems. When interviewing, I want to emphasize product judgment and mention the graph UI work.",
+        title: "自我介紹",
+        bodyMarkdown: "我是一個產品導向的工程師,面試時想強調產品判斷力與圖形介面的專案。",
         chunks: [],
       },
       {
         domain: "general",
         knowledgeType: "knowledge_note",
-        title: "Product-minded engineering",
-        outcome: "create_knowledge",
-        outcomeReason: "The source contains extractable concepts about product engineering.",
+        title: "自我介紹",
+        outcome: "keep_searchable",
+        outcomeReason: "這看起來是面試自我介紹草稿,不是可重用的知識。",
         structuredData: {
-          summary: "A personal interview answer draft.",
+          summary: "一份個人面試自我介紹草稿。",
           concepts: [
             {
-              name: "Product-minded engineering",
+              name: "自我介紹",
               type: "topic",
               specificity: "specific",
               confidence: "medium",
             },
           ],
-          claims: [
-            {
-              text: "The source describes product-minded engineering.",
-              confidence: "medium",
-              evidenceChunkIds: [],
-            },
-          ],
+          claims: [],
           methods: [],
           examples: [],
           constraints: [],
@@ -482,39 +477,33 @@ describe("agent run queue service", () => {
     );
   });
 
-  test("guards one-off interview answer drafts to keep-searchable proposals", async () => {
+  test("keeps a non-English interview draft searchable when the LLM decides keep_searchable", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawNoteRepository = new InMemoryRawNoteRepository();
     const proposalRepository = new InMemoryProposalRepository();
-    const overlyEagerKnowledgeIndexer = {
+    const keepSearchableIndexer = {
       async extract() {
         return {
           provider: "openai" as const,
           extraction: {
             domain: "general",
             knowledgeType: "knowledge_note",
-            title: "Product-minded engineering",
-            outcome: "create_knowledge" as const,
-            outcomeReason: "The source contains extractable concepts about product engineering.",
+            title: "自我介紹",
+            outcome: "keep_searchable" as const,
+            outcomeReason: "這是面試自我介紹草稿,不是可重用的知識。",
             structuredData: {
-              summary: "A personal interview answer draft.",
+              summary: "一份個人面試自我介紹草稿。",
               concepts: [
                 {
-                  name: "Self introduction",
+                  name: "自我介紹",
                   type: "topic",
                   specificity: "specific",
                   confidence: "medium" as const,
                 },
               ],
-              claims: [
-                {
-                  text: "The source describes product-minded engineering.",
-                  confidence: "medium" as const,
-                  evidenceChunkIds: [],
-                },
-              ],
+              claims: [],
               methods: [],
               examples: [],
               constraints: [],
@@ -532,11 +521,11 @@ describe("agent run queue service", () => {
       noteLinkRepository,
       rawNoteRepository,
       proposalRepository,
-      overlyEagerKnowledgeIndexer,
+      keepSearchableIndexer,
     );
     const rawNote = await rawNoteRepository.create({
-      title: "Tell me about yourself",
-      bodyMarkdown: "I am a product-minded engineer and this is my personal interview answer.",
+      title: "自我介紹",
+      bodyMarkdown: "我是一個產品導向的工程師,這是我的面試自我介紹草稿。",
     });
 
     const agentRun = await service.enqueue({
@@ -727,6 +716,9 @@ describe("agent run queue service", () => {
           outcomeReason: "This source revises an existing knowledge block.",
           targetBlockId: "block-existing-1",
           confidence: "high" as const,
+          conflictDetected: true,
+          conflictSummary: "The source revises the existing retrieval evaluation loop.",
+          conflictResolution: "needs_user_decision" as const,
         };
       },
     };
@@ -812,7 +804,15 @@ describe("agent run queue service", () => {
     );
     expect((upsertItem?.payload as Record<string, unknown>).targetBlockId).toBe("block-existing-1");
 
-    // The outcome decision is emitted only AFTER search_blocks has run (#103).
+    // Conflict comes from the LLM classification, not a keyword scan (#105).
+    expect(upsertItem).toMatchObject({
+      conflictDetected: true,
+      conflictSummary: "The source revises the existing retrieval evaluation loop.",
+      conflictResolution: "needs_user_decision",
+    });
+
+    // The outcome decision is emitted only AFTER search_blocks has run (#103),
+    // and a suspected conflict triggers a version-history read.
     const eventKeys = agentRunRepository.events.map((event) => {
       if (event.category === "tool" && event.name === "called") {
         return `tool.called:${(event.payload as { tool?: string }).tool}`;
@@ -823,5 +823,6 @@ describe("agent run queue service", () => {
     const outcomeIndex = eventKeys.indexOf("indexing.outcome_classified");
     expect(searchIndex).toBeGreaterThanOrEqual(0);
     expect(outcomeIndex).toBeGreaterThan(searchIndex);
+    expect(eventKeys).toContain("tool.called:get_block_history");
   });
 });

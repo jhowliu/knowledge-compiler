@@ -11,7 +11,6 @@ import type { RawSourceWithChunks } from "../domain/rawSource.js";
 import { agentRunEvents } from "../domain/agentRunEvents.js";
 import {
   WikiIndexerService,
-  applySourceOnlyOutcomeGuard,
   type WikiIndexer,
   type WikiIndexingSource,
 } from "./wikiIndexer.service.js";
@@ -304,9 +303,9 @@ export class AgentRunQueueService {
     }
 
     const { extraction: extractedResult, provider } = await this.wikiIndexerService.extract(source);
-    // Provisional outcome from extraction. The authoritative outcome is decided
-    // below, AFTER the knowledge base has been searched (see #103).
-    let extraction = applySourceOnlyOutcomeGuard(source, extractedResult);
+    // Provisional outcome from the LLM extraction. The authoritative outcome is
+    // decided below, AFTER the knowledge base has been searched (see #103).
+    let extraction = extractedResult;
     const extractedConcepts = extraction.structuredData.concepts;
     await this.agentRunRepository.addEvent({
       agentRunId,
@@ -369,6 +368,13 @@ export class AgentRunQueueService {
     // knowledge-base context rather than blind (#103, #104).
     let blockSearch: Awaited<ReturnType<AgentToolService["searchBlocks"]>> | null = null;
     let targetBlockId: string | null = null;
+    // Conflict detection is part of the LLM's reasoned decision (#105), not a
+    // keyword scan of the source text.
+    let conflict: {
+      detected: boolean;
+      summary: string | null;
+      resolution: "update" | "keep_both" | "needs_user_decision" | null;
+    } = { detected: false, summary: null, resolution: null };
     if (agentToolService) {
       blockSearch = await this.callTool(
         agentRunId,
@@ -393,13 +399,18 @@ export class AgentRunQueueService {
             .filter((match) => match.match_type !== "none")
             .map((match) => match.canonical_label ?? match.input),
         });
-        extraction = applySourceOnlyOutcomeGuard(source, {
+        extraction = {
           ...extraction,
           outcome: classification.outcome,
           outcomeReason: classification.outcomeReason,
           confidence: classification.confidence,
-        });
+        };
         targetBlockId = extraction.outcome === "update_existing_knowledge" ? classification.targetBlockId : null;
+        conflict = {
+          detected: classification.conflictDetected,
+          summary: classification.conflictSummary,
+          resolution: classification.conflictResolution,
+        };
       } else if (extraction.outcome === "update_existing_knowledge") {
         // Fallback when the indexer cannot reclassify: use the top search hit.
         targetBlockId = blockSearch.results[0]?.block_id ?? null;
@@ -471,7 +482,7 @@ export class AgentRunQueueService {
       : null;
     if (targetBlock) round += 1;
 
-    const conflictDetected = targetBlock ? hasConflictSignal(source.bodyMarkdown) : false;
+    const conflictDetected = Boolean(targetBlock) && conflict.detected;
     if (conflictDetected && targetBlock) {
       await this.callTool(
         agentRunId,
@@ -525,14 +536,12 @@ export class AgentRunQueueService {
                 source_spans: sourceSpan ? [sourceSpan] : [],
                 confidence: extraction.confidence,
                 conflict_detected: item.actionType === "keep_source_searchable" ? false : conflictDetected,
-                conflict_summary: item.actionType === "keep_source_searchable" ? null : conflictDetected
-                  ? "The source appears to contradict or revise existing knowledge."
-                  : null,
-                conflict_resolution: item.actionType === "keep_source_searchable"
+                conflict_summary: item.actionType === "keep_source_searchable" || !conflictDetected
                   ? null
-                  : conflictDetected
-                    ? ("needs_user_decision" as const)
-                    : null,
+                  : conflict.summary,
+                conflict_resolution: item.actionType === "keep_source_searchable" || !conflictDetected
+                  ? null
+                  : conflict.resolution,
               };
             }),
           suggested_links: extraction.outcome === "keep_searchable"
@@ -675,10 +684,6 @@ function contractChunks(source: WikiIndexingSource) {
         body_markdown: source.bodyMarkdown,
         token_estimate: Math.max(1, Math.ceil(source.bodyMarkdown.length / 4)),
       }];
-}
-
-function hasConflictSignal(text: string) {
-  return /\b(conflict|contradict|instead|however|but|no longer|not true)\b/i.test(text);
 }
 
 function summarizeToolOutput(output: unknown) {

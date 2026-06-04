@@ -4,6 +4,97 @@ import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repositor
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 
 describe("ProposalService", () => {
+  test("approves keep-searchable proposals without creating knowledge artifacts", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-interview-answer",
+      draft: {
+        detectedDomain: "general",
+        detectedKnowledgeType: "source_only",
+        impactLevel: 1,
+        confidence: "high",
+        rationale: "Recommended: Keep searchable. This is an interview answer draft.",
+        items: [
+          {
+            actionType: "keep_source_searchable",
+            targetType: "raw_source",
+            payload: {
+              outcome: "keep_searchable",
+              outcomeReason: "This looks like an interview answer draft, not reusable knowledge.",
+              title: "Tell me about yourself",
+              concepts: [{ name: "self introduction", type: "topic", confidence: "medium" }],
+              knowledgeProposal: {
+                domain: "general",
+                knowledgeType: "knowledge_note",
+                title: "Tell me about yourself",
+                bodyMarkdown: "A personal answer draft.",
+                structuredData: { concepts: [] },
+              },
+            },
+            rationale: "This source should remain searchable without becoming graph knowledge.",
+          },
+        ],
+      },
+    });
+
+    const approved = await service.approveProposal(proposal.id);
+
+    expect(approved.status).toBe("approved");
+    expect(knowledge.compiledNotes).toHaveLength(0);
+    expect(knowledge.knowledgeSources).toHaveLength(0);
+    expect(knowledge.knowledgeVersions).toHaveLength(0);
+    expect(knowledge.knowledgeBlocks).toHaveLength(0);
+    expect(noteLinks.noteLinks).toHaveLength(0);
+  });
+
+  test("can override a keep-searchable recommendation into a knowledge note", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-framework",
+      draft: {
+        detectedDomain: "general",
+        detectedKnowledgeType: "source_only",
+        impactLevel: 1,
+        confidence: "medium",
+        rationale: "Recommended: Keep searchable.",
+        items: [
+          {
+            actionType: "keep_source_searchable",
+            targetType: "raw_source",
+            payload: {
+              outcome: "keep_searchable",
+              outcomeReason: "The agent was unsure whether this is reusable.",
+              knowledgeProposal: {
+                domain: "interviewing",
+                knowledgeType: "knowledge_note",
+                title: "Project story framework",
+                bodyMarkdown: "Use context, decision, tradeoff, and outcome.",
+                structuredData: { concepts: [] },
+              },
+            },
+            rationale: "Keep source only by default.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id, { indexingOutcomeOverride: "create_knowledge" });
+
+    expect(knowledge.compiledNotes).toHaveLength(1);
+    expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.compiledNotes[0]).toMatchObject({
+      domain: "interviewing",
+      noteType: "knowledge_note",
+      title: "Project story framework",
+    });
+  });
+
   test("approves proposal items into compiled and canonical knowledge", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();
@@ -373,6 +464,81 @@ describe("ProposalService", () => {
       targetNoteId: existing.id,
       relationType: "related_concept",
       status: "pending",
+    });
+  });
+
+  test("updates targeted existing knowledge instead of creating a duplicate for revisions", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+
+    const existing = await knowledge.upsertCompiledNote({
+      domain: "general",
+      noteType: "knowledge_note",
+      title: "Retrieval-Augmented Generation Evaluation Loop",
+      bodyMarkdown: "Evaluate retrieval before answer generation.",
+      structuredData: { concepts: [{ name: "RAG evaluation", type: "topic" }] },
+    });
+    const existingSnapshot = await knowledge.upsertKnowledgeSourceVersion({
+      domain: existing.domain,
+      knowledgeType: existing.noteType,
+      title: existing.title,
+      bodyMarkdown: existing.bodyMarkdown,
+      structuredData: existing.structuredData,
+      compiledNoteId: existing.id,
+      proposalId: "proposal-original",
+      changeSummary: "Initial version.",
+      blocks: [{ blockIndex: 0, heading: null, bodyMarkdown: existing.bodyMarkdown, tokenEstimate: 8 }],
+    });
+    const proposal = await proposals.create({
+      rawNoteId: "raw-note-rag-revision",
+      draft: {
+        detectedDomain: "general",
+        detectedKnowledgeType: "knowledge_note",
+        impactLevel: 3,
+        confidence: "high",
+        rationale: "Recommended: Update existing knowledge.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "general",
+              knowledgeType: "knowledge_note",
+              title: "RAG Evaluation Loop Revision",
+              bodyMarkdown: "Evaluate coverage, claim support, citation precision, and conflicts.",
+              targetCompiledNoteId: existing.id,
+              targetKnowledgeSourceId: existingSnapshot.source.id,
+              structuredData: {
+                concepts: [{ name: "RAG evaluation", type: "topic" }],
+              },
+            },
+            rationale: "Revise the existing RAG evaluation knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.compiledNotes).toHaveLength(1);
+    expect(knowledge.compiledNotes[0]).toMatchObject({
+      id: existing.id,
+      title: "RAG Evaluation Loop Revision",
+    });
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toContain("RAG evaluation");
+    expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.knowledgeSources[0]).toMatchObject({
+      id: existingSnapshot.source.id,
+      title: "RAG Evaluation Loop Revision",
+      currentVersionId: "knowledge-version-2",
+    });
+    expect(knowledge.knowledgeVersions).toHaveLength(2);
+    expect(knowledge.knowledgeVersions[1]).toMatchObject({
+      knowledgeSourceId: existingSnapshot.source.id,
+      compiledNoteId: existing.id,
+      versionNumber: 2,
     });
   });
 });

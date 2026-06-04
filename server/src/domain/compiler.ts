@@ -67,9 +67,16 @@ export type GeneralKnowledgeExtraction = {
   domain: string;
   knowledgeType: string;
   title: string | null;
+  outcome: IndexingOutcome;
+  outcomeReason: string;
   structuredData: KnowledgeStructuredData;
   confidence: Confidence;
 };
+
+export type IndexingOutcome =
+  | "keep_searchable"
+  | "create_knowledge"
+  | "update_existing_knowledge";
 
 export type DecisionRule = {
   signal: string;

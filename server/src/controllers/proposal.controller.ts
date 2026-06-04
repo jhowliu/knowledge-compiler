@@ -23,8 +23,15 @@ export class ProposalController {
 
   approve = async (request: Request, response: Response, next: NextFunction) => {
     try {
+      const indexingOutcomeOverride =
+        request.body.indexingOutcomeOverride === "keep_searchable" ||
+        request.body.indexingOutcomeOverride === "create_knowledge"
+          ? request.body.indexingOutcomeOverride
+          : null;
       response.json({
-        proposal: await this.proposalService.approveProposal(requireStringParam(request, "id")),
+        proposal: await this.proposalService.approveProposal(requireStringParam(request, "id"), {
+          indexingOutcomeOverride,
+        }),
       });
     } catch (error) {
       next(error);

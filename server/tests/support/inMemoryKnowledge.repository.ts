@@ -196,12 +196,33 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async upsertCompiledNote(input: {
     userId?: string | null;
+    targetCompiledNoteId?: string | null;
     domain: string;
     noteType: string;
     title: string;
     bodyMarkdown: string;
     structuredData: unknown;
   }): Promise<CompiledNote> {
+    const existing = input.targetCompiledNoteId
+      ? this.compiledNotes.find((note) => note.id === input.targetCompiledNoteId && note.status === "active")
+      : this.compiledNotes.find(
+          (note) =>
+            note.userId === (input.userId ?? null) &&
+            note.domain === input.domain &&
+            note.noteType === input.noteType &&
+            note.title.toLowerCase() === input.title.toLowerCase() &&
+            note.status === "active",
+        );
+    if (existing) {
+      existing.domain = input.domain;
+      existing.noteType = input.noteType;
+      existing.title = input.title;
+      existing.bodyMarkdown = input.bodyMarkdown;
+      existing.structuredData = input.structuredData;
+      existing.updatedAt = new Date("2026-05-24T00:00:00.000Z");
+      return existing;
+    }
+
     const note: CompiledNote = {
       id: `compiled-${this.compiledNotes.length + 1}`,
       userId: input.userId ?? null,
@@ -225,6 +246,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
+    targetKnowledgeSourceId?: string | null;
     domain: string;
     knowledgeType: string;
     title: string;
@@ -235,7 +257,23 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     changeSummary?: string | null;
     blocks: CreateKnowledgeBlockInput[];
   }): Promise<KnowledgeSourceSnapshot> {
-    let source = this.knowledgeSources.find(
+    let source = input.targetKnowledgeSourceId
+      ? this.knowledgeSources.find(
+          (item) =>
+            item.id === input.targetKnowledgeSourceId &&
+            item.userId === (input.userId ?? null) &&
+            item.status === "active",
+        )
+      : null;
+    if (!source && input.compiledNoteId) {
+      const version = [...this.knowledgeVersions]
+        .reverse()
+        .find((item) => item.compiledNoteId === input.compiledNoteId);
+      source = version
+        ? this.knowledgeSources.find((item) => item.id === version.knowledgeSourceId && item.status === "active")
+        : undefined;
+    }
+    source ??= this.knowledgeSources.find(
       (item) =>
         item.userId === (input.userId ?? null) &&
         item.domain === input.domain &&
@@ -258,6 +296,10 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         updatedAt: new Date("2026-05-24T00:00:00.000Z"),
       };
       this.knowledgeSources.push(source);
+    } else {
+      source.domain = input.domain;
+      source.knowledgeType = input.knowledgeType;
+      source.title = input.title;
     }
 
     const version: KnowledgeVersion = {

@@ -34,6 +34,8 @@ type ApplyContext = {
   compiledNoteByTitle: Map<string, CompiledNote>;
 };
 
+type IndexingOutcomeOverride = "keep_searchable" | "create_knowledge" | null;
+
 export class ProposalService {
   constructor(
     private readonly proposalRepository: ProposalRepository,
@@ -54,7 +56,7 @@ export class ProposalService {
     return proposal;
   }
 
-  async approveProposal(id: string) {
+  async approveProposal(id: string, options: { indexingOutcomeOverride?: IndexingOutcomeOverride } = {}) {
     const proposal = await this.getProposal(id);
     if (proposal.status !== "pending") {
       return proposal;
@@ -62,7 +64,7 @@ export class ProposalService {
 
     const context: ApplyContext = { compiledNoteByTitle: new Map() };
     for (const item of proposal.items) {
-      await this.applyItem(proposal, item, context);
+      await this.applyItem(proposal, item, context, options.indexingOutcomeOverride ?? null);
     }
 
     await this.proposalRepository.setItemStatus(id, "approved");
@@ -90,8 +92,66 @@ export class ProposalService {
     return this.getProposal(id);
   }
 
-  private async applyItem(proposal: ProposalWithItems, item: ProposalItem, context: ApplyContext) {
+  private async applyItem(
+    proposal: ProposalWithItems,
+    item: ProposalItem,
+    context: ApplyContext,
+    indexingOutcomeOverride: IndexingOutcomeOverride,
+  ) {
     const payload = asRecord(item.payload);
+
+    if (
+      indexingOutcomeOverride === "keep_searchable" &&
+      (item.actionType === "upsert_compiled_note" ||
+        item.actionType === "upsert_knowledge" ||
+        item.actionType === "create_link")
+    ) {
+      return;
+    }
+
+    if (item.actionType === "keep_source_searchable") {
+      if (indexingOutcomeOverride !== "create_knowledge") {
+        return;
+      }
+
+      const knowledgeProposal = asRecord(payload.knowledgeProposal);
+      await this.applyItem(
+        proposal,
+        {
+          ...item,
+          actionType: "upsert_knowledge",
+          targetType: "knowledge_source",
+          payload: {
+            domain: stringValue(knowledgeProposal, "domain", stringValue(payload, "domain", "general")),
+            knowledgeType: stringValue(
+              knowledgeProposal,
+              "knowledgeType",
+              stringValue(payload, "knowledgeType", "knowledge_note"),
+            ),
+            title: stringValue(knowledgeProposal, "title", stringValue(payload, "title", "Untitled Note")),
+            bodyMarkdown: stringValue(
+              knowledgeProposal,
+              "bodyMarkdown",
+              stringValue(payload, "bodyMarkdown", ""),
+            ),
+            structuredData: knowledgeProposal.structuredData ?? payload.structuredData ?? {},
+            targetKnowledgeSourceId: stringValue(
+              knowledgeProposal,
+              "targetKnowledgeSourceId",
+              stringValue(payload, "targetKnowledgeSourceId", ""),
+            ),
+            targetCompiledNoteId: stringValue(
+              knowledgeProposal,
+              "targetCompiledNoteId",
+              stringValue(payload, "targetCompiledNoteId", ""),
+            ),
+          },
+        },
+        context,
+        null,
+      );
+      return;
+    }
 
     if (item.actionType === "upsert_compiled_note" || item.actionType === "upsert_knowledge") {
       const title = stringValue(payload, "title", "Untitled Note");
@@ -104,8 +164,11 @@ export class ProposalService {
         "noteType",
         stringValue(payload, "knowledgeType", "note"),
       );
+      const targetCompiledNoteId = stringValue(payload, "targetCompiledNoteId") || null;
+      const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
       const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
         userId: proposal.userId,
+        targetCompiledNoteId,
         domain: stringValue(payload, "domain", "coding"),
         noteType,
         title,
@@ -127,6 +190,7 @@ export class ProposalService {
 
       const knowledgeSnapshot = await this.knowledgeRepository.upsertKnowledgeSourceVersion({
         userId: proposal.userId,
+        targetKnowledgeSourceId,
         domain: compiledNote.domain,
         knowledgeType: compiledNote.noteType,
         title: compiledNote.title,

@@ -17,10 +17,40 @@ import type {
   CompiledNote,
   KnowledgeSourceTimeline,
   NoteLink,
+  RawNote,
+  RawSource,
   RelatedNoteMatch,
   WorkspaceData,
 } from '../../types/domain'
 import { relationOptionLabel, shortTimestamp } from '../agent-runs/agentRunView'
+
+type SourceGraphCard = {
+  key: string
+  id: string
+  title: string
+  bodyMarkdown: string
+  sourceRole: string
+  sourceType: string
+  outcomeReason: string | null
+  timestamp: string
+}
+
+type GraphNode =
+  | {
+      kind: 'knowledge'
+      key: string
+      note: CompiledNote
+      position: CanvasPoint
+      relation: string
+      link?: NoteLink
+    }
+  | {
+      kind: 'source'
+      key: string
+      source: SourceGraphCard
+      position: CanvasPoint
+      relation: string
+    }
 
 function noteTypeLabel(noteType: string) {
   return noteType.replaceAll('_', ' ')
@@ -30,6 +60,11 @@ function noteTone(noteType: string) {
   if (noteType === 'algorithm') return 'border-emerald-300 bg-emerald-50 text-emerald-800'
   if (noteType === 'mistake') return 'border-orange-300 bg-orange-50 text-orange-800'
   return 'border-gray-300 bg-white text-gray-700'
+}
+
+function sourceTone(sourceRole: string) {
+  if (sourceRole === 'reference') return 'border-sky-300 bg-sky-50 text-sky-800'
+  return 'border-amber-300 bg-amber-50 text-amber-800'
 }
 
 function noteKeywords(note: CompiledNote | undefined) {
@@ -58,6 +93,80 @@ function mergeKnowledgeNotes(data: WorkspaceData) {
   const notes = new globalThis.Map<string, CompiledNote>()
   for (const note of data.compiledNotes) notes.set(note.id, note)
   return [...notes.values()]
+}
+
+function recordValue(value: unknown) {
+  if (value && typeof value === 'object') return value as Record<string, unknown>
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function indexingOutcome(extractedData: unknown) {
+  return stringValue(recordValue(extractedData).outcome)
+}
+
+function outcomeReason(extractedData: unknown) {
+  return stringValue(recordValue(extractedData).outcomeReason)
+}
+
+function buildSourceGraphCards(data: WorkspaceData): SourceGraphCard[] {
+  const approvedRawSourceIds = new Set<string>()
+  const approvedRawNoteIds = new Set<string>()
+  for (const proposal of data.proposals) {
+    if (proposal.status !== 'approved') continue
+    for (const item of proposal.items) {
+      if (item.actionType !== 'keep_source_searchable') continue
+      const payload = recordValue(item.payload)
+      const rawSourceId = stringValue(payload.rawSourceId)
+      const rawNoteId = stringValue(payload.rawNoteId)
+      if (rawSourceId) approvedRawSourceIds.add(rawSourceId)
+      if (rawNoteId) approvedRawNoteIds.add(rawNoteId)
+    }
+  }
+
+  const rawSourceCards = data.rawSources
+    .filter((source) => indexingOutcome(source.extractedData) === 'keep_searchable')
+    .filter((source) => approvedRawSourceIds.has(source.id))
+    .map((source: RawSource) => ({
+      key: `source:${source.id}`,
+      id: source.id,
+      title: source.title ?? 'Untitled source',
+      bodyMarkdown: source.bodyMarkdown,
+      sourceRole: source.sourceRole,
+      sourceType: source.sourceType,
+      outcomeReason: outcomeReason(source.extractedData),
+      timestamp: source.updatedAt,
+    }))
+  const rawSourceIds = new Set(data.rawSources.map((source) => source.id))
+  const rawNoteCards = data.rawNotes
+    .filter((note) => !note.rawSourceId || !rawSourceIds.has(note.rawSourceId))
+    .filter((note) => indexingOutcome(note.extractedData) === 'keep_searchable')
+    .filter((note) => approvedRawNoteIds.has(note.id))
+    .map((note: RawNote) => ({
+      key: `source:${note.id}`,
+      id: note.id,
+      title: note.title ?? 'Untitled source',
+      bodyMarkdown: note.bodyMarkdown,
+      sourceRole: note.sourceRole,
+      sourceType: note.sourceType,
+      outcomeReason: outcomeReason(note.extractedData),
+      timestamp: note.createdAt,
+    }))
+
+  return [...rawSourceCards, ...rawNoteCards].sort(
+    (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  )
 }
 
 function connectedNoteId(link: NoteLink, noteId: string) {
@@ -155,8 +264,18 @@ export function KnowledgeCanvas({
   const latestNodePositionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const notes = useMemo(() => mergeKnowledgeNotes(data), [data.compiledNotes])
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
+  const sourceCards = useMemo(
+    () => buildSourceGraphCards(data),
+    [data.proposals, data.rawNotes, data.rawSources],
+  )
+  const sourceCardByKey = useMemo(
+    () => new globalThis.Map(sourceCards.map((source) => [source.key, source])),
+    [sourceCards],
+  )
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [selectedNoteModalId, setSelectedNoteModalId] = useState<string | null>(null)
+  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null)
+  const [selectedSourceModalKey, setSelectedSourceModalKey] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [canvasZoom, setCanvasZoom] = useState(1)
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 })
@@ -170,7 +289,8 @@ export function KnowledgeCanvas({
     origin: { x: number; y: number }
   } | null>(null)
   const [dragState, setDragState] = useState<{
-    noteId: string
+    nodeKey: string
+    persistNoteId: string | null
     startClientX: number
     startClientY: number
     origin: { x: number; y: number }
@@ -206,6 +326,7 @@ export function KnowledgeCanvas({
   }, [persistedNodePositions])
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null
   const selectedModalNote = selectedNoteModalId ? noteById.get(selectedNoteModalId) ?? null : null
+  const selectedSourceModal = selectedSourceModalKey ? sourceCardByKey.get(selectedSourceModalKey) ?? null : null
 
   useEffect(() => {
     let cancelled = false
@@ -289,7 +410,8 @@ export function KnowledgeCanvas({
     ...(selectedNote ? [selectedNote] : []),
     ...connectedGraphNotes,
     ...notes,
-  ]).slice(0, 9)
+  ]).slice(0, Math.max(1, 9 - Math.min(sourceCards.length, 4)))
+  const visibleSourceCards = sourceCards.slice(0, Math.max(0, 9 - visibleGraphNotes.length))
   const graphPositions = [
     { x: 44, y: 48 },
     { x: 22, y: 31 },
@@ -301,7 +423,9 @@ export function KnowledgeCanvas({
     { x: 82, y: 50 },
     { x: 14, y: 50 },
   ]
-  const graphNodes = visibleGraphNotes.map((note, index) => ({
+  const knowledgeGraphNodes = visibleGraphNotes.map((note, index) => ({
+    kind: 'knowledge' as const,
+    key: `knowledge:${note.id}`,
     note,
     position: nodePositions[note.id] ?? graphPositions[index] ?? graphPositions[0],
     relation:
@@ -310,7 +434,18 @@ export function KnowledgeCanvas({
         : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
     link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
-  const graphNodeById = new globalThis.Map(graphNodes.map((node) => [node.note.id, node]))
+  const sourceGraphNodes = visibleSourceCards.map((source, index) => {
+    const positionIndex = visibleGraphNotes.length + index
+    return {
+      kind: 'source' as const,
+      key: source.key,
+      source,
+      position: nodePositions[source.key] ?? graphPositions[positionIndex] ?? graphPositions[0],
+      relation: source.outcomeReason ?? 'Kept searchable',
+    }
+  })
+  const graphNodes: GraphNode[] = [...knowledgeGraphNodes, ...sourceGraphNodes]
+  const graphNodeById = new globalThis.Map(knowledgeGraphNodes.map((node) => [node.note.id, node]))
   const baseGraphEdges = data.noteLinks
     .filter(
       (link) =>
@@ -339,8 +474,8 @@ export function KnowledgeCanvas({
       ): edge is {
         id: string
         link: NoteLink
-        sourceNode: (typeof graphNodes)[number]
-        targetNode: (typeof graphNodes)[number]
+        sourceNode: (typeof knowledgeGraphNodes)[number]
+        targetNode: (typeof knowledgeGraphNodes)[number]
         midpoint: { x: number; y: number }
       } => Boolean(edge),
     )
@@ -398,6 +533,12 @@ export function KnowledgeCanvas({
       setSelectedNoteModalId(null)
     }
   }, [noteById, selectedNoteModalId])
+
+  useEffect(() => {
+    if (selectedSourceModalKey && !sourceCardByKey.has(selectedSourceModalKey)) {
+      setSelectedSourceModalKey(null)
+    }
+  }, [selectedSourceModalKey, sourceCardByKey])
 
   function pointFromEvent(event: React.PointerEvent) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -477,7 +618,7 @@ export function KnowledgeCanvas({
 
   function startPan(event: React.PointerEvent) {
     const target = event.target as HTMLElement
-    if (target.closest('[data-note-id], [data-edge-toolbar], [data-link-draft], button, input, select, textarea')) {
+    if (target.closest('[data-graph-node-key], [data-edge-toolbar], [data-link-draft], button, input, select, textarea')) {
       return
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -494,15 +635,26 @@ export function KnowledgeCanvas({
     zoomCanvas(canvasZoom + direction * 0.08, { x: event.clientX, y: event.clientY })
   }
 
-  function startDrag(event: React.PointerEvent, noteId: string, position: { x: number; y: number }) {
+  function startDrag(
+    event: React.PointerEvent,
+    nodeKey: string,
+    position: { x: number; y: number },
+    persistNoteId: string | null,
+  ) {
     const target = event.target as HTMLElement
     if (target.closest('[data-link-handle="true"]')) {
       return
     }
     event.currentTarget.setPointerCapture(event.pointerId)
-    setSelectedNoteId(noteId)
+    if (persistNoteId) {
+      setSelectedNoteId(persistNoteId)
+      setSelectedSourceKey(null)
+    } else {
+      setSelectedSourceKey(nodeKey)
+    }
     setDragState({
-      noteId,
+      nodeKey,
+      persistNoteId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       origin: position,
@@ -546,7 +698,7 @@ export function KnowledgeCanvas({
       y: Math.min(86, Math.max(16, dragState.origin.y + ((event.clientY - dragState.startClientY) / (rect.height * canvasZoom)) * 100)),
     }
     setNodePositions((positions) => {
-      const nextPositions = { ...positions, [dragState.noteId]: nextPosition }
+      const nextPositions = { ...positions, [dragState.nodeKey]: nextPosition }
       latestNodePositionsRef.current = nextPositions
       return nextPositions
     })
@@ -577,9 +729,9 @@ export function KnowledgeCanvas({
     } else if (edgeDragState) {
       setEdgeDragState(null)
     } else if (dragState) {
-      const position = latestNodePositionsRef.current[dragState.noteId]
-      if (position) {
-        onMoveNoteCard(dragState.noteId, position)
+      const position = latestNodePositionsRef.current[dragState.nodeKey]
+      if (position && dragState.persistNoteId) {
+        onMoveNoteCard(dragState.persistNoteId, position)
       }
     }
     setConnectState(null)
@@ -609,9 +761,9 @@ export function KnowledgeCanvas({
 
         <div className="absolute left-7 top-6 z-20">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Graph view</p>
-          <h2 className="mt-1 text-2xl font-extrabold text-ink">Notes as links</h2>
+          <h2 className="mt-1 text-2xl font-extrabold text-ink">Knowledge and sources</h2>
           <p className="mt-1 max-w-[340px] text-sm leading-6 text-gray-500">
-            Cards stay lightweight. Open one to inspect body, evidence, and agent-suggested links.
+            Knowledge cards can be linked. Source cards stay visible for later sorting without entering RAG.
           </p>
         </div>
 
@@ -927,56 +1079,76 @@ export function KnowledgeCanvas({
 
           {graphNodes.length ? (
             graphNodes.map((node) => {
-              const isSelected = node.note.id === selectedNote?.id
+              const isKnowledge = node.kind === 'knowledge'
+              const isSelected = isKnowledge
+                ? node.note.id === selectedNote?.id
+                : node.key === selectedSourceKey
+              const title = isKnowledge ? node.note.title : node.source.title
+              const label = isKnowledge ? noteTypeLabel(node.note.noteType) : 'Source'
+              const labelTone = isKnowledge ? noteTone(node.note.noteType) : sourceTone(node.source.sourceRole)
               return (
                 <button
                   className={`group absolute z-10 w-[208px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-lg border bg-white p-3 text-left shadow-card transition hover:-translate-y-[calc(50%+2px)] ${
                     isSelected ? 'border-violet ring-4 ring-violet/10' : 'border-gray-200 hover:border-gray-300'
                   }`}
-                  data-note-id={node.note.id}
-                  key={node.note.id}
+                  data-graph-node-key={node.key}
+                  data-note-id={isKnowledge ? node.note.id : undefined}
+                  key={node.key}
                   onClick={() => {
-                    setSelectedNoteId(node.note.id)
-                    setSelectedNoteModalId(node.note.id)
+                    if (isKnowledge) {
+                      setSelectedNoteId(node.note.id)
+                      setSelectedSourceKey(null)
+                      setSelectedNoteModalId(node.note.id)
+                    } else {
+                      setSelectedSourceKey(node.key)
+                      setSelectedSourceModalKey(node.key)
+                    }
                     setSelectedEdgeId(null)
                     setPendingConnection(null)
                   }}
-                  onPointerDown={(event) => startDrag(event, node.note.id, node.position)}
+                  onPointerDown={(event) =>
+                    startDrag(event, node.key, node.position, isKnowledge ? node.note.id : null)
+                  }
                   style={{ left: `${node.position.x}%`, top: `${node.position.y}%` }}
                   type="button"
                 >
-                  <span
-                    className="absolute -right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-violet text-white opacity-0 shadow-md transition group-hover:opacity-100 group-focus-visible:opacity-100"
-                    data-link-handle="true"
-                    onClick={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      setSelectedNoteId(node.note.id)
-                      setSelectedEdgeId(null)
-                      setPendingConnection(null)
-                      setConnectState({
-                        sourceNoteId: node.note.id,
-                        start: { x: node.position.x + 4.8, y: node.position.y },
-                        current: pointFromEvent(event),
-                      })
-                    }}
-                    title="Create link"
-                  >
-                    <Plus size={15} strokeWidth={2.8} />
-                  </span>
+                  {isKnowledge ? (
+                    <span
+                      className="absolute -right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-violet text-white opacity-0 shadow-md transition group-hover:opacity-100 group-focus-visible:opacity-100"
+                      data-link-handle="true"
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setSelectedNoteId(node.note.id)
+                        setSelectedSourceKey(null)
+                        setSelectedEdgeId(null)
+                        setPendingConnection(null)
+                        setConnectState({
+                          sourceNoteId: node.note.id,
+                          start: { x: node.position.x + 4.8, y: node.position.y },
+                          current: pointFromEvent(event),
+                        })
+                      }}
+                      title="Create link"
+                    >
+                      <Plus size={15} strokeWidth={2.8} />
+                    </span>
+                  ) : null}
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${noteTone(node.note.noteType)}`}>
-                      {noteTypeLabel(node.note.noteType)}
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${labelTone}`}>
+                      {label}
                     </span>
                     {isSelected ? (
                       <GitBranch size={15} className="text-violet" />
-                    ) : (
+                    ) : isKnowledge ? (
                       <Link2 size={14} className="text-gray-400" />
+                    ) : (
+                      <History size={14} className="text-gray-400" />
                     )}
                   </div>
                   <p className="line-clamp-2 text-[13px] font-extrabold leading-5 text-ink">
-                    {node.note.title}
+                    {title}
                   </p>
                   <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-gray-500">
                     {node.relation}
@@ -987,7 +1159,7 @@ export function KnowledgeCanvas({
           ) : (
             <div className="absolute inset-0 grid place-items-center">
               <p className="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-sm text-gray-500">
-                Compile a raw note to start the graph.
+                Index a source or create knowledge to start the graph.
               </p>
             </div>
           )}
@@ -1112,6 +1284,63 @@ export function KnowledgeCanvas({
                 </div>
               </section>
 
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedSourceModal ? (
+        <div
+          aria-labelledby="source-detail-modal-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4"
+          onClick={() => setSelectedSourceModalKey(null)}
+          role="dialog"
+        >
+          <section
+            className="flex max-h-[82vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg border border-[#303030] bg-[#1B1B1B] text-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="border-b border-[#303030] px-6 py-5">
+              <span className="mb-3 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold uppercase text-amber-100">
+                Source only
+              </span>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 className="text-xl font-extrabold leading-7 text-white" id="source-detail-modal-title">
+                    {selectedSourceModal.title}
+                  </h2>
+                  <p className="mt-3 text-xs font-semibold text-gray-400">
+                    {selectedSourceModal.sourceRole.replaceAll('_', ' ')} · Kept searchable, not promoted to Knowledge
+                  </p>
+                </div>
+                <button
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-gray-400 hover:bg-[#202020] hover:text-white"
+                  onClick={() => setSelectedSourceModalKey(null)}
+                  title="Close"
+                  type="button"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {selectedSourceModal.outcomeReason ? (
+                <section className="mb-6">
+                  <h3 className="mb-3 text-sm font-extrabold text-gray-100">Indexing decision</h3>
+                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-4 text-sm leading-6 text-gray-300">
+                    {selectedSourceModal.outcomeReason}
+                  </p>
+                </section>
+              ) : null}
+
+              <section>
+                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Source content</h3>
+                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
+                  <MarkdownPreview markdown={selectedSourceModal.bodyMarkdown} />
+                </div>
+              </section>
             </div>
           </section>
         </div>

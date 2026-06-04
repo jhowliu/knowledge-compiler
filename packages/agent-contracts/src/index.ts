@@ -22,6 +22,11 @@ export const sourceSpanSchema = z.object({
 
 export const confidenceSchema = z.enum(["high", "medium", "low"]);
 export const conflictResolutionSchema = z.enum(["update", "keep_both", "needs_user_decision"]);
+export const indexingOutcomeSchema = z.enum([
+  "keep_searchable",
+  "create_knowledge",
+  "update_existing_knowledge",
+]);
 
 export const knowledgeStructuredDataSchema = z.object({
   summary: z.string(),
@@ -72,7 +77,7 @@ export const knowledgeStructuredDataSchema = z.object({
 
 export const proposalItemSchema = z
   .object({
-    action: z.enum(["upsert_knowledge", "create_knowledge"]),
+    action: z.enum(["upsert_knowledge", "create_knowledge", "keep_source_searchable"]),
     target_block_id: z.string().nullable(),
     title: z.string().min(1),
     body_markdown: z.string().min(1),
@@ -145,6 +150,7 @@ export const searchBlocksInputSchema = z.object({
 export const blockSummarySchema = z.object({
   block_id: z.string(),
   knowledge_source_id: z.string(),
+  compiled_note_id: z.string().nullable(),
   title: z.string(),
   heading: z.string().nullable(),
   body_markdown_preview: z.string(),
@@ -181,6 +187,7 @@ export const getBlockOutputSchema = z.object({
     id: z.string(),
     knowledge_source_id: z.string(),
     knowledge_version_id: z.string(),
+    compiled_note_id: z.string().nullable(),
     title: z.string(),
     heading: z.string().nullable(),
     body_markdown: z.string(),
@@ -225,6 +232,8 @@ export const getBlockHistoryOutputSchema = z.object({
 });
 
 export const draftProposalInputSchema = z.object({
+  indexing_outcome: indexingOutcomeSchema,
+  outcome_reason: z.string().min(1),
   reasoning_summary: z.string().min(1),
   incomplete_reasoning: z.boolean(),
   items: z.array(proposalItemSchema).min(1),
@@ -279,6 +288,7 @@ export const judgeOutputSchema = z.object({
 
 export type SourceSpan = z.infer<typeof sourceSpanSchema>;
 export type ProposalItem = z.infer<typeof proposalItemSchema>;
+export type IndexingOutcome = z.infer<typeof indexingOutcomeSchema>;
 export type SuggestedLink = z.infer<typeof suggestedLinkSchema>;
 export type GetSourceInput = z.infer<typeof getSourceInputSchema>;
 export type GetSourceOutput = z.infer<typeof getSourceOutputSchema>;

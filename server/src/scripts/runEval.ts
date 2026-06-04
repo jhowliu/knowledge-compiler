@@ -73,6 +73,8 @@ async function runCase(id: string): Promise<EvalCaseResult> {
   );
   const sourceSpan = sourceSpanFor(source);
   const proposal = {
+    indexing_outcome: "create_knowledge" as const,
+    outcome_reason: "Golden eval fixture expects reusable source-grounded knowledge.",
     reasoning_summary: `Golden eval proposal for ${id}.`,
     incomplete_reasoning: false,
     items: [
@@ -115,6 +117,7 @@ async function runCase(id: string): Promise<EvalCaseResult> {
           {
             block_id: "existing-block",
             knowledge_source_id: "existing-source",
+            compiled_note_id: "compiled-existing",
             title: "Existing block",
             heading: null,
             body_markdown_preview: existingBlock.slice(0, 240),

@@ -45,6 +45,7 @@ export type DraftProposalContext = {
   existingBlocksContext?: Array<{
     block_id: string;
     knowledge_source_id: string;
+    compiled_note_id: string | null;
     title: string;
     heading: string | null;
     body_markdown_preview: string;
@@ -103,6 +104,7 @@ export class AgentToolService {
       results: results.map((result) => ({
         block_id: result.blockId,
         knowledge_source_id: result.knowledgeSourceId,
+        compiled_note_id: result.compiledNoteId,
         title: result.title,
         heading: result.heading,
         body_markdown_preview: result.bodyMarkdown.slice(0, 320),
@@ -170,7 +172,12 @@ export class AgentToolService {
       rawJudgeOutput: judgeOutput,
     });
 
-    const draft = toDraftUpdateProposal(parsedInput, judgeOutput, invalidItemIndexes);
+    const draft = toDraftUpdateProposal(
+      parsedInput,
+      judgeOutput,
+      invalidItemIndexes,
+      context.existingBlocksContext ?? [],
+    );
     const proposal = await this.proposalRepository.create({
       userId: context.userId,
       rawNoteId: context.rawNoteId,
@@ -200,38 +207,64 @@ function toDraftUpdateProposal(
   input: DraftProposalInput,
   judgeOutput: Awaited<ReturnType<EvalJudgeService["judge"]>>,
   invalidItemIndexes: Set<number>,
+  existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
 ): DraftUpdateProposal {
   return {
     detectedDomain: "general",
-    detectedKnowledgeType: "knowledge_note",
+    detectedKnowledgeType: input.indexing_outcome === "keep_searchable" ? "source_only" : "knowledge_note",
     impactLevel: judgeOutput.overall_verdict === "fail" ? 3 : 2,
     confidence: judgeOutput.overall_verdict === "pass" ? "high" : "medium",
-    rationale: input.reasoning_summary,
+    rationale: `Recommended: ${input.indexing_outcome.replaceAll("_", " ")}. ${input.outcome_reason} ${input.reasoning_summary}`,
     items: [
-      ...input.items.map((item, index) => ({
-        actionType: item.action === "create_knowledge" ? "upsert_knowledge" : item.action,
-        targetType: "knowledge_source",
-        payload: {
-          knowledgeType: "knowledge_note",
-          title: item.title,
-          bodyMarkdown: item.structured_facets
-            ? renderKnowledgeFacetsMarkdown(item.structured_facets, item.body_markdown)
-            : item.body_markdown,
-          structuredData: {
-            ...(item.structured_facets ? normalizeKnowledgeStructuredData(item.structured_facets) : {}),
-            sourceConceptIds: item.source_concept_ids,
-            sourceSpans: item.source_spans,
+      ...input.items.map((item, index) => {
+        const targetBlock = item.target_block_id
+          ? existingBlocksContext.find((block) => block.block_id === item.target_block_id) ?? null
+          : null;
+        const bodyMarkdown = item.structured_facets
+          ? renderKnowledgeFacetsMarkdown(item.structured_facets, item.body_markdown)
+          : item.body_markdown;
+        const structuredData = item.structured_facets
+          ? normalizeKnowledgeStructuredData(item.structured_facets)
+          : {};
+
+        return {
+          actionType: item.action === "create_knowledge" ? "upsert_knowledge" : item.action,
+          targetType: item.action === "keep_source_searchable" ? "raw_source" : "knowledge_source",
+          payload: {
+            outcome: input.indexing_outcome,
+            outcomeReason: input.outcome_reason,
+            knowledgeType: "knowledge_note",
+            title: item.title,
+            bodyMarkdown,
+            targetKnowledgeSourceId: targetBlock?.knowledge_source_id ?? null,
+            targetCompiledNoteId: targetBlock?.compiled_note_id ?? null,
             targetBlockId: item.target_block_id,
+            structuredData: {
+              ...structuredData,
+              sourceConceptIds: item.source_concept_ids,
+              sourceSpans: item.source_spans,
+              targetBlockId: item.target_block_id,
+            },
+            knowledgeProposal: {
+              domain: "general",
+              knowledgeType: "knowledge_note",
+              title: item.title,
+              bodyMarkdown,
+              structuredData,
+              targetKnowledgeSourceId: targetBlock?.knowledge_source_id ?? null,
+              targetCompiledNoteId: targetBlock?.compiled_note_id ?? null,
+              targetBlockId: item.target_block_id,
+            },
           },
-        },
-        rationale: input.reasoning_summary,
-        sourceSpans: item.source_spans,
-        conflictDetected: item.conflict_detected,
-        conflictSummary: item.conflict_summary,
-        conflictResolution: item.conflict_resolution,
-        evalVerdict: itemEvalVerdict(input, judgeOutput, index, invalidItemIndexes),
-        incompleteReasoning: input.incomplete_reasoning,
-      })),
+          rationale: input.reasoning_summary,
+          sourceSpans: item.source_spans,
+          conflictDetected: item.conflict_detected,
+          conflictSummary: item.conflict_summary,
+          conflictResolution: item.conflict_resolution,
+          evalVerdict: itemEvalVerdict(input, judgeOutput, index, invalidItemIndexes),
+          incompleteReasoning: input.incomplete_reasoning,
+        };
+      }),
       ...input.suggested_links.map((link) => ({
         actionType: "create_link",
         targetType: "note_link",

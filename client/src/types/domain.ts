@@ -20,6 +20,7 @@ export type RawNote = {
   sourceType: string
   sourceRole: RawSourceRole
   bodyMarkdown: string
+  extractedData: unknown
   createdAt: string
 }
 

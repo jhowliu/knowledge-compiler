@@ -87,6 +87,11 @@ function eventSummary(event: AgentRunEvent) {
     return count === null ? 'Loaded existing notes.' : `Loaded ${count} existing notes.`
   }
   if (key === 'indexing.react_loop_started') return 'Started the agent tool loop for source-aware indexing.'
+  if (key === 'indexing.outcome_classified') {
+    const outcome = typeof payload.outcome === 'string' ? payload.outcome.replaceAll('_', ' ') : 'indexing outcome'
+    const reason = typeof payload.reason === 'string' ? payload.reason : null
+    return reason ? `Recommended ${outcome}: ${reason}` : `Recommended ${outcome}.`
+  }
   if (key === 'indexing.detected') {
     const concepts = Array.isArray(payload.concepts) ? payload.concepts.length : null
     const provider = typeof payload.provider === 'string' ? payload.provider : 'LLM'
@@ -173,6 +178,11 @@ function progressSteps(agentRun: AgentRun | null, events: AgentRunEvent[], hasPr
       label: 'Loaded source',
       summary: 'The raw note/source is available to the agent.',
       keys: ['source.raw_note_loaded', 'source.raw_source_loaded', 'source.notes_loaded'],
+    },
+    {
+      label: 'Classified outcome',
+      summary: 'The agent decided whether this should stay searchable or become knowledge.',
+      keys: ['indexing.outcome_classified'],
     },
     {
       label: 'Extracted knowledge',

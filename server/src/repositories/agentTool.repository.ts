@@ -10,6 +10,7 @@ type BlockRow = {
   id: string;
   knowledge_source_id: string;
   knowledge_version_id: string;
+  compiled_note_id: string | null;
   title: string;
   heading: string | null;
   body_markdown: string;
@@ -76,12 +77,14 @@ export class PostgresAgentToolReadRepository implements AgentToolReadRepository 
           knowledge_blocks.id,
           knowledge_blocks.knowledge_source_id,
           knowledge_blocks.knowledge_version_id,
+          knowledge_versions.compiled_note_id,
           knowledge_sources.title,
           knowledge_blocks.heading,
           knowledge_blocks.body_markdown,
           knowledge_blocks.status
         from knowledge_blocks
         join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
+        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
         where knowledge_blocks.id = $1
         limit 1
       `,
@@ -122,6 +125,7 @@ export class PostgresAgentToolReadRepository implements AgentToolReadRepository 
         id: block.id,
         knowledge_source_id: block.knowledge_source_id,
         knowledge_version_id: block.knowledge_version_id,
+        compiled_note_id: block.compiled_note_id,
         title: block.title,
         heading: block.heading,
         body_markdown: block.body_markdown,

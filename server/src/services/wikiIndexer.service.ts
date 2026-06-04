@@ -1,5 +1,9 @@
 import { env } from "../config/env.js";
-import type { DraftUpdateProposal, GeneralKnowledgeExtraction } from "../domain/compiler.js";
+import type {
+  DraftUpdateProposal,
+  GeneralKnowledgeExtraction,
+  IndexingOutcome,
+} from "../domain/compiler.js";
 import type { SearchResult } from "../domain/knowledge.js";
 import type { RawNote } from "../domain/rawNote.js";
 import type { RawSourceChunk, RawSourceRole } from "../domain/rawSource.js";
@@ -125,11 +129,16 @@ const knowledgeStructuredDataSchema = {
 const extractionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["domain", "knowledgeType", "title", "structuredData", "confidence"],
+  required: ["domain", "knowledgeType", "title", "outcome", "outcomeReason", "structuredData", "confidence"],
   properties: {
     domain: { type: "string" },
     knowledgeType: { type: "string" },
     title: { type: ["string", "null"] },
+    outcome: {
+      type: "string",
+      enum: ["keep_searchable", "create_knowledge", "update_existing_knowledge"],
+    },
+    outcomeReason: { type: "string" },
     structuredData: knowledgeStructuredDataSchema,
     confidence: { type: "string", enum: ["low", "medium", "high"] },
   },
@@ -166,13 +175,14 @@ export class WikiIndexerService {
       throw new Error("OPENAI_API_KEY is required for LLM wiki indexing");
     }
 
-    return { extraction: await this.extractWithOpenAI(source), provider: "openai" };
+    return { extraction: applySourceOnlyOutcomeGuard(source, await this.extractWithOpenAI(source)), provider: "openai" };
   }
 
   draftProposal(source: WikiIndexingSource, extraction: GeneralKnowledgeExtraction, relatedNotes: SearchResult[]) {
-    const title = knowledgeTitle(source, extraction);
+    const routedExtraction = applySourceOnlyOutcomeGuard(source, extraction);
+    const title = knowledgeTitle(source, routedExtraction);
     const structuredData = normalizeKnowledgeStructuredData({
-      ...extraction.structuredData,
+      ...routedExtraction.structuredData,
       rawSourceId: source.rawSourceId,
       rawNoteId: source.rawNoteId,
       sourceRole: source.sourceRole,
@@ -184,32 +194,69 @@ export class WikiIndexerService {
         tokenEstimate: chunk.tokenEstimate,
       })),
     });
-    const knowledgeType = extraction.knowledgeType || "knowledge_note";
+    const knowledgeType = routedExtraction.knowledgeType || "knowledge_note";
     const bodyMarkdown = renderKnowledgeFacetsMarkdown(structuredData, source.bodyMarkdown);
     const relatedCompiledNotes = relatedNotes
       .filter((note) => note.targetType === "compiled_note")
       .slice(0, 3);
+    const targetCompiledNote = routedExtraction.outcome === "update_existing_knowledge"
+      ? relatedCompiledNotes[0] ?? null
+      : null;
+    const knowledgePayload = {
+      domain: routedExtraction.domain,
+      knowledgeType,
+      title,
+      bodyMarkdown,
+      structuredData,
+      outcome: routedExtraction.outcome,
+      outcomeReason: routedExtraction.outcomeReason,
+      targetCompiledNoteId: targetCompiledNote?.id ?? null,
+      targetTitle: targetCompiledNote?.title ?? null,
+    };
+
+    if (routedExtraction.outcome === "keep_searchable") {
+      return {
+        detectedDomain: routedExtraction.domain,
+        detectedKnowledgeType: knowledgeType,
+        impactLevel: 1,
+        confidence: routedExtraction.confidence,
+        rationale: `Recommended: Keep searchable. ${routedExtraction.outcomeReason}`,
+        items: [
+          {
+            actionType: "keep_source_searchable",
+            targetType: source.rawSourceId ? "raw_source" : "raw_note",
+            payload: {
+              outcome: routedExtraction.outcome,
+              outcomeReason: routedExtraction.outcomeReason,
+              title: source.title ?? title,
+              sourceRole: source.sourceRole,
+              sourceType: source.sourceType,
+              rawSourceId: source.rawSourceId,
+              rawNoteId: source.rawNoteId,
+              concepts: structuredData.concepts,
+              sourceChunks: structuredData.sourceChunks,
+              knowledgeProposal: knowledgePayload,
+            },
+            rationale: routedExtraction.outcomeReason,
+          },
+        ],
+      };
+    }
 
     return {
-      detectedDomain: extraction.domain,
+      detectedDomain: routedExtraction.domain,
       detectedKnowledgeType: knowledgeType,
-      impactLevel: relatedCompiledNotes.length ? 3 : 2,
-      confidence: extraction.confidence,
-      rationale: `LLM wiki indexing proposed one approved knowledge update${
+      impactLevel: routedExtraction.outcome === "update_existing_knowledge" ? 3 : relatedCompiledNotes.length ? 3 : 2,
+      confidence: routedExtraction.confidence,
+      rationale: `Recommended: ${outcomeLabel(routedExtraction.outcome)}. ${routedExtraction.outcomeReason} LLM wiki indexing proposed one approved knowledge update${
         relatedCompiledNotes.length ? ` and ${relatedCompiledNotes.length} related-note link suggestions` : ""
       }.`,
       items: [
         {
           actionType: "upsert_knowledge",
           targetType: "knowledge_source",
-          payload: {
-            domain: extraction.domain,
-            knowledgeType,
-            title,
-            bodyMarkdown,
-            structuredData,
-          },
-          rationale: "Create or update approved knowledge from this source.",
+          payload: knowledgePayload,
+          rationale: routedExtraction.outcomeReason || "Create or update approved knowledge from this source.",
         },
         ...relatedCompiledNotes.map((note) => ({
           actionType: "create_link",
@@ -221,7 +268,8 @@ export class WikiIndexerService {
             targetNoteId: note.id,
             targetTitle: note.title,
             relationType: "related_concept",
-            confidence: extraction.confidence,
+            confidence: routedExtraction.confidence,
+            indexingOutcome: routedExtraction.outcome,
           },
           rationale: note.title
             ? `LLM wiki indexing found overlap with "${note.title}".`
@@ -263,7 +311,7 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "Extract the source into strict source-grounded LLM-wiki facets. The structuredData object is the source of truth; do not create coding/interview-specific top-level fields such as patterns, algorithms, recognition signals, key insights, implementation details, or common traps. Use concepts, claims, methods, examples, and constraints instead. Only include content directly supported by the source text. Do not add facts, algorithms, steps, traps, examples, terminology, or conclusions from outside knowledge. Every claim must cite one or more provided Chunk IDs in evidenceChunkIds. If a useful idea seems likely but is not explicitly supported by the source, put it in inferredSuggestions instead of claims, methods, examples, constraints, or summary. Source roles can be personal_note or reference; use the role as context without forcing an interview-specific classification.",
+              "Extract the source into strict source-grounded LLM-wiki facets and choose an indexing outcome before drafting knowledge. Use outcome keep_searchable when the content is useful to search but would be strange as a reusable Knowledge Note, including interview answer drafts, self-introduction scripts, resume/project pitches, meeting notes, TODOs, and one-off personal artifacts. Use create_knowledge or update_existing_knowledge only when the source teaches a reusable method, framework, claim, constraint, technical explanation, or concept outside the original source. Do not create knowledge merely because the source has a title or extractable concepts. The structuredData object is the source of truth; do not create coding/interview-specific top-level fields such as patterns, algorithms, recognition signals, key insights, implementation details, or common traps. Use concepts, claims, methods, examples, and constraints instead. Only include content directly supported by the source text. Do not add facts, algorithms, steps, traps, examples, terminology, or conclusions from outside knowledge. Every claim must cite one or more provided Chunk IDs in evidenceChunkIds. If a useful idea seems likely but is not explicitly supported by the source, put it in inferredSuggestions instead of claims, methods, examples, constraints, or summary. Source roles can be personal_note or reference; use the role as context without forcing an interview-specific classification.",
           },
           {
             role: "user",
@@ -311,11 +359,52 @@ function knowledgeTitle(source: Pick<RawNote, "title">, extraction: GeneralKnowl
   return source.title ?? "Untitled knowledge";
 }
 
+function outcomeLabel(outcome: IndexingOutcome) {
+  if (outcome === "keep_searchable") return "Keep searchable";
+  if (outcome === "update_existing_knowledge") return "Update existing knowledge";
+  return "Create knowledge note";
+}
+
+export function applySourceOnlyOutcomeGuard(
+  source: Pick<WikiIndexingSource, "bodyMarkdown" | "sourceRole" | "title">,
+  extraction: GeneralKnowledgeExtraction,
+): GeneralKnowledgeExtraction {
+  if (extraction.outcome === "keep_searchable" || !isSourceOnlyPersonalArtifact(source)) {
+    return extraction;
+  }
+
+  return {
+    ...extraction,
+    outcome: "keep_searchable",
+    outcomeReason:
+      "This source looks like a personal draft or one-off artifact. Keep it searchable and visible as a Source card, but do not promote it into reusable Knowledge.",
+  };
+}
+
+function isSourceOnlyPersonalArtifact(source: Pick<WikiIndexingSource, "bodyMarkdown" | "sourceRole" | "title">) {
+  const text = `${source.title ?? ""}\n${source.bodyMarkdown}`.toLowerCase();
+  const personalPronounSignal = /\b(i|me|my|myself|i'm|i am|should mention|want to emphasize)\b/.test(text);
+  const interviewDraftSignal = /tell me about yourself|self[-\s]?introduction|self intro|interview answer|interview draft|behavioral interview/.test(text);
+  const pitchDraftSignal = /resume pitch|project pitch|elevator pitch|personal pitch|on my resume|representative project/.test(text);
+  const oneOffSignal = /meeting notes?|todo|one[-\s]?off|scratch note|draft script/.test(text);
+
+  if (interviewDraftSignal || pitchDraftSignal) {
+    return true;
+  }
+
+  return source.sourceRole === "personal_note" && personalPronounSignal && oneOffSignal;
+}
+
 function normalizeExtraction(value: unknown): GeneralKnowledgeExtraction {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const confidence = record.confidence === "low" || record.confidence === "medium" || record.confidence === "high"
     ? record.confidence
     : "medium";
+  const outcome = record.outcome === "keep_searchable" ||
+    record.outcome === "create_knowledge" ||
+    record.outcome === "update_existing_knowledge"
+    ? record.outcome
+    : "create_knowledge";
 
   return {
     domain: typeof record.domain === "string" && record.domain.trim() ? record.domain.trim() : "general",
@@ -324,6 +413,13 @@ function normalizeExtraction(value: unknown): GeneralKnowledgeExtraction {
         ? record.knowledgeType.trim()
         : "knowledge_note",
     title: typeof record.title === "string" && record.title.trim() ? record.title.trim() : null,
+    outcome,
+    outcomeReason:
+      typeof record.outcomeReason === "string" && record.outcomeReason.trim()
+        ? record.outcomeReason.trim()
+        : outcome === "keep_searchable"
+          ? "This source is useful for search but is not reusable knowledge."
+          : "This source contains reusable knowledge.",
     structuredData: normalizeKnowledgeStructuredData(record.structuredData),
     confidence,
   };

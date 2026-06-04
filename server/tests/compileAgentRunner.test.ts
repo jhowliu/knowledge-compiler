@@ -143,7 +143,7 @@ test("passes a model-authored draft_proposal payload straight through", async ()
 test("default client uses the Agents SDK as a single-tool policy and parses the call", async () => {
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
-  let capturedAgent: { model: unknown; tools: Array<{ name: string }>; toolUseBehavior: unknown } | null = null;
+  let capturedAgent: { model: unknown; tools: Array<{ name: string }>; toolUseBehavior: unknown; modelSettings: unknown } | null = null;
   let capturedInput = "";
   let capturedOptions: { maxTurns?: number } | null = null;
   const agentRun: AgentsSdkRun = async (agent, input, options) => {
@@ -151,6 +151,7 @@ test("default client uses the Agents SDK as a single-tool policy and parses the 
       model: agent.model,
       tools: agent.tools.map((agentTool) => ({ name: agentTool.name })),
       toolUseBehavior: agent.toolUseBehavior,
+      modelSettings: agent.modelSettings,
     };
     capturedInput = input;
     capturedOptions = options;
@@ -171,6 +172,8 @@ test("default client uses the Agents SDK as a single-tool policy and parses the 
       model: "gpt-5-mini",
       toolUseBehavior: "stop_on_first_tool",
       tools: [{ name: "get_source" }, { name: "search_blocks" }],
+      // Must force a tool call so a text reply can't abort the run.
+      modelSettings: { toolChoice: "required" },
     });
     expect(capturedInput).toContain("Available tools this round: get_source, search_blocks");
     expect(capturedOptions).toEqual({ maxTurns: 1 });

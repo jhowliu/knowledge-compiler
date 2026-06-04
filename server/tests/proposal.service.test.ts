@@ -154,7 +154,7 @@ describe("ProposalService", () => {
     ).toHaveLength(2);
   });
 
-  test("creates pending note link suggestions for related compiled notes", async () => {
+  test("does not create blind related-note links on upsert approval (#98)", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();
     const noteLinks = new InMemoryNoteLinkRepository();
@@ -200,14 +200,9 @@ describe("ProposalService", () => {
 
     await service.approveProposal(proposal.id);
 
-    expect(noteLinks.noteLinks).toHaveLength(1);
-    expect(noteLinks.noteLinks[0]).toMatchObject({
-      sourceNoteId: "compiled-1",
-      targetNoteId: "compiled-existing-1",
-      relationType: "related_concept",
-      status: "pending",
-      confidence: "high",
-    });
+    // Even with related candidates present, approving an upsert no longer creates
+    // links server-side — only explicit agent-judged create_link items do (#98).
+    expect(noteLinks.noteLinks).toHaveLength(0);
   });
 
   test("creates a new knowledge version and archives old blocks on repeated approval", async () => {

@@ -280,6 +280,10 @@ function createAgentsSdkModelClient(agentRun: AgentsSdkRun = run as AgentsSdkRun
       model: request.model,
       tools,
       toolUseBehavior: "stop_on_first_tool",
+      // Force a tool call every round: a plain-text reply would otherwise leave
+      // finalOutput as prose, throw in parseSdkToolChoice, and abort the whole
+      // run (bypassing the harness's incomplete_reasoning fallback).
+      modelSettings: { toolChoice: "required" },
     });
     const result = await agentRun(agent, request.input, { maxTurns: 1 });
     return parseSdkToolChoice(result.finalOutput);

@@ -125,6 +125,16 @@ function eventSummary(event: AgentRunEvent) {
     const count = numberValue(payload.candidateCount)
     return count === null ? 'Scored link candidates.' : `Scored ${count} link candidates.`
   }
+  if (key === 'linking.candidates_found') {
+    const count = numberValue(payload.candidateCount)
+    return count === null ? 'Found link candidates.' : `Found ${count} link candidates.`
+  }
+  if (key === 'linking.judged') {
+    const candidates = numberValue(payload.candidateCount)
+    const linked = numberValue(payload.linkedCount)
+    if (candidates === null && linked === null) return 'Judged link candidates.'
+    return `Judged ${candidates ?? 0} candidate${candidates === 1 ? '' : 's'} → ${linked ?? 0} link${linked === 1 ? '' : 's'} accepted.`
+  }
   if (key === 'linking.suggestion_created') {
     const noteLinkId = typeof payload.noteLinkId === 'string' ? shortId(payload.noteLinkId) : null
     return noteLinkId ? `Created link suggestion ${noteLinkId}.` : 'Created a link suggestion.'

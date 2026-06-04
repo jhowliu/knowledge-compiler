@@ -177,6 +177,10 @@ export class AgentToolService {
       judgeOutput,
       invalidItemIndexes,
       context.existingBlocksContext ?? [],
+      {
+        rawNoteId: context.rawNoteId,
+        rawSourceId: context.sourceId,
+      },
     );
     const proposal = await this.proposalRepository.create({
       userId: context.userId,
@@ -187,10 +191,15 @@ export class AgentToolService {
     return validateToolOutput(draftProposalOutputSchema, {
       proposal_id: proposal.id,
       item_count: parsedInput.items.length,
-      link_count: parsedInput.suggested_links.length,
+      link_count: judgedLinks(parsedInput).length,
       saved_at: proposal.createdAt.toISOString(),
     });
   }
+}
+
+/** Links the agent judged strong enough to create (#98): medium/high only. */
+function judgedLinks(input: DraftProposalInput) {
+  return input.suggested_links.filter((link) => link.confidence !== "low");
 }
 
 function groundingScore(grounding: Array<{ verdict: "grounded" | "weak" | "ungrounded" }>) {
@@ -208,6 +217,7 @@ function toDraftUpdateProposal(
   judgeOutput: Awaited<ReturnType<EvalJudgeService["judge"]>>,
   invalidItemIndexes: Set<number>,
   existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
+  sourceReference: { rawNoteId: string; rawSourceId: string },
 ): DraftUpdateProposal {
   return {
     detectedDomain: "general",
@@ -236,6 +246,8 @@ function toDraftUpdateProposal(
             knowledgeType: "knowledge_note",
             title: item.title,
             bodyMarkdown,
+            rawSourceId: item.action === "keep_source_searchable" ? sourceReference.rawSourceId : null,
+            rawNoteId: item.action === "keep_source_searchable" ? sourceReference.rawNoteId : null,
             targetKnowledgeSourceId: targetBlock?.knowledge_source_id ?? null,
             targetCompiledNoteId: targetBlock?.compiled_note_id ?? null,
             targetBlockId: item.target_block_id,
@@ -265,7 +277,9 @@ function toDraftUpdateProposal(
           incompleteReasoning: input.incomplete_reasoning,
         };
       }),
-      ...input.suggested_links.map((link) => ({
+      // Only medium/high-confidence judged links become pending links (#98);
+      // low-confidence judgments are dropped rather than creating noisy links.
+      ...judgedLinks(input).map((link) => ({
         actionType: "create_link",
         targetType: "note_link",
         payload: {
@@ -273,6 +287,8 @@ function toDraftUpdateProposal(
           targetBlockId: link.target_block_id,
           relationType: link.relation_type,
           confidence: link.confidence,
+          sourceEvidence: link.source_evidence,
+          targetEvidence: link.target_evidence,
         },
         rationale: link.rationale ?? "Agent suggested a relationship link.",
         evalVerdict: judgeOutput.overall_verdict,

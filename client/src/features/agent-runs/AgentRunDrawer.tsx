@@ -11,6 +11,7 @@ import {
   RotateCw,
   X,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { isRecord } from '../../lib/knowledge'
 import type { AgentRun, AgentRunDetail, AgentRunEvent, WorkspaceData } from '../../types/domain'
 import {
@@ -32,9 +33,9 @@ function shortId(value: string | null | undefined) {
   return value.length > 8 ? `${value.slice(0, 8)}...` : value
 }
 
-function durationLabel(agentRun: AgentRun | null) {
+function durationLabel(agentRun: AgentRun | null, now = Date.now()) {
   if (!agentRun?.startedAt) return 'Not started'
-  const end = agentRun.completedAt ? new Date(agentRun.completedAt) : new Date()
+  const end = agentRun.completedAt ? new Date(agentRun.completedAt) : new Date(now)
   const start = new Date(agentRun.startedAt)
   const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))
   if (seconds < 60) return `${seconds}s`
@@ -124,6 +125,16 @@ function eventSummary(event: AgentRunEvent) {
     const count = numberValue(payload.candidateCount)
     return count === null ? 'Scored link candidates.' : `Scored ${count} link candidates.`
   }
+  if (key === 'linking.candidates_found') {
+    const count = numberValue(payload.candidateCount)
+    return count === null ? 'Found link candidates.' : `Found ${count} link candidates.`
+  }
+  if (key === 'linking.judged') {
+    const candidates = numberValue(payload.candidateCount)
+    const linked = numberValue(payload.linkedCount)
+    if (candidates === null && linked === null) return 'Judged link candidates.'
+    return `Judged ${candidates ?? 0} candidate${candidates === 1 ? '' : 's'} → ${linked ?? 0} link${linked === 1 ? '' : 's'} accepted.`
+  }
   if (key === 'linking.suggestion_created') {
     const noteLinkId = typeof payload.noteLinkId === 'string' ? shortId(payload.noteLinkId) : null
     return noteLinkId ? `Created link suggestion ${noteLinkId}.` : 'Created a link suggestion.'
@@ -180,11 +191,6 @@ function progressSteps(agentRun: AgentRun | null, events: AgentRunEvent[], hasPr
       keys: ['source.raw_note_loaded', 'source.raw_source_loaded', 'source.notes_loaded'],
     },
     {
-      label: 'Classified outcome',
-      summary: 'The agent decided whether this should stay searchable or become knowledge.',
-      keys: ['indexing.outcome_classified'],
-    },
-    {
       label: 'Extracted knowledge',
       summary: 'Concepts, claims, methods, and constraints were detected.',
       keys: ['indexing.detected', 'indexing.drafted', 'indexing.extraction_completed'],
@@ -193,6 +199,11 @@ function progressSteps(agentRun: AgentRun | null, events: AgentRunEvent[], hasPr
       label: 'Searched related knowledge',
       summary: 'Existing knowledge notes were checked for overlap.',
       keys: ['indexing.related_found', 'linking.scored'],
+    },
+    {
+      label: 'Classified outcome',
+      summary: 'The agent decided after checking whether related knowledge already exists.',
+      keys: ['indexing.outcome_classified'],
     },
     {
       label: 'Drafted proposal',
@@ -258,6 +269,7 @@ export function AgentRunDrawer({
   onRetry: (agentRunId: string) => void
 }) {
   const agentRun = detail?.agentRun ?? null
+  const [now, setNow] = useState(() => Date.now())
   const output = isRecord(agentRun?.output) ? agentRun.output : {}
   const generatedProposalId =
     typeof output.proposalId === 'string' ? output.proposalId : null
@@ -285,6 +297,15 @@ export function AgentRunDrawer({
     ['Related', relatedNotes.length],
     ['Links', generatedLinks.length],
   ]
+
+  useEffect(() => {
+    if (agentRun?.status !== 'running' || !agentRun.startedAt || agentRun.completedAt) {
+      return undefined
+    }
+    setNow(Date.now())
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [agentRun?.completedAt, agentRun?.startedAt, agentRun?.status])
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
@@ -321,7 +342,7 @@ export function AgentRunDrawer({
             {[
               ['Status', agentRun?.status ?? (isLoading ? 'loading' : 'missing')],
               ['Started', shortTimestamp(agentRun?.startedAt ?? null)],
-              ['Duration', durationLabel(agentRun)],
+              ['Duration', durationLabel(agentRun, now)],
             ].map(([label, value]) => (
               <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>

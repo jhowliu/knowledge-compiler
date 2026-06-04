@@ -60,6 +60,8 @@ export function eventLabel(event: Pick<AgentRunEvent, 'category' | 'name'>) {
     'proposal.created': 'Proposal created',
     'eval.completed': 'Eval completed',
     'linking.scored': 'Link candidates scored',
+    'linking.candidates_found': 'Link candidates found',
+    'linking.judged': 'Links judged',
     'linking.suggestion_created': 'Link suggestion created',
     'error.failed': 'Failed',
     'error.unknown': 'Unknown legacy event',

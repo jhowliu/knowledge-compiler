@@ -228,7 +228,6 @@ export class ProposalService {
 
       const structuredDataRecord = asRecord(structuredData);
       const concepts = Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [];
-      const conceptNames: string[] = [];
       for (const concept of concepts) {
         const conceptRecord = asRecord(concept);
         const name = stringValue(conceptRecord, "name");
@@ -236,7 +235,6 @@ export class ProposalService {
         if (!name) {
           continue;
         }
-        conceptNames.push(name);
         const savedConcept = await this.knowledgeRepository.upsertConcept({
           userId: proposal.userId,
           name,
@@ -253,13 +251,8 @@ export class ProposalService {
         });
       }
 
-      await this.suggestLinksForCompiledNote({
-        proposal,
-        compiledNoteId: compiledNote.id,
-        title: compiledNote.title,
-        bodyMarkdown: compiledNote.bodyMarkdown,
-        conceptNames,
-      });
+      // Related links are no longer created blindly here (#98): the agent judges
+      // candidates in the compile loop and emits explicit create_link items.
       return;
     }
 
@@ -303,36 +296,4 @@ export class ProposalService {
     }
   }
 
-  private async suggestLinksForCompiledNote(input: {
-    proposal: ProposalWithItems;
-    compiledNoteId: string;
-    title: string;
-    bodyMarkdown: string;
-    conceptNames: string[];
-  }) {
-    const relatedNotes = await this.knowledgeRepository.searchRelated({
-      query: `${input.title}\n${input.bodyMarkdown}`,
-      conceptNames: input.conceptNames,
-      limit: 8,
-    });
-
-    const compiledMatches = relatedNotes
-      .filter((note) => note.targetType === "compiled_note" && note.id !== input.compiledNoteId)
-      .slice(0, 4);
-
-    for (const match of compiledMatches) {
-      await this.noteLinkRepository.createSuggestion({
-        userId: input.proposal.userId,
-        sourceNoteType: "compiled_note",
-        sourceNoteId: input.compiledNoteId,
-        targetNoteType: "compiled_note",
-        targetNoteId: match.id,
-        relationType: "related_concept",
-        confidence: input.proposal.confidence,
-        rationale: match.title
-          ? `Agent found overlap with "${match.title}" while applying proposal ${input.proposal.id}.`
-          : `Agent found concept overlap while applying proposal ${input.proposal.id}.`,
-      });
-    }
-  }
 }

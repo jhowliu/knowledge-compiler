@@ -162,6 +162,11 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       ...agentRunEvents.indexing.relatedFound,
       payload: { relatedNotes },
     });
+    await this.agentRunRepository.addEvent({
+      agentRunId,
+      ...agentRunEvents.linking.candidatesFound,
+      payload: { candidateCount: relatedNotes.length },
+    });
 
     if (!agentToolService) {
       for (const concept of extractedConcepts) {
@@ -388,6 +393,16 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         agentRunId,
         ...agentRunEvents.proposal.created,
         payload: { proposalId: proposalOutput.proposal_id },
+      });
+      await this.agentRunRepository.addEvent({
+        agentRunId,
+        ...agentRunEvents.linking.judged,
+        payload: {
+          candidateCount: loopState.candidateBlocks.length,
+          suggestedCount: input.suggested_links.length,
+          // medium/high-confidence links that became pending create_link items
+          linkedCount: proposalOutput.link_count,
+        },
       });
       return proposalOutput;
     };

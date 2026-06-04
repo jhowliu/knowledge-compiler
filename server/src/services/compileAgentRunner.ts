@@ -208,6 +208,11 @@ function buildInstructions() {
     "- Cite chunk ids you saw in get_source/search results; do not invent ids.",
     "- Do not add facts, steps, or conclusions that are not supported by the source text.",
     "- If a tool returns a validation error, read it, correct your arguments, and call the tool again.",
+    "",
+    "suggested_links (relationship judgment):",
+    "- Judge each related block you saw in search_blocks/get_block: only add a suggested_link when the two genuinely relate (supports, contrasts, example_of, prerequisite, related_concept). Search overlap alone is NOT enough.",
+    "- For each link set target_block_id to a real block id you saw, a precise relation_type, and confidence; give a concrete rationale plus source_evidence/target_evidence snippets justifying it.",
+    "- Use confidence low for weak/uncertain relationships — low-confidence links are dropped and will not be created. Reserve medium/high for clear relationships. If nothing clearly relates, return an empty suggested_links list.",
     "Respond only by calling a tool.",
   ].join("\n");
 }
@@ -280,6 +285,10 @@ function createAgentsSdkModelClient(agentRun: AgentsSdkRun = run as AgentsSdkRun
       model: request.model,
       tools,
       toolUseBehavior: "stop_on_first_tool",
+      // Force a tool call every round: a plain-text reply would otherwise leave
+      // finalOutput as prose, throw in parseSdkToolChoice, and abort the whole
+      // run (bypassing the harness's incomplete_reasoning fallback).
+      modelSettings: { toolChoice: "required" },
     });
     const result = await agentRun(agent, request.input, { maxTurns: 1 });
     return parseSdkToolChoice(result.finalOutput);

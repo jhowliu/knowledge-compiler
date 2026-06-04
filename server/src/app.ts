@@ -42,6 +42,7 @@ import {
 } from "./services/agentRunQueue.service.js";
 import { CompileRawNoteHandler } from "./services/agentRun/compileRawNoteHandler.js";
 import { ReindexLinksHandler } from "./services/agentRun/reindexLinksHandler.js";
+import type { LinkJudge } from "./services/agentRun/linkJudge.js";
 import { DashboardService } from "./services/dashboard.service.js";
 import {
   NoopEmbeddingService,
@@ -74,6 +75,8 @@ export type AppDependencies = {
   /** Compile loop runner factory. Defaults to the deterministic scripted runner;
    * production wires the LLM-backed runner here. */
   compileAgentRunnerFactory?: CompileAgentRunnerFactory;
+  /** Link judge for reindex_links. Defaults to the LLM judge; tests inject a fake. */
+  linkJudge?: LinkJudge;
   askAnswerer?: AskAnswerer;
   embeddingService?: EmbeddingService;
   enablePhaseOneWorkflow?: boolean;
@@ -159,6 +162,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     agentRunRepository,
     knowledgeRepository,
     noteLinkRepository,
+    dependencies.linkJudge,
   );
   const agentRunQueueService = new AgentRunQueueService(
     agentRunRepository,

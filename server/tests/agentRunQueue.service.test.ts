@@ -5,6 +5,7 @@ import {
 import type { AgentRunHandler } from "../src/services/agentRun/agentRunHandler.js";
 import { CompileRawNoteHandler } from "../src/services/agentRun/compileRawNoteHandler.js";
 import { ReindexLinksHandler } from "../src/services/agentRun/reindexLinksHandler.js";
+import type { LinkJudge } from "../src/services/agentRun/linkJudge.js";
 import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import {
   createLlmCompileAgentRunner,
@@ -40,9 +41,28 @@ function createAgentRunQueueService(input: {
   extractionEvalRepository?: ExtractionEvalRepository;
   agentToolReadRepository?: AgentToolReadRepository;
   compileAgentRunnerFactory?: CompileAgentRunnerFactory;
+  linkJudge?: LinkJudge;
 }) {
+  // Default to a deterministic offline judge: link iff the two notes share a
+  // non-trivial keyword, so reindex tests never reach the network.
+  const linkJudge: LinkJudge =
+    input.linkJudge ??
+    (async ({ source, target }) => {
+      const overlap = source.bodyMarkdown
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((word) => word.length > 3 && target.bodyMarkdown.toLowerCase().includes(word));
+      return {
+        should_link: overlap.length > 0,
+        relation_type: "related_concept",
+        confidence: overlap.length > 0 ? "medium" : "low",
+        rationale: overlap.length ? `Shared: ${overlap.slice(0, 3).join(", ")}.` : "No clear relationship.",
+        source_evidence: [],
+        target_evidence: [],
+      };
+    });
   const handlers: AgentRunHandler[] = [
-    new ReindexLinksHandler(input.agentRunRepository, input.knowledgeRepository, input.noteLinkRepository),
+    new ReindexLinksHandler(input.agentRunRepository, input.knowledgeRepository, input.noteLinkRepository, linkJudge),
   ];
   if (input.rawNoteRepository && input.proposalRepository) {
     handlers.push(
@@ -401,7 +421,7 @@ describe("agent run queue service", () => {
     });
   });
 
-  test("runs deterministic reindex links and creates pending link suggestions", async () => {
+  test("runs agent-judged reindex links and creates pending link suggestions", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
@@ -452,13 +472,16 @@ describe("agent run queue service", () => {
       relationType: "related_concept",
       createdByAgentRunId: agentRun.id,
     });
+    // Rationale comes from the judge, not a generic message.
+    expect(noteLinkRepository.noteLinks[0].rationale).toMatch(/Shared:/);
     expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
       expect.arrayContaining([
         "lifecycle.queued",
         "lifecycle.started",
         "source.notes_loaded",
-        "linking.scored",
+        "linking.candidates_found",
         "linking.suggestion_created",
+        "linking.judged",
         "lifecycle.completed",
       ]),
     );

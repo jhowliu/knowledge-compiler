@@ -1,6 +1,10 @@
 # Recap
 
 ## Summary
+- Fixed keep-searchable source cards on the graph: the graph now treats an approved `keep_source_searchable` proposal as the source-card signal, falling back through `proposal.rawNoteId -> rawNote.rawSourceId` when older/newer proposal payloads do not include `rawSourceId`. New agent-tool proposals now include `rawSourceId` and `rawNoteId` on keep-source items.
+- Keep-searchable graph validation: `npm run typecheck --workspace=client`, `npm run typecheck --workspace=server`, `npm run build --workspace=client`, and `git diff --check` pass.
+- Adjusted the Agent Run drawer progress tracker so compile steps read in the actual source-aware order: queued, loaded source, extracted knowledge, searched related knowledge, classified outcome, drafted proposal. The drawer duration now live-counts every second while a run is actively running.
+- Agent Run drawer validation: `npm run typecheck`, `npm run build --workspace=client`, and `git diff --check` pass. Full `npm run build` currently fails in unrelated server work at `server/src/services/agentRun/linkJudge.ts` (`../config/env.js` import and Agents SDK tool parameter typing).
 - Implemented issue #115 on `codex/split-agent-run-handlers-115`: split `AgentRunQueueService` into a small lifecycle/handler-registry orchestrator, `CompileRawNoteHandler`, `ReindexLinksHandler`, `AgentRunHandler`, and dependency-free compile runner types; app/test construction now registers handlers instead of passing a 10-argument queue constructor.
 - Issue #115 validation passed: `npm run test --workspace=server`, `npm run typecheck --workspace=server`, `npm run build --workspace=server`, and `git diff --check`.
 - Implemented #107 P2 on `feat/llm-compile-runner-p2`: the production compile runner now uses the OpenAI Agents SDK (`Agent` + `tool` + `run`) as a one-tool policy inside the existing harness, so the SDK chooses the next legal tool while `runAgentLoop` still owns dynamic tool exposure, guardrails, event logging, validation, and persistence.

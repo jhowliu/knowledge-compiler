@@ -118,6 +118,29 @@ export const suggestedLinkSchema = z.object({
   target_evidence: z.array(z.string()).default([]),
 });
 
+export const linkRelationTypeSchema = z.enum([
+  "related_concept",
+  "supports",
+  "contrasts",
+  "example_of",
+  "prerequisite",
+]);
+
+/**
+ * Standalone agent judgment for whether two knowledge notes should link (#98).
+ * Used by the reindex_links backfill trigger; the compile loop expresses the
+ * same judgment inline via {@link suggestedLinkSchema}. Only should_link with
+ * medium/high confidence becomes a pending link.
+ */
+export const linkJudgmentSchema = z.object({
+  should_link: z.boolean(),
+  relation_type: linkRelationTypeSchema,
+  confidence: confidenceSchema,
+  rationale: z.string().min(1),
+  source_evidence: z.array(z.string()).default([]),
+  target_evidence: z.array(z.string()).default([]),
+});
+
 export const getSourceInputSchema = z.object({
   source_id: z.string().min(1),
 });
@@ -296,6 +319,8 @@ export type SourceSpan = z.infer<typeof sourceSpanSchema>;
 export type ProposalItem = z.infer<typeof proposalItemSchema>;
 export type IndexingOutcome = z.infer<typeof indexingOutcomeSchema>;
 export type SuggestedLink = z.infer<typeof suggestedLinkSchema>;
+export type LinkRelationType = z.infer<typeof linkRelationTypeSchema>;
+export type LinkJudgment = z.infer<typeof linkJudgmentSchema>;
 export type GetSourceInput = z.infer<typeof getSourceInputSchema>;
 export type GetSourceOutput = z.infer<typeof getSourceOutputSchema>;
 export type SearchBlocksInput = z.infer<typeof searchBlocksInputSchema>;

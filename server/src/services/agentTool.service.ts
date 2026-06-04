@@ -177,6 +177,10 @@ export class AgentToolService {
       judgeOutput,
       invalidItemIndexes,
       context.existingBlocksContext ?? [],
+      {
+        rawNoteId: context.rawNoteId,
+        rawSourceId: context.sourceId,
+      },
     );
     const proposal = await this.proposalRepository.create({
       userId: context.userId,
@@ -213,6 +217,7 @@ function toDraftUpdateProposal(
   judgeOutput: Awaited<ReturnType<EvalJudgeService["judge"]>>,
   invalidItemIndexes: Set<number>,
   existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
+  sourceReference: { rawNoteId: string; rawSourceId: string },
 ): DraftUpdateProposal {
   return {
     detectedDomain: "general",
@@ -241,6 +246,8 @@ function toDraftUpdateProposal(
             knowledgeType: "knowledge_note",
             title: item.title,
             bodyMarkdown,
+            rawSourceId: item.action === "keep_source_searchable" ? sourceReference.rawSourceId : null,
+            rawNoteId: item.action === "keep_source_searchable" ? sourceReference.rawNoteId : null,
             targetKnowledgeSourceId: targetBlock?.knowledge_source_id ?? null,
             targetCompiledNoteId: targetBlock?.compiled_note_id ?? null,
             targetBlockId: item.target_block_id,

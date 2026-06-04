@@ -32,6 +32,15 @@ describe("agent run routes", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
+      // Deterministic offline judge so the test never hits the network.
+      linkJudge: async () => ({
+        should_link: true,
+        relation_type: "related_concept",
+        confidence: "medium",
+        rationale: "Both cover BFS shortest path.",
+        source_evidence: [],
+        target_evidence: [],
+      }),
     });
 
     const response = await request(app)

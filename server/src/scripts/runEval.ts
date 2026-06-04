@@ -16,7 +16,7 @@ type EvalCaseResult = {
   id: string;
   description: string;
   passed: boolean;
-  coverageScore: number;
+  coverageScore: number | null;
   groundingScore: number;
   errors: string[];
 };
@@ -38,18 +38,24 @@ async function run() {
   const failed = results.filter((result) => !result.passed);
   for (const result of results) {
     const marker = result.passed ? "PASS" : "FAIL";
+    const coverageText = result.coverageScore === null ? "n/a" : result.coverageScore.toFixed(2);
     console.log(
-      `${marker} ${result.id} coverage=${result.coverageScore.toFixed(2)} grounding=${result.groundingScore.toFixed(2)} ${result.description}`,
+      `${marker} ${result.id} coverage=${coverageText} grounding=${result.groundingScore.toFixed(2)} ${result.description}`,
     );
     for (const error of result.errors) {
       console.log(`  - ${error}`);
     }
   }
 
-  const averageCoverage = average(results.map((result) => result.coverageScore));
+  const coverageScores = results
+    .map((result) => result.coverageScore)
+    .filter((score): score is number => score !== null);
+  const averageCoverage = coverageScores.length ? average(coverageScores) : null;
   const averageGrounding = average(results.map((result) => result.groundingScore));
   console.log(
-    `\nEval summary: ${results.length - failed.length}/${results.length} passed, average coverage=${averageCoverage.toFixed(2)}, average grounding=${averageGrounding.toFixed(2)}`,
+    `\nEval summary: ${results.length - failed.length}/${results.length} passed, average coverage=${
+      averageCoverage === null ? "n/a (not measured)" : averageCoverage.toFixed(2)
+    }, average grounding=${averageGrounding.toFixed(2)}`,
   );
   console.log("Regression delta: no checked-in baseline yet; compare this summary between prompt changes.");
 
@@ -149,7 +155,9 @@ async function runCase(id: string): Promise<EvalCaseResult> {
   if (proposal.items[0].conflict_detected !== expected.should_conflict) {
     errors.push(`expected conflict_detected=${expected.should_conflict}`);
   }
-  if (judge.coverage.score < expected.min_coverage_score) {
+  // Coverage is no longer measured by the deterministic lint; skip the assertion
+  // unless a future LLM judge populates it.
+  if (judge.coverage.score !== null && judge.coverage.score < expected.min_coverage_score) {
     errors.push(`coverage ${judge.coverage.score} is below ${expected.min_coverage_score}`);
   }
   if (groundingScore < expected.min_grounding_score) {

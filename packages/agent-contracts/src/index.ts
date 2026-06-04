@@ -265,7 +265,9 @@ export const judgeOutputSchema = z.object({
   coverage: z.object({
     expected_concepts: z.array(z.object({ label: z.string(), reason: z.string() })),
     missing_from_proposal: z.array(z.string()),
-    score: z.number().min(0).max(1),
+    // null = coverage was not measured (the deterministic lint does not estimate
+    // under-extraction; that requires an LLM judge).
+    score: z.number().min(0).max(1).nullable(),
   }),
   grounding: z.array(
     z.object({

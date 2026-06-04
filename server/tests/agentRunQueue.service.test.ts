@@ -825,4 +825,120 @@ describe("agent run queue service", () => {
     expect(outcomeIndex).toBeGreaterThan(searchIndex);
     expect(eventKeys).toContain("tool.called:get_block_history");
   });
+
+  test("updates a block surfaced via the concept index even when full-text search misses", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawNoteRepository = new InMemoryRawNoteRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+
+    let classifyCandidateCount: number | null = null;
+    const reclassifyingIndexer = {
+      extract: llmWikiIndexer.extract,
+      draftProposal: llmWikiIndexer.draftProposal,
+      async classifyOutcome(input: { candidateBlocks: Array<{ block_id: string }> }) {
+        classifyCandidateCount = input.candidateBlocks.length;
+        return {
+          outcome: "update_existing_knowledge" as const,
+          outcomeReason: "Concept-index match covers this already.",
+          // The concept-linked block, NOT a full-text search hit.
+          targetBlockId: "block-concept-1",
+          confidence: "high" as const,
+          conflictDetected: false,
+          conflictSummary: null,
+          conflictResolution: null,
+        };
+      },
+    };
+    const readRepository: AgentToolReadRepository = {
+      async getBlock(blockId: string) {
+        return {
+          block: {
+            id: blockId,
+            knowledge_source_id: "ks-concept-1",
+            knowledge_version_id: "kv-concept-1",
+            compiled_note_id: "cn-concept-1",
+            title: "Concept-linked block",
+            heading: null,
+            body_markdown: "Existing concept body",
+            status: "active",
+          },
+          evidence: [],
+          links: [],
+        };
+      },
+      async getBlockHistory() {
+        return { versions: [] };
+      },
+      // Full-text search returns nothing, but the concept index links a block.
+      async lookupConcepts(concepts: string[]) {
+        return {
+          matches: concepts.map((concept, index) => ({
+            input: concept,
+            concept_id: `concept-${index}`,
+            canonical_label: concept,
+            match_type: "exact" as const,
+            linked_block_ids: index === 0 ? ["block-concept-1"] : [],
+          })),
+        };
+      },
+    };
+
+    const service = new AgentRunQueueService(
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      rawNoteRepository,
+      proposalRepository,
+      reclassifyingIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      readRepository,
+    );
+
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "Constrained shortest path revisited",
+        sourceRole: "reference",
+        sourceType: "markdown",
+        bodyMarkdown: "# Notes\n\nDifferent wording of an already-captured idea.",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: "Notes",
+          bodyMarkdown: "Different wording of an already-captured idea.",
+          tokenEstimate: 8,
+        },
+      ],
+    );
+
+    const agentRun = await service.enqueue({
+      runType: "compile_raw_note",
+      input: { rawSourceId: rawSource.id },
+    });
+    await service.process(agentRun.id);
+
+    const completedRun = await agentRunRepository.getById(agentRun.id);
+    expect(completedRun?.status).toBe("completed");
+    expect(completedRun?.output).toMatchObject({ indexingOutcome: "update_existing_knowledge" });
+
+    // The concept-linked block became a candidate despite the full-text miss.
+    expect(classifyCandidateCount).toBe(1);
+    const upsertItem = proposalRepository.proposals[0].items.find(
+      (item) => item.actionType === "upsert_knowledge",
+    );
+    expect((upsertItem?.payload as Record<string, unknown>).targetBlockId).toBe("block-concept-1");
+
+    // The candidate was pulled in via get_block during concept-index recall.
+    const calledTools = agentRunRepository.events
+      .filter((event) => event.category === "tool" && event.name === "called")
+      .map((event) => (event.payload as { tool?: string; input?: { block_id?: string } }));
+    expect(
+      calledTools.some((call) => call.tool === "get_block" && call.input?.block_id === "block-concept-1"),
+    ).toBe(true);
+  });
 });

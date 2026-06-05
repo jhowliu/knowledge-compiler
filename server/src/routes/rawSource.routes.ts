@@ -35,6 +35,7 @@ export function createRawSourceRoutes(rawSourceService: RawSourceService) {
   router.delete("/projects/:projectId/folders/:folderId", controller.deleteFolder);
   router.post("/", validateBody(createRawSourceSchema), controller.create);
   router.get("/:id", controller.get);
+  router.get("/:id/indexing-trace", controller.indexingTrace);
   router.patch("/:id/topics", validateBody(updateSourceTopicsSchema), controller.updateTopics);
   router.patch("/:id/organization", validateBody(moveRawSourceSchema), controller.move);
   router.patch("/:id", validateBody(updateRawSourceSchema), controller.update);

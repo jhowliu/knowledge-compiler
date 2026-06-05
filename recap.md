@@ -1,6 +1,10 @@
 # Recap
 
 ## Summary
+- Finished issue #126 client migration on `feat/client-sources-migration-126`: the client no longer loads or writes `/raw-notes`, `WorkspaceData` is source-only, the editor moved to `client/src/features/sources/SourceEditorPage.tsx`, and app state now uses `selectedSourceId` / `SourceIndexingTrace`.
+- Source editor create/save/delete/indexing now calls `/sources`, `/sources/:id`, `/sources/:id/compile`, and `/sources/:id/indexing-trace`; new-source "Save & index" now creates the source and immediately compiles it instead of stopping after creation.
+- Issue #126 validation passed: `npm run typecheck`, `npm run build --workspace=client`, `npm run build --workspace=server`, `npm run test --workspace=server`, `git diff --check`, and `rg "/raw-notes|rawNotes|RawNote|RawNoteIndexingTrace|rawNoteId" client/src -n` with no matches.
+- Issue #126 local API smoke passed against `http://127.0.0.1:4000`: temporary source create returned `201`, compile returned `202`, trace returned `200` with the same `rawSource.id` and one agent run, and cleanup delete returned `204`.
 - Started issue #118 on `codex/source-canonical-118`: added migration `017_source_first_proposal_lineage.sql` to add `update_proposals.raw_source_id`, create/backfill missing `raw_sources` and chunks for raw notes, merge raw-note extraction metadata into sources, backfill proposal-level source lineage, and patch approved `keep_source_searchable` item payloads with direct `rawSourceId`.
 - Proposal creation now accepts and returns `rawSourceId`; source-backed compile/runtime paths pass it through, keep-source item payloads are normalized with direct `rawSourceId`, and approval evidence now prefers `raw_source` over `raw_note` when canonical lineage exists.
 - Removed the Notes Graph source-card fallback through `proposal.rawNoteId -> rawNote.rawSourceId`; source-only cards now depend on approved source-backed keep-searchable proposal records. Review Inbox source lookup now checks proposal-level and item-level `rawSourceId` first.
@@ -191,6 +195,7 @@
 - `update_existing_knowledge` must be a target-aware command, not just a label. When a target compiled note or knowledge source is resolved, approval updates that exact card/source and appends a new version; title-based upsert is only a fallback when no target is known.
 
 ## Open Issues
+- Issue #126 browser UI smoke could not be completed in this session because the in-app Browser blocked local `127.0.0.1` navigation by policy after the last patch; API smoke plus type/build/test coverage passed. The only remaining `raw_note` client strings are legacy agent-run event keys/labels, not `/raw-notes` API usage.
 - Issue #118 remaining scope: raw-note routes/services/UI are still compatibility surfaces; next target is making compile/run/review/trace APIs source-first end to end, then removing `rawNoteId`, `raw_note_id`, and `raw_notes` from active runtime paths after migration safety is proven.
 - Issue #107 validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server -- compileAgentRunner.test.ts agentRunQueue.service.test.ts`, `npm run build --workspace=server`, and `git diff --check` pass after P2. Remaining risk is manual real-model quality spot-checking because the deferred LLM eval harness is not in place yet.
 - Issue #99 validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` verified manual drag link creation, edge toolbar positioning, approved relation label rendering, approved remove, pending approve, pending reject, no console errors, and no document horizontal overflow. The in-app browser automation could not drive the native `<select>` directly, so the new relation-value route contract was validated by API PATCH plus refreshed edge-label rendering.
@@ -282,6 +287,7 @@
 - App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
+- Open the #126 PR after staging the source migration files; leave unrelated local untracked files (`AGENT.md`, `deisgn.pen`, `issue.sh`, `seed-notes/`) out of the PR unless they become intentional.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.
 - Consider adding a stronger LLM-backed entailment judge for claim-to-span support and a visible eval baseline in CI.

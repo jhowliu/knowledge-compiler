@@ -8,9 +8,8 @@ import type {
   NoteCardPosition,
   NoteLink,
   Proposal,
-  RawNote,
-  RawNoteIndexingTrace,
   RawSource,
+  SourceIndexingTrace,
   SourceOrganization,
   Topic,
   WorkspaceData,
@@ -83,7 +82,6 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
 
 async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
   const [
-    rawNotes,
     rawSources,
     sourceOrganization,
     topics,
@@ -94,7 +92,6 @@ async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
     agentRuns,
   ] =
     await Promise.all([
-      requestJson<{ rawNotes: RawNote[] }>('/raw-notes'),
       requestJson<{ rawSources: RawSource[] }>('/sources'),
       requestJson<{ sourceOrganization: SourceOrganization }>('/sources/organization'),
       requestJson<{ topics: Topic[] }>('/topics'),
@@ -108,7 +105,6 @@ async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
     ])
 
   return {
-    rawNotes: rawNotes.rawNotes,
     rawSources: rawSources.rawSources,
     sourceOrganization: sourceOrganization.sourceOrganization,
     topics: topics.topics,
@@ -153,9 +149,9 @@ export async function applySourceTopics(sourceId: string, topicIds: string[]) {
   return result.rawSource
 }
 
-export async function loadRawNoteIndexingTrace(rawNoteId: string) {
-  const result = await requestJson<{ indexingTrace: RawNoteIndexingTrace }>(
-    `/raw-notes/${rawNoteId}/indexing-trace`,
+export async function loadSourceIndexingTrace(rawSourceId: string) {
+  const result = await requestJson<{ indexingTrace: SourceIndexingTrace }>(
+    `/sources/${rawSourceId}/indexing-trace`,
   )
   return result.indexingTrace
 }

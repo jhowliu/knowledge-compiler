@@ -70,7 +70,7 @@ export interface AgentRunRepository {
   complete(id: string, output: unknown): Promise<AgentRun>;
   fail(id: string, error: string): Promise<AgentRun>;
   getById(id: string): Promise<AgentRun | null>;
-  listByRawNote(rawNoteId: string): Promise<AgentRun[]>;
+  listBySource(rawSourceId: string): Promise<AgentRun[]>;
   listRecent(limit: number): Promise<AgentRun[]>;
   listEvents(agentRunId: string): Promise<AgentRunEvent[]>;
 }
@@ -202,15 +202,15 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     return result.rows.map(mapAgentRun);
   }
 
-  async listByRawNote(rawNoteId: string) {
+  async listBySource(rawSourceId: string) {
     const result = await query<AgentRunRow>(
       `
         select *
         from agent_runs
-        where input ->> 'rawNoteId' = $1
+        where input ->> 'rawSourceId' = $1
         order by created_at desc
       `,
-      [rawNoteId],
+      [rawSourceId],
     );
 
     return result.rows.map(mapAgentRun);

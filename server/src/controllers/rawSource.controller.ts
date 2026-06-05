@@ -156,6 +156,15 @@ export class RawSourceController {
     }
   };
 
+  indexingTrace = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const indexingTrace = await this.rawSourceService.getIndexingTrace(requireStringParam(request, "id"));
+      response.json({ indexingTrace });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   delete = async (request: Request, response: Response, next: NextFunction) => {
     try {
       await this.rawSourceService.deleteRawSource(requireStringParam(request, "id"));

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { isRecord, payloadLabel } from '../../lib/knowledge'
-import type { AgentRun, Proposal, RawNote, RawSource } from '../../types/domain'
+import type { AgentRun, Proposal, RawSource } from '../../types/domain'
 import { agentRunLabel, agentRunOutputText, shortTimestamp } from './agentRunView'
 
 type ActivityGroup = 'running' | 'needsReview' | 'failed' | 'completed'
@@ -28,19 +28,15 @@ function proposalIdForRun(agentRun: AgentRun) {
 function sourceIdForRun(agentRun: AgentRun) {
   if (!isRecord(agentRun.input)) return null
   const rawSourceId = typeof agentRun.input.rawSourceId === 'string' ? agentRun.input.rawSourceId : null
-  const rawNoteId = typeof agentRun.input.rawNoteId === 'string' ? agentRun.input.rawNoteId : null
-  return { rawNoteId, rawSourceId }
+  return { rawSourceId }
 }
 
-function sourceTitleForRun(agentRun: AgentRun, rawNotes: RawNote[], rawSources: RawSource[]) {
+function sourceTitleForRun(agentRun: AgentRun, rawSources: RawSource[]) {
   const ids = sourceIdForRun(agentRun)
   const rawSource = ids?.rawSourceId
     ? rawSources.find((source) => source.id === ids.rawSourceId) ?? null
     : null
-  const rawNote = ids?.rawNoteId
-    ? rawNotes.find((note) => note.id === ids.rawNoteId) ?? null
-    : null
-  return rawSource?.title ?? rawNote?.title ?? agentRunLabel(agentRun.runType)
+  return rawSource?.title ?? agentRunLabel(agentRun.runType)
 }
 
 function runStep(agentRun: AgentRun, proposal: Proposal | null) {
@@ -131,7 +127,6 @@ function ActivityRow({
   onRetry,
   onSelectAgentRun,
   proposal,
-  rawNotes,
   rawSources,
 }: {
   agentRun: AgentRun
@@ -139,7 +134,6 @@ function ActivityRow({
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
   proposal: Proposal | null
-  rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
   return (
@@ -149,7 +143,7 @@ function ActivityRow({
           <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-violet" />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-extrabold text-ink">
-            {agentRunLabel(agentRun.runType)} · {sourceTitleForRun(agentRun, rawNotes, rawSources)}
+            {agentRunLabel(agentRun.runType)} · {sourceTitleForRun(agentRun, rawSources)}
             </p>
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{runStep(agentRun, proposal)}</p>
             {proposal ? (
@@ -208,7 +202,6 @@ function ActivityGroupSection({
   onSelectAgentRun,
   isOpen,
   onToggle,
-  rawNotes,
   rawSources,
 }: {
   group: ActivityGroup
@@ -218,7 +211,6 @@ function ActivityGroupSection({
   onSelectAgentRun: (agentRunId: string) => void
   isOpen: boolean
   onToggle: () => void
-  rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
   const copy = groupCopy(group)
@@ -263,7 +255,6 @@ function ActivityGroupSection({
                 onRetry={onRetry}
                 onSelectAgentRun={onSelectAgentRun}
                 proposal={proposal}
-                rawNotes={rawNotes}
                 rawSources={rawSources}
               />
             ))}
@@ -284,7 +275,6 @@ export function AgentActivityPage({
   onRetry,
   onSelectAgentRun,
   proposals,
-  rawNotes,
   rawSources,
 }: {
   agentRuns: AgentRun[]
@@ -292,7 +282,6 @@ export function AgentActivityPage({
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
   proposals: Proposal[]
-  rawNotes: RawNote[]
   rawSources: RawSource[]
 }) {
   const groups = groupRuns(agentRuns, proposals)
@@ -343,7 +332,6 @@ export function AgentActivityPage({
               onOpenProposal={onOpenProposal}
               onRetry={onRetry}
               onSelectAgentRun={onSelectAgentRun}
-              rawNotes={rawNotes}
               rawSources={rawSources}
             />
           ))}

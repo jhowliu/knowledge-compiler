@@ -8,7 +8,7 @@ import {
 } from './features/agent-runs/AgentActivityCenter'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
 import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
-import { RawNoteEditorPage } from './features/raw-notes/RawNoteEditorPage'
+import { SourceEditorPage } from './features/sources/SourceEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
@@ -16,7 +16,7 @@ import {
   createAgentRunEventSource,
   createTopic,
   loadAgentRunDetail,
-  loadRawNoteIndexingTrace,
+  loadSourceIndexingTrace,
   loadWorkspaceData,
   requestJson,
   requestVoid,
@@ -30,10 +30,9 @@ import type {
   KnowledgeSearchResult,
   NoteCardPosition,
   Proposal,
-  RawNote,
-  RawNoteIndexingTrace,
   RawSource,
   RawSourceRole,
+  SourceIndexingTrace,
   ThemeMode,
   Topic,
   WorkspaceData,
@@ -54,8 +53,8 @@ function App() {
   const [draftTopicIds, setDraftTopicIds] = useState<string[]>([])
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
-  const [selectedRawNoteId, setSelectedRawNoteId] = useState<string | null>(null)
-  const [selectedRawNoteTrace, setSelectedRawNoteTrace] = useState<RawNoteIndexingTrace | null>(null)
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [selectedSourceTrace, setSelectedSourceTrace] = useState<SourceIndexingTrace | null>(null)
   const [selectedAgentRunDetail, setSelectedAgentRunDetail] = useState<AgentRunDetail | null>(null)
   const [isAgentRunDetailLoading, setIsAgentRunDetailLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,7 +63,7 @@ function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [includeArchivedSearch, setIncludeArchivedSearch] = useState(false)
-  const [isRawNoteDirty, setIsRawNoteDirty] = useState(false)
+  const [isSourceDirty, setIsSourceDirty] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -100,11 +99,11 @@ function App() {
     }
   }
 
-  async function refreshSelectedRawNoteTrace(rawNoteId: string) {
+  async function refreshSelectedSourceTrace(rawSourceId: string) {
     try {
-      setSelectedRawNoteTrace(await loadRawNoteIndexingTrace(rawNoteId))
+      setSelectedSourceTrace(await loadSourceIndexingTrace(rawSourceId))
     } catch (nextError) {
-      setSelectedRawNoteTrace(null)
+      setSelectedSourceTrace(null)
       setError(nextError instanceof Error ? nextError.message : 'Unable to load indexing trace')
     }
   }
@@ -240,12 +239,12 @@ function App() {
   }, [themeMode])
 
   useEffect(() => {
-    if (activeView === 'raw_note_editor') {
+    if (activeView === 'source_editor') {
       titleInputRef.current?.focus()
     }
   }, [activeView])
 
-  function rawNotePayload() {
+  function sourcePayload() {
     return {
       title: title.trim() || null,
       sourceRole,
@@ -255,8 +254,8 @@ function App() {
     }
   }
 
-  async function saveSelectedRawNote() {
-    if (!selectedRawNoteId) {
+  async function saveSelectedSource() {
+    if (!selectedSourceId) {
       return null
     }
 
@@ -267,17 +266,17 @@ function App() {
 
     setIsSubmitting(true)
     try {
-      const result = await requestJson<{ rawNote: RawNote }>(`/raw-notes/${selectedRawNoteId}`, {
+      const result = await requestJson<{ rawSource: RawSource }>(`/sources/${selectedSourceId}`, {
         method: 'PATCH',
-        body: JSON.stringify(rawNotePayload()),
+        body: JSON.stringify(sourcePayload()),
       })
-      setSelectedRawNoteId(result.rawNote.id)
-      setIsRawNoteDirty(false)
-      setNotice('Raw note saved.')
+      setSelectedSourceId(result.rawSource.id)
+      setIsSourceDirty(false)
+      setNotice('Source saved.')
       setError(null)
       await refresh()
-      await refreshSelectedRawNoteTrace(result.rawNote.id)
-      return result.rawNote
+      await refreshSelectedSourceTrace(result.rawSource.id)
+      return result.rawSource
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
       setNotice(null)
@@ -287,22 +286,22 @@ function App() {
     }
   }
 
-  async function deleteSelectedRawNote() {
-    if (!selectedRawNoteId) {
+  async function deleteSelectedSource() {
+    if (!selectedSourceId) {
       return
     }
 
     setIsSubmitting(true)
     try {
-      await requestVoid(`/raw-notes/${selectedRawNoteId}`, { method: 'DELETE' })
+      await requestVoid(`/sources/${selectedSourceId}`, { method: 'DELETE' })
       setTitle('')
       setBodyMarkdown('')
       setSourceRole('personal_note')
       setDraftTopicIds([])
-      setSelectedRawNoteId(null)
-      setSelectedRawNoteTrace(null)
-      setIsRawNoteDirty(false)
-      setNotice('Raw note deleted.')
+      setSelectedSourceId(null)
+      setSelectedSourceTrace(null)
+      setIsSourceDirty(false)
+      setNotice('Source deleted.')
       setError(null)
       await refresh()
     } catch (nextError) {
@@ -313,7 +312,7 @@ function App() {
     }
   }
 
-  async function submitRawNote(event: React.FormEvent) {
+  async function submitSource(event: React.FormEvent) {
     event.preventDefault()
     if (!bodyMarkdown.trim()) {
       setError('Write a practice note first.')
@@ -322,89 +321,95 @@ function App() {
 
     setIsSubmitting(true)
     try {
-      let result: { rawNote?: RawNote; proposal: Proposal | null; agentRunId?: string | null }
-      const isCompilingSavedNote = Boolean(selectedRawNoteId)
-      if (selectedRawNoteId) {
-        const selectedRawNote = workspaceData.rawNotes.find((note) => note.id === selectedRawNoteId)
-        if (isRawNoteDirty) {
-          await requestJson<{ rawNote: RawNote }>(`/raw-notes/${selectedRawNoteId}`, {
+      let result: { rawSource?: RawSource; proposal: Proposal | null; agentRunId?: string | null }
+      const isCompilingSavedSource = Boolean(selectedSourceId)
+      if (selectedSourceId) {
+        if (isSourceDirty) {
+          await requestJson<{ rawSource: RawSource }>(`/sources/${selectedSourceId}`, {
             method: 'PATCH',
-            body: JSON.stringify(rawNotePayload()),
+            body: JSON.stringify(sourcePayload()),
           })
         }
         result = await requestJson<{
-          rawNote?: RawNote
+          rawSource?: RawSource
           proposal: Proposal | null
           agentRunId?: string | null
-        }>(
-          selectedRawNote?.rawSourceId
-            ? `/sources/${selectedRawNote.rawSourceId}/compile`
-            : `/raw-notes/${selectedRawNoteId}/compile`,
-          {
-            method: 'POST',
-            body: JSON.stringify({}),
-          },
-        )
-      } else {
-        result = await requestJson<{
-          rawNote: RawNote
-          proposal: Proposal | null
-          agentRunId?: string | null
-        }>('/raw-notes', {
+        }>(`/sources/${selectedSourceId}/compile`, {
           method: 'POST',
-          body: JSON.stringify(rawNotePayload()),
+          body: JSON.stringify({}),
         })
+      } else {
+        const createResult = await requestJson<{
+          rawSource: RawSource
+        }>('/sources', {
+          method: 'POST',
+          body: JSON.stringify(sourcePayload()),
+        })
+        const compileResult = await requestJson<{
+          rawSource?: RawSource
+          proposal: Proposal | null
+          agentRunId?: string | null
+        }>(`/sources/${createResult.rawSource.id}/compile`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        })
+        result = {
+          rawSource: compileResult.rawSource ?? createResult.rawSource,
+          proposal: compileResult.proposal,
+          agentRunId: compileResult.agentRunId,
+        }
       }
       setSelectedProposalId(result.proposal?.id ?? null)
-      const nextRawNoteId = selectedRawNoteId ?? result.rawNote?.id ?? null
-      setSelectedRawNoteId(nextRawNoteId)
-      setIsRawNoteDirty(false)
-      if (result.rawNote) {
-        setTitle(result.rawNote.title ?? '')
-        setSourceRole(result.rawNote.sourceRole)
-        setBodyMarkdown(result.rawNote.bodyMarkdown)
+      const nextSourceId = selectedSourceId ?? result.rawSource?.id ?? null
+      setSelectedSourceId(nextSourceId)
+      setIsSourceDirty(false)
+      if (result.rawSource) {
+        setTitle(result.rawSource.title ?? '')
+        setSourceRole(result.rawSource.sourceRole)
+        setDraftTopicIds(result.rawSource.topicIds)
+        setBodyMarkdown(result.rawSource.bodyMarkdown)
       }
       setNotice(
         result.agentRunId
-          ? 'Raw note queued for agentic wiki indexing. Trace is available in this editor.'
+          ? 'Source queued for agentic wiki indexing. Trace is available in this editor.'
           : result.proposal
-            ? isCompilingSavedNote
-              ? 'Raw note compiled. Review the generated update proposal.'
-              : 'Raw note captured. Review the generated update proposal.'
-            : isCompilingSavedNote
-              ? 'Raw note compiled.'
-              : 'Raw note captured.',
+            ? isCompilingSavedSource
+              ? 'Source compiled. Review the generated update proposal.'
+              : 'Source captured. Review the generated update proposal.'
+            : isCompilingSavedSource
+              ? 'Source compiled.'
+              : 'Source captured.',
       )
       setError(null)
       const refreshedData = await refresh()
       const nextProposalId =
         result.proposal?.id ??
-        (nextRawNoteId
-          ? refreshedData?.proposals.find((proposal) => proposal.rawNoteId === nextRawNoteId)?.id
+        (nextSourceId
+          ? refreshedData?.proposals.find((proposal) => proposal.rawSourceId === nextSourceId)?.id
           : null) ??
         null
       if (nextProposalId) {
         setSelectedProposalId(nextProposalId)
         setActiveView('update_proposals')
       }
-      if (nextRawNoteId) {
-        await refreshSelectedRawNoteTrace(nextRawNoteId)
+      if (nextSourceId) {
+        await refreshSelectedSourceTrace(nextSourceId)
         window.setTimeout(() => {
           void (async () => {
             const delayedData = await refresh()
             const delayedProposal = delayedData?.proposals.find(
-              (proposal) => proposal.rawNoteId === nextRawNoteId,
+              (proposal) => proposal.rawSourceId === nextSourceId,
             )
             if (delayedProposal) {
               setSelectedProposalId(delayedProposal.id)
               setActiveView('update_proposals')
               setNotice('Agent finished wiki indexing. Review the proposed incremental updates.')
             }
-            await refreshSelectedRawNoteTrace(nextRawNoteId)
+            await refreshSelectedSourceTrace(nextSourceId)
           })()
         }, 900)
       } else {
-        setSelectedRawNoteTrace(null)
+        setSelectedSourceTrace(null)
       }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to save note')
@@ -414,8 +419,8 @@ function App() {
     }
   }
 
-  function openRawNotesView() {
-    setActiveView('raw_note_editor')
+  function openSourcesView() {
+    setActiveView('source_editor')
     setNotice(null)
     setError(null)
   }
@@ -432,51 +437,48 @@ function App() {
     setError(null)
   }
 
-  function openNewRawNoteEditor() {
+  function openNewSourceEditor() {
     setTitle('')
     setBodyMarkdown('')
     setSourceRole('personal_note')
     setDraftTopicIds([])
-    setSelectedRawNoteId(null)
-    setSelectedRawNoteTrace(null)
-    setIsRawNoteDirty(false)
-    openRawNotesView()
+    setSelectedSourceId(null)
+    setSelectedSourceTrace(null)
+    setIsSourceDirty(false)
+    openSourcesView()
   }
 
-  function selectRawNote(rawNote: RawNote) {
-    const rawSource = rawNote.rawSourceId
-      ? workspaceData.rawSources.find((source) => source.id === rawNote.rawSourceId)
-      : null
-    setSelectedRawNoteId(rawNote.id)
-    setSelectedRawNoteTrace(null)
-    setTitle(rawNote.title ?? '')
-    setSourceRole(rawNote.sourceRole)
-    setDraftTopicIds(rawSource?.topicIds ?? [])
-    setBodyMarkdown(rawNote.bodyMarkdown)
-    setIsRawNoteDirty(false)
+  function selectSource(rawSource: RawSource) {
+    setSelectedSourceId(rawSource.id)
+    setSelectedSourceTrace(null)
+    setTitle(rawSource.title ?? '')
+    setSourceRole(rawSource.sourceRole)
+    setDraftTopicIds(rawSource.topicIds)
+    setBodyMarkdown(rawSource.bodyMarkdown)
+    setIsSourceDirty(false)
     setNotice(null)
     setError(null)
-    void refreshSelectedRawNoteTrace(rawNote.id)
+    void refreshSelectedSourceTrace(rawSource.id)
   }
 
   function updateDraftTitle(value: string) {
     setTitle(value)
-    setIsRawNoteDirty(true)
+    setIsSourceDirty(true)
   }
 
   function updateDraftBody(value: string) {
     setBodyMarkdown(value)
-    setIsRawNoteDirty(true)
+    setIsSourceDirty(true)
   }
 
   function updateSourceRole(value: RawSourceRole) {
     setSourceRole(value)
-    setIsRawNoteDirty(true)
+    setIsSourceDirty(true)
   }
 
   function updateDraftTopicIds(topicIds: string[]) {
     setDraftTopicIds(topicIds)
-    setIsRawNoteDirty(true)
+    setIsSourceDirty(true)
   }
 
   async function createSourceProject(name: string) {
@@ -572,14 +574,15 @@ function App() {
       setNotice('Source moved.')
       setError(null)
       const nextData = await refresh()
-      const selectedRawNote = selectedRawNoteId
-        ? nextData?.rawNotes.find((note) => note.id === selectedRawNoteId)
+      const selectedSource = selectedSourceId
+        ? nextData?.rawSources.find((source) => source.id === selectedSourceId)
         : null
-      if (selectedRawNote) {
-        setTitle(selectedRawNote.title ?? '')
-        setSourceRole(selectedRawNote.sourceRole)
-        setBodyMarkdown(selectedRawNote.bodyMarkdown)
-        setIsRawNoteDirty(false)
+      if (selectedSource) {
+        setTitle(selectedSource.title ?? '')
+        setSourceRole(selectedSource.sourceRole)
+        setDraftTopicIds(selectedSource.topicIds)
+        setBodyMarkdown(selectedSource.bodyMarkdown)
+        setIsSourceDirty(false)
       }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to move source')
@@ -803,28 +806,28 @@ function App() {
     <main
       className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
     >
-      {activeView === 'raw_note_editor' ? null : (
+      {activeView === 'source_editor' ? null : (
         <LeftNavigation
           activeView={activeView}
           agentActivitySummary={agentActivitySummary}
           onAgentActivityClick={openAgentActivityView}
-          onCaptureClick={openNewRawNoteEditor}
+          onCaptureClick={openNewSourceEditor}
           onKnowledgeMapClick={() => setActiveView('knowledge_map')}
-          onRawNotesClick={openRawNotesView}
+          onSourcesClick={openSourcesView}
           onUpdateProposalsClick={openUpdateProposalsView}
           pendingCount={pendingCount}
           themeMode={themeMode}
         />
       )}
       <section className="flex min-w-0 flex-1 flex-col">
-        {activeView !== 'raw_note_editor' ? (
+        {activeView !== 'source_editor' ? (
           <TopToolbar
             activeView={activeView}
             agentActivitySummary={agentActivitySummary}
             agentRunStatus={latestAgentRun?.status ?? 'idle'}
             compiledCount={workspaceData.compiledNotes.length}
             isAgentRunning={isAgentRunning}
-            noteCount={workspaceData.rawSources.length || workspaceData.rawNotes.length}
+            noteCount={workspaceData.rawSources.length}
             onAgentActivityClick={openAgentActivityView}
             onReindexLinks={() => void startReindexLinksRun()}
             onSearchQueryChange={setSearchQuery}
@@ -879,7 +882,6 @@ function App() {
             onRejectProposal={(proposalId) => void decideProposal(proposalId, 'reject')}
             onSelectProposal={setSelectedProposalId}
             proposals={workspaceData.proposals}
-            rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
             selectedProposalId={selectedProposalId}
           />
@@ -890,17 +892,16 @@ function App() {
             onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
             onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
             proposals={workspaceData.proposals}
-            rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
           />
         ) : (
-          <RawNoteEditorPage
+          <SourceEditorPage
             agentActivitySummary={agentActivitySummary}
             agentRuns={workspaceData.agentRuns}
             bodyMarkdown={bodyMarkdown}
             error={error}
-            indexingTrace={selectedRawNoteTrace}
-            isDirty={isRawNoteDirty}
+            indexingTrace={selectedSourceTrace}
+            isDirty={isSourceDirty}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
             onApplyTopics={(rawSourceId, topicIds) => void applyTopicsToSource(rawSourceId, topicIds)}
@@ -908,28 +909,27 @@ function App() {
             onCreateFolder={(projectId, name) => void createSourceFolder(projectId, name)}
             onCreateProject={(name) => void createSourceProject(name)}
             onCreateTopic={(name) => addTopic(name)}
-            onDelete={() => void deleteSelectedRawNote()}
+            onDelete={() => void deleteSelectedSource()}
             onDeleteFolder={(projectId, folderId) => void deleteSourceFolder(projectId, folderId)}
             onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
             onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
-            onNewNote={openNewRawNoteEditor}
+            onNewNote={openNewSourceEditor}
             onOpenAgentActivity={openAgentActivityView}
             onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
             onRenameFolder={(projectId, folderId, name) => void renameSourceFolder(projectId, folderId, name)}
             onRenameProject={(projectId, name) => void renameSourceProject(projectId, name)}
-            onSave={() => void saveSelectedRawNote()}
-            onSelectRawNote={selectRawNote}
+            onSave={() => void saveSelectedSource()}
+            onSelectSource={selectSource}
             onSourceRoleChange={updateSourceRole}
-            onSubmit={submitRawNote}
+            onSubmit={submitSource}
             onTitleChange={updateDraftTitle}
             onTopicIdsChange={updateDraftTopicIds}
             proposals={workspaceData.proposals}
-            rawNotes={workspaceData.rawNotes}
             rawSources={workspaceData.rawSources}
             sourceProjects={workspaceData.sourceOrganization.projects}
-            selectedRawNoteId={selectedRawNoteId}
+            selectedSourceId={selectedSourceId}
             sourceRole={sourceRole}
             themeMode={themeMode}
             title={title}

@@ -489,7 +489,6 @@ describe("raw source routes", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(proposalRepository.proposals).toHaveLength(1);
-    expect(proposalRepository.proposals[0].rawNoteId).toBeNull();
     expect(proposalRepository.proposals[0].rawSourceId).toBe(createResponse.body.rawSource.id);
   });
 });

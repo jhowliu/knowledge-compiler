@@ -30,7 +30,7 @@ describe("dashboard routes", () => {
       approvalStatus: "approved",
     });
 
-    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const app = createApp({ knowledgeRepository });
     const response = await request(app).get("/search?q=knowledge%20blocks");
 
     expect(response.status).toBe(200);
@@ -82,7 +82,7 @@ describe("dashboard routes", () => {
       ],
     });
 
-    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const app = createApp({ knowledgeRepository });
     const defaultResponse = await request(app).get("/search?q=stale-source-only");
     const archivedResponse = await request(app).get("/search?q=stale-source-only&includeArchived=true");
 
@@ -117,7 +117,6 @@ describe("dashboard routes", () => {
 
     const app = createApp({
       knowledgeRepository,
-      enablePhaseOneWorkflow: false,
       embeddingService: {
         async embedText() {
           return [1, 0, 0];
@@ -186,7 +185,7 @@ describe("dashboard routes", () => {
       approvalStatus: "approved",
     });
 
-    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const app = createApp({ knowledgeRepository });
     const response = await request(app).get(`/knowledge-sources/${first.source.id}/timeline`);
 
     expect(response.status).toBe(200);
@@ -239,7 +238,7 @@ describe("dashboard routes", () => {
       ],
     });
 
-    const app = createApp({ knowledgeRepository, enablePhaseOneWorkflow: false });
+    const app = createApp({ knowledgeRepository });
     const response = await request(app).get(`/compiled-notes/${compiledNote.id}/timeline`);
 
     expect(response.status).toBe(200);
@@ -253,7 +252,6 @@ describe("dashboard routes", () => {
   test("legacy review endpoints are no longer registered", async () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
-      enablePhaseOneWorkflow: false,
     });
 
     await expect(request(app).get("/mistakes")).resolves.toMatchObject({ status: 404 });

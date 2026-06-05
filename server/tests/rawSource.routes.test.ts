@@ -7,7 +7,6 @@ import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repositor
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
-import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 
 const routeWikiIndexer = {
@@ -87,7 +86,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/sources").send({
@@ -120,7 +118,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const createResponse = await request(app).post("/sources").send({
       sourceRole: "personal_note",
@@ -161,7 +158,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     await request(app).post("/sources").send({
       title: "Personal source",
@@ -191,7 +187,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const projectResponse = await request(app).post("/sources/projects").send({
@@ -222,7 +217,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const projectResponse = await request(app).post("/sources/projects").send({
       name: "Research",
@@ -294,7 +288,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const projectResponse = await request(app).post("/sources/projects").send({
       name: "Research",
@@ -325,7 +318,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const projectResponse = await request(app).post("/sources/projects").send({
       name: "Temporary project",
@@ -350,7 +342,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const projectResponse = await request(app).post("/sources/projects").send({
       name: "Research",
@@ -391,7 +382,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
     const sourceResponse = await request(app).post("/sources").send({
       title: "Move me",
@@ -444,7 +434,6 @@ describe("raw source routes", () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const app = createApp({
       rawSourceRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/sources").send({

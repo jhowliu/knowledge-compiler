@@ -57,7 +57,6 @@ describe("topic routes", () => {
     const topicRepository = new InMemoryTopicRepository();
     const app = createApp({
       topicRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const createResponse = await request(app).post("/topics").send({
@@ -93,7 +92,6 @@ describe("topic routes", () => {
   test("rejects duplicate topic names for the same user", async () => {
     const app = createApp({
       topicRepository: new InMemoryTopicRepository(),
-      enablePhaseOneWorkflow: false,
     });
 
     await request(app).post("/topics").send({ name: "Research" });
@@ -107,7 +105,6 @@ describe("topic routes", () => {
     const topicRepository = new InMemoryTopicRepository();
     const app = createApp({
       topicRepository,
-      enablePhaseOneWorkflow: false,
     });
     const createResponse = await request(app).post("/topics").send({ name: "Graph Theory" });
     topicRepository.referencedTopicIds.add(createResponse.body.topic.id);

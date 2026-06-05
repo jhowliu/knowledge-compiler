@@ -109,6 +109,23 @@ test("renders the running transcript so the model can author from observations",
   expect(captured!.input).toContain("Available tools this round: draft_proposal");
 });
 
+test("instructs body markdown authoring to preserve useful source structure", async () => {
+  let captured: CompileModelRequest | null = null;
+  const modelClient: CompileModelClient = async (request) => {
+    captured = request;
+    return { toolName: "get_source", arguments: { source_id: "raw-source-1" } };
+  };
+  const runner = createLlmCompileAgentRunner(makeContext(), { modelClient });
+
+  await runner.nextStep(view({ availableTools: ["get_source"] }));
+
+  expect(captured!.instructions).toContain("Preserve source-visible structure");
+  expect(captured!.instructions).toContain("numbered steps");
+  expect(captured!.instructions).toContain("Typical Uses");
+  expect(captured!.instructions).toContain("Do NOT force every note into a fixed template");
+  expect(captured!.instructions).toContain("if the source is prose, keep the output mostly prose");
+});
+
 test("passes a model-authored draft_proposal payload straight through", async () => {
   const draft: DraftProposalInput = {
     indexing_outcome: "create_knowledge",

@@ -1,6 +1,7 @@
 # Recap
 
 ## Summary
+- Adjusted compile agent `body_markdown` authoring rules so readable knowledge notes preserve useful source-visible structure (numbered steps, examples, caveats, decision rules, code blocks) without forcing every note into a fixed facets/template layout. Added a compile-agent prompt contract test for the preservation rule.
 - Finished issue #126 client migration on `feat/client-sources-migration-126`: the client no longer loads or writes `/raw-notes`, `WorkspaceData` is source-only, the editor moved to `client/src/features/sources/SourceEditorPage.tsx`, and app state now uses `selectedSourceId` / `SourceIndexingTrace`.
 - Source editor create/save/delete/indexing now calls `/sources`, `/sources/:id`, `/sources/:id/compile`, and `/sources/:id/indexing-trace`; new-source "Save & index" now creates the source and immediately compiles it instead of stopping after creation.
 - Issue #126 validation passed: `npm run typecheck`, `npm run build --workspace=client`, `npm run build --workspace=server`, `npm run test --workspace=server`, `git diff --check`, and `rg "/raw-notes|rawNotes|RawNote|RawNoteIndexingTrace|rawNoteId" client/src -n` with no matches.

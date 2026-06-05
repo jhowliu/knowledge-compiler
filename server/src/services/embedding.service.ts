@@ -55,20 +55,17 @@ export async function embedKnowledgeBlock(
   return embeddingService.embedText(text);
 }
 
-// Contextual Retrieval: prepend the block's section path (e.g.
-// "Binary Search on Answer › Examples") so a small chunk keeps the parent
-// context it would otherwise lose once retrieved on its own. Falls back to the
-// block heading when no path is stored.
+// Contextual Retrieval: prepend the LLM-generated situating context (stored on
+// the block as metadata.context) so a small chunk keeps the parent context it
+// would otherwise lose once retrieved on its own. Falls back to the block
+// heading when no context was generated.
 function sectionContextFrom(block: {
   heading?: string | null;
   metadata?: Record<string, unknown> | null;
 }): string | null {
-  const rawPath = block.metadata?.sectionPath;
-  const path = Array.isArray(rawPath)
-    ? rawPath.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-    : [];
-  if (path.length) {
-    return path.join(" › ");
+  const context = block.metadata?.context;
+  if (typeof context === "string" && context.trim()) {
+    return context.trim();
   }
   return block.heading?.trim() || null;
 }

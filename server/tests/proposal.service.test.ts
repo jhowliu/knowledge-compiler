@@ -318,6 +318,65 @@ describe("ProposalService", () => {
     expect(knowledge.embeddings.get("knowledge-block-1")).toEqual([1, 0, 0]);
   });
 
+  test("stores generated contextual retrieval context and prepends it before embedding", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const embeddedTexts: string[] = [];
+    const service = new ProposalService(
+      proposals,
+      knowledge,
+      noteLinks,
+      {
+        async embedText(text) {
+          embeddedTexts.push(text);
+          return [1, 0, 0];
+        },
+      },
+      {
+        async contextualize({ note, chunk }) {
+          expect(note).toContain("Vector search helps semantic retrieval.");
+          expect(chunk).toContain("Vector search");
+          return "Context: this note explains vector search for retrieval.";
+        },
+      },
+    );
+
+    const proposal = await proposals.create({
+      draft: {
+        detectedDomain: "research",
+        detectedKnowledgeType: "paper_note",
+        impactLevel: 2,
+        confidence: "high",
+        rationale: "Contextual retrieval proposal.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "research",
+              knowledgeType: "paper_note",
+              title: "Vector search",
+              bodyMarkdown: "Vector search helps semantic retrieval.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Create approved knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    const block = knowledge.knowledgeBlocks.find((candidate) => candidate.status === "active");
+    expect(block?.metadata).toMatchObject({
+      context: "Context: this note explains vector search for retrieval.",
+    });
+    expect(embeddedTexts[0]).toBe(
+      "Context: this note explains vector search for retrieval.\n\nVector search helps semantic retrieval.",
+    );
+  });
+
   test("stores the model-authored readable note as the body, keeping facets as metadata (#119)", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();

@@ -12,20 +12,24 @@ function capturingService() {
 }
 
 describe("embedKnowledgeBlock contextual retrieval", () => {
-  test("prepends the section path so a small chunk keeps parent context", async () => {
+  test("prepends the generated context so a small chunk keeps parent context", async () => {
     const { service, calls } = capturingService();
 
     await embedKnowledgeBlock(service, {
       id: "block-1",
       heading: "Examples",
       bodyMarkdown: "- Koko eating bananas",
-      metadata: { sectionPath: ["Binary Search on Answer", "Examples"] },
+      metadata: {
+        context: "Examples from the Binary Search on Answer note.",
+      },
     });
 
-    expect(calls[0]).toBe("Binary Search on Answer › Examples\n\n- Koko eating bananas");
+    expect(calls[0]).toBe(
+      "Examples from the Binary Search on Answer note.\n\n- Koko eating bananas",
+    );
   });
 
-  test("falls back to the heading when no section path is stored", async () => {
+  test("falls back to the heading when no context is stored", async () => {
     const { service, calls } = capturingService();
 
     await embedKnowledgeBlock(service, {

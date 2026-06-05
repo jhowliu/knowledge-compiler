@@ -1,11 +1,29 @@
 import request from "supertest";
 import { createApp } from "../src/app.js";
-import type { AskAnswerer } from "../src/services/ask.service.js";
+import { askSystemPrompt, type AskAnswerer } from "../src/services/ask.service.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 
 const topicA = "00000000-0000-4000-8000-000000000201";
 const topicB = "00000000-0000-4000-8000-000000000202";
+
+describe("ask system prompt", () => {
+  test("scopes answers to the exact question instead of summarizing whole blocks", () => {
+    const prompt = askSystemPrompt.toLowerCase();
+    expect(prompt).toContain("exact question");
+    expect(prompt).toContain("examples, return only the examples");
+    expect(prompt).toContain("concise definition first");
+    expect(prompt).toContain("do not include unrelated steps");
+  });
+
+  test("still requires grounding and citation markers", () => {
+    const prompt = askSystemPrompt.toLowerCase();
+    expect(prompt).toContain("only the retrieved knowledge blocks");
+    expect(prompt).toContain("do not use outside knowledge");
+    expect(prompt).toContain("not contain enough information");
+    expect(prompt).toContain("[1], [2]");
+  });
+});
 
 describe("ask routes", () => {
   test("POST /ask returns grounded answer with source citations", async () => {

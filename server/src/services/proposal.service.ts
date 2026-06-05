@@ -168,7 +168,7 @@ export class ProposalService {
       const targetCompiledNoteId = stringValue(payload, "targetCompiledNoteId") || null;
       const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
       const sourceType = proposal.rawSourceId ? "raw_source" : "raw_note";
-      const sourceId = proposal.rawSourceId ?? proposal.rawNoteId ?? proposal.id;
+      const sourceId = proposal.rawSourceId ?? proposal.id;
       const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
         userId: proposal.userId,
         targetCompiledNoteId,
@@ -217,10 +217,10 @@ export class ProposalService {
         approvalStatus: "approved",
       });
 
-      if (proposal.rawNoteId) {
-        await this.knowledgeRepository.createEvidenceLinksFromRawNoteChunks({
+      if (proposal.rawSourceId) {
+        await this.knowledgeRepository.createEvidenceLinksFromSourceChunks({
           userId: proposal.userId,
-          rawNoteId: proposal.rawNoteId,
+          rawSourceId: proposal.rawSourceId,
           targetType: "knowledge_version",
           targetId: knowledgeSnapshot.version.id,
           confidence: proposal.confidence,

@@ -124,7 +124,6 @@ export type NoteLinkStatus = "pending" | "approved" | "rejected";
 export type UpdateProposal = {
   id: string;
   userId: string | null;
-  rawNoteId: string | null;
   rawSourceId: string | null;
   detectedDomain: string | null;
   detectedKnowledgeType: string | null;
@@ -212,7 +211,7 @@ export type AgentRunEvent = {
 
 export type SearchResult = {
   id: string;
-  targetType: "raw_note" | "compiled_note";
+  targetType: "raw_source" | "compiled_note";
   title: string | null;
   bodyMarkdown: string;
   domain: string | null;

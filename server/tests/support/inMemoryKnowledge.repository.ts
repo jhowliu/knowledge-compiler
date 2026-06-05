@@ -42,7 +42,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly conceptIndex: ConceptIndexRecord[] = [];
   readonly embeddings = new Map<string, number[]>();
-  readonly rawNoteChunkIdsByRawNoteId = new Map<string, string[]>();
+  readonly rawSourceChunkIdsByRawSourceId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
 
   async upsertConcept(input: {
@@ -397,16 +397,16 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     });
   }
 
-  async createEvidenceLinksFromRawNoteChunks(input: {
+  async createEvidenceLinksFromSourceChunks(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawSourceId: string;
     targetType: string;
     targetId: string;
     confidence: string;
     impactLevel: number;
     approvalStatus: string;
   }): Promise<number> {
-    const chunkIds = this.rawNoteChunkIdsByRawNoteId.get(input.rawNoteId) ?? [];
+    const chunkIds = this.rawSourceChunkIdsByRawSourceId.get(input.rawSourceId) ?? [];
     for (const chunkId of chunkIds) {
       await this.createEvidenceLink({
         userId: input.userId,

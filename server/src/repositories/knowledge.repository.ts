@@ -78,7 +78,7 @@ type KnowledgeBlockRow = {
 
 type SearchResultRow = {
   id: string;
-  target_type: "raw_note" | "compiled_note";
+  target_type: "raw_source" | "compiled_note";
   title: string | null;
   body_markdown: string;
   domain: string | null;
@@ -300,9 +300,9 @@ async function listEvidenceReferencesForTargets(input: {
         evidence_links.id,
         evidence_links.source_type,
         evidence_links.source_id,
-        coalesce(raw_notes.title, direct_sources.title, chunk_sources.title, note_sources.title, chunks.heading) as source_title,
-        coalesce(direct_chunks.raw_source_id, direct_sources.id, note_sources.id) as raw_source_id,
-        coalesce(chunk_sources.title, direct_sources.title, note_sources.title) as raw_source_title,
+        coalesce(direct_sources.title, chunk_sources.title, chunks.heading) as source_title,
+        coalesce(direct_chunks.raw_source_id, direct_sources.id) as raw_source_id,
+        coalesce(chunk_sources.title, direct_sources.title) as raw_source_title,
         chunks.id as raw_source_chunk_id,
         chunks.chunk_index,
         chunks.heading as chunk_heading,
@@ -321,18 +321,12 @@ async function listEvidenceReferencesForTargets(input: {
       left join raw_sources direct_sources
         on evidence_links.source_type = 'raw_source'
         and direct_sources.id = evidence_links.source_id
-      left join raw_notes
-        on evidence_links.source_type = 'raw_note'
-        and raw_notes.id = evidence_links.source_id
-      left join raw_sources note_sources
-        on note_sources.id = raw_notes.raw_source_id
       left join lateral (
         select raw_source_chunks.*
         from raw_source_chunks
         where raw_source_chunks.raw_source_id = coalesce(
           direct_chunks.raw_source_id,
-          direct_sources.id,
-          note_sources.id
+          direct_sources.id
         )
           and (direct_chunks.id is null or raw_source_chunks.id = direct_chunks.id)
         order by raw_source_chunks.chunk_index asc
@@ -484,9 +478,9 @@ export interface KnowledgeRepository {
     impactLevel: number;
     approvalStatus: string;
   }): Promise<void>;
-  createEvidenceLinksFromRawNoteChunks(input: {
+  createEvidenceLinksFromSourceChunks(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawSourceId: string;
     targetType: string;
     targetId: string;
     confidence: string;
@@ -600,32 +594,32 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
 
           select
             id,
-            'raw_note'::text as target_type,
+            'raw_source'::text as target_type,
             title,
             body_markdown,
             domain,
             null::text as note_type,
             ts_rank(search_vector, query.ts_query) as rank,
             created_at
-          from raw_notes, query
+          from raw_sources, query
           where search_vector @@ query.ts_query
         ),
         concept_results as (
           select
             cn.target_id as id,
             cn.target_type,
-            coalesce(compiled_notes.title, raw_notes.title) as title,
-            coalesce(compiled_notes.body_markdown, raw_notes.body_markdown) as body_markdown,
-            coalesce(compiled_notes.domain, raw_notes.domain) as domain,
+            coalesce(compiled_notes.title, raw_sources.title) as title,
+            coalesce(compiled_notes.body_markdown, raw_sources.body_markdown) as body_markdown,
+            coalesce(compiled_notes.domain, raw_sources.domain) as domain,
             compiled_notes.note_type,
             2.0::real as rank,
-            coalesce(compiled_notes.created_at, raw_notes.created_at) as created_at
+            coalesce(compiled_notes.created_at, raw_sources.created_at) as created_at
           from concept_index cn
           join concepts c on c.id = cn.concept_id
           left join compiled_notes on cn.target_type = 'compiled_note'
             and compiled_notes.id = cn.target_id
-          left join raw_notes on cn.target_type = 'raw_note'
-            and raw_notes.id = cn.target_id
+          left join raw_sources on cn.target_type = 'raw_source'
+            and raw_sources.id = cn.target_id
           where c.normalized_name = any($2::text[])
         )
         select distinct on (target_type, id)
@@ -1373,9 +1367,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
   }
 
-  async createEvidenceLinksFromRawNoteChunks(input: {
+  async createEvidenceLinksFromSourceChunks(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawSourceId: string;
     targetType: string;
     targetId: string;
     confidence: string;
@@ -1403,15 +1397,14 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           $5,
           $6,
           $7
-        from raw_notes
-        join raw_source_chunks on raw_source_chunks.raw_source_id = raw_notes.raw_source_id
-        where raw_notes.id = $2
+        from raw_source_chunks
+        where raw_source_chunks.raw_source_id = $2
         order by raw_source_chunks.chunk_index asc
         returning id
       `,
       [
         input.userId ?? null,
-        input.rawNoteId,
+        input.rawSourceId,
         input.targetType,
         input.targetId,
         input.confidence,

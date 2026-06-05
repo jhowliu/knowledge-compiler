@@ -8,7 +8,6 @@ import type {
   RenameSourceProjectInput,
   UpdateRawSourceInput,
 } from "../domain/rawSource.js";
-import type { RawNoteRepository } from "../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import type { AgentRunQueueService } from "./agentRunQueue.service.js";
 import { chunkSourceMarkdown } from "./sourceChunker.service.js";
@@ -16,7 +15,6 @@ import { chunkSourceMarkdown } from "./sourceChunker.service.js";
 export class RawSourceService {
   constructor(
     private readonly rawSourceRepository: RawSourceRepository,
-    private readonly rawNoteRepository?: RawNoteRepository | null,
     private readonly agentRunQueueService?: AgentRunQueueService | null,
   ) {}
 
@@ -146,12 +144,10 @@ export class RawSourceService {
 
   async compileRawSource(id: string) {
     const rawSource = await this.getRawSource(id);
-    const rawNote = await this.ensureCompatibilityRawNote(rawSource.id);
 
     if (!this.agentRunQueueService) {
       return {
         rawSource,
-        rawNote,
         proposal: null,
         agentRunId: null,
       };
@@ -162,7 +158,6 @@ export class RawSourceService {
       runType: "compile_raw_note",
       input: {
         rawSourceId: rawSource.id,
-        rawNoteId: rawNote.id,
       },
     });
     setTimeout(() => {
@@ -173,30 +168,8 @@ export class RawSourceService {
 
     return {
       rawSource,
-      rawNote,
       proposal: null,
       agentRunId: agentRun.id,
     };
-  }
-
-  private async ensureCompatibilityRawNote(rawSourceId: string) {
-    if (!this.rawNoteRepository) {
-      throw new AppError("Raw note compatibility repository is not configured", 500);
-    }
-
-    const existingRawNote = await this.rawNoteRepository.getByRawSourceId(rawSourceId);
-    if (existingRawNote) {
-      return existingRawNote;
-    }
-
-    const rawSource = await this.getRawSource(rawSourceId);
-    return this.rawNoteRepository.create({
-      userId: rawSource.userId,
-      rawSourceId: rawSource.id,
-      sourceType: rawSource.sourceType,
-      sourceRole: rawSource.sourceRole,
-      title: rawSource.title,
-      bodyMarkdown: rawSource.bodyMarkdown,
-    });
   }
 }

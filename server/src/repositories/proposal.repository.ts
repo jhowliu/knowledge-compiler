@@ -10,7 +10,6 @@ import type { DraftUpdateProposal } from "../domain/compiler.js";
 type ProposalRow = {
   id: string;
   user_id: string | null;
-  raw_note_id: string | null;
   raw_source_id: string | null;
   detected_domain: string | null;
   detected_knowledge_type: string | null;
@@ -44,7 +43,6 @@ function mapProposal(row: ProposalRow): UpdateProposal {
   return {
     id: row.id,
     userId: row.user_id,
-    rawNoteId: row.raw_note_id,
     rawSourceId: row.raw_source_id,
     detectedDomain: row.detected_domain,
     detectedKnowledgeType: row.detected_knowledge_type,
@@ -80,12 +78,10 @@ function mapProposalItem(row: ProposalItemRow): ProposalItem {
 export interface ProposalRepository {
   create(input: {
     userId?: string | null;
-    rawNoteId: string;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems>;
   getById(id: string): Promise<ProposalWithItems | null>;
-  listByRawNote(rawNoteId: string): Promise<ProposalWithItems[]>;
   listRecent(limit: number): Promise<ProposalWithItems[]>;
   setStatus(id: string, status: ProposalStatus): Promise<UpdateProposal>;
   setItemStatus(proposalId: string, status: ProposalStatus): Promise<void>;
@@ -100,7 +96,6 @@ export interface ProposalRepository {
 export class PostgresProposalRepository implements ProposalRepository {
   async create(input: {
     userId?: string | null;
-    rawNoteId: string;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }) {
@@ -108,7 +103,6 @@ export class PostgresProposalRepository implements ProposalRepository {
       `
         insert into update_proposals (
           user_id,
-          raw_note_id,
           raw_source_id,
           detected_domain,
           detected_knowledge_type,
@@ -116,12 +110,11 @@ export class PostgresProposalRepository implements ProposalRepository {
           confidence,
           rationale
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        values ($1, $2, $3, $4, $5, $6, $7)
         returning *
       `,
       [
         input.userId ?? null,
-        input.rawNoteId,
         input.rawSourceId ?? null,
         input.draft.detectedDomain,
         input.draft.detectedKnowledgeType,
@@ -137,7 +130,6 @@ export class PostgresProposalRepository implements ProposalRepository {
     for (const item of input.draft.items) {
       const payload = normalizeProposalItemPayload(item.payload, {
         actionType: item.actionType,
-        rawNoteId: input.rawNoteId,
         rawSourceId: input.rawSourceId ?? null,
       });
       const itemResult = await query<ProposalItemRow>(
@@ -226,28 +218,6 @@ export class PostgresProposalRepository implements ProposalRepository {
     return proposals;
   }
 
-  async listByRawNote(rawNoteId: string) {
-    const proposalResult = await query<ProposalRow>(
-      `
-        select *
-        from update_proposals
-        where raw_note_id = $1
-        order by created_at desc
-      `,
-      [rawNoteId],
-    );
-
-    const proposals: ProposalWithItems[] = [];
-    for (const row of proposalResult.rows) {
-      const proposal = await this.getById(row.id);
-      if (proposal) {
-        proposals.push(proposal);
-      }
-    }
-
-    return proposals;
-  }
-
   async setStatus(id: string, status: ProposalStatus) {
     const result = await query<ProposalRow>(
       `
@@ -292,7 +262,7 @@ export class PostgresProposalRepository implements ProposalRepository {
 
 function normalizeProposalItemPayload(
   payload: Record<string, unknown>,
-  context: { actionType: string; rawNoteId: string; rawSourceId: string | null },
+  context: { actionType: string; rawSourceId: string | null },
 ) {
   if (context.actionType !== "keep_source_searchable") {
     return payload;
@@ -300,9 +270,6 @@ function normalizeProposalItemPayload(
 
   return {
     ...payload,
-    rawNoteId: typeof payload.rawNoteId === "string" && payload.rawNoteId.trim()
-      ? payload.rawNoteId
-      : context.rawNoteId,
     rawSourceId: typeof payload.rawSourceId === "string" && payload.rawSourceId.trim()
       ? payload.rawSourceId
       : context.rawSourceId,

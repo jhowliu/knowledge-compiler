@@ -9,7 +9,6 @@ describe("note card position routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteCardPositionRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app)
@@ -43,7 +42,6 @@ describe("note card position routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteCardPositionRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     await request(app)
@@ -63,7 +61,6 @@ describe("note card position routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteCardPositionRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     await request(app)
@@ -100,7 +97,6 @@ describe("note card position routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteCardPositionRepository: new InMemoryNoteCardPositionRepository(),
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app)

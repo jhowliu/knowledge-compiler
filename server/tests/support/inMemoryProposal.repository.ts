@@ -11,14 +11,12 @@ export class InMemoryProposalRepository implements ProposalRepository {
 
   async create(input: {
     userId?: string | null;
-    rawNoteId: string;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems> {
     const proposal: ProposalWithItems = {
       id: `proposal-${this.proposals.length + 1}`,
       userId: input.userId ?? null,
-      rawNoteId: input.rawNoteId,
       rawSourceId: input.rawSourceId ?? null,
       detectedDomain: input.draft.detectedDomain,
       detectedKnowledgeType: input.draft.detectedKnowledgeType,
@@ -38,7 +36,6 @@ export class InMemoryProposalRepository implements ProposalRepository {
           item.actionType === "keep_source_searchable"
             ? {
                 ...item.payload,
-                rawNoteId: typeof item.payload.rawNoteId === "string" ? item.payload.rawNoteId : input.rawNoteId,
                 rawSourceId:
                   typeof item.payload.rawSourceId === "string" ? item.payload.rawSourceId : input.rawSourceId ?? null,
               }
@@ -60,10 +57,6 @@ export class InMemoryProposalRepository implements ProposalRepository {
 
   async getById(id: string): Promise<ProposalWithItems | null> {
     return this.proposals.find((proposal) => proposal.id === id) ?? null;
-  }
-
-  async listByRawNote(rawNoteId: string): Promise<ProposalWithItems[]> {
-    return this.proposals.filter((proposal) => proposal.rawNoteId === rawNoteId);
   }
 
   async listRecent(): Promise<ProposalWithItems[]> {

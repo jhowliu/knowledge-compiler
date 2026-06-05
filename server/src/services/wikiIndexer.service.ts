@@ -5,7 +5,6 @@ import type {
   IndexingOutcome,
 } from "../domain/compiler.js";
 import type { Confidence, SearchResult } from "../domain/knowledge.js";
-import type { RawNote } from "../domain/rawNote.js";
 import type { RawSourceChunk, RawSourceRole } from "../domain/rawSource.js";
 import {
   normalizeKnowledgeStructuredData,
@@ -363,7 +362,7 @@ export class WikiIndexerService {
         items: [
           {
             actionType: "keep_source_searchable",
-            targetType: source.rawSourceId ? "raw_source" : "raw_note",
+            targetType: "raw_source",
             payload: {
               outcome: routedExtraction.outcome,
               outcomeReason: routedExtraction.outcomeReason,
@@ -485,7 +484,7 @@ export class WikiIndexerService {
   }
 }
 
-function knowledgeTitle(source: Pick<RawNote, "title">, extraction: GeneralKnowledgeExtraction) {
+function knowledgeTitle(source: { title: string | null }, extraction: GeneralKnowledgeExtraction) {
   if (extraction.title) {
     return extraction.title;
   }

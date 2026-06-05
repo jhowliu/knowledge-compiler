@@ -37,7 +37,7 @@ import {
 
 export type DraftProposalContext = {
   agentRunId: string;
-  rawNoteId: string;
+  rawNoteId: string | null;
   sourceId: string;
   userId?: string | null;
   chunks: Array<{ chunk_index: number; body_markdown: string; id: string; heading: string | null; token_estimate: number }>;
@@ -178,13 +178,11 @@ export class AgentToolService {
       invalidItemIndexes,
       context.existingBlocksContext ?? [],
       {
-        rawNoteId: context.rawNoteId,
         rawSourceId: context.sourceId,
       },
     );
     const proposal = await this.proposalRepository.create({
       userId: context.userId,
-      rawNoteId: context.rawNoteId,
       rawSourceId: context.sourceId,
       draft,
     });
@@ -218,7 +216,7 @@ function toDraftUpdateProposal(
   judgeOutput: Awaited<ReturnType<EvalJudgeService["judge"]>>,
   invalidItemIndexes: Set<number>,
   existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
-  sourceReference: { rawNoteId: string; rawSourceId: string },
+  sourceReference: { rawSourceId: string },
 ): DraftUpdateProposal {
   return {
     detectedDomain: "general",
@@ -251,7 +249,6 @@ function toDraftUpdateProposal(
             title: item.title,
             bodyMarkdown,
             rawSourceId: item.action === "keep_source_searchable" ? sourceReference.rawSourceId : null,
-            rawNoteId: item.action === "keep_source_searchable" ? sourceReference.rawNoteId : null,
             targetKnowledgeSourceId: targetBlock?.knowledge_source_id ?? null,
             targetCompiledNoteId: targetBlock?.compiled_note_id ?? null,
             targetBlockId: item.target_block_id,

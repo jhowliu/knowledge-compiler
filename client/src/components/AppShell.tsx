@@ -42,7 +42,7 @@ export function LeftNavigation({
   onAgentActivityClick,
   onCaptureClick,
   onKnowledgeMapClick,
-  onRawNotesClick,
+  onSourcesClick,
   onUpdateProposalsClick,
   themeMode,
 }: {
@@ -52,7 +52,7 @@ export function LeftNavigation({
   onAgentActivityClick: () => void
   onCaptureClick: () => void
   onKnowledgeMapClick: () => void
-  onRawNotesClick: () => void
+  onSourcesClick: () => void
   onUpdateProposalsClick: () => void
   themeMode: ThemeMode
 }) {
@@ -101,8 +101,8 @@ export function LeftNavigation({
           Notes network
         </button>
         <button
-          className={navItemClass(activeView === 'raw_note_editor')}
-          onClick={onRawNotesClick}
+          className={navItemClass(activeView === 'source_editor')}
+          onClick={onSourcesClick}
           type="button"
         >
           <PencilLine size={16} className="text-gray-400" />
@@ -185,7 +185,7 @@ export function TopToolbar({
       title: 'Notes network',
       subtitle: `${noteCount} sources -> ${compiledCount} compiled notes. Open a card to inspect links.`,
     },
-    raw_note_editor: {
+    source_editor: {
       title: 'Sources',
       subtitle: 'Capture evidence, organize projects, and index reusable knowledge.',
     },

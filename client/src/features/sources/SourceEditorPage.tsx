@@ -26,10 +26,9 @@ import type { AgentActivitySummary } from '../agent-runs/AgentActivityCenter'
 import type {
   AgentRun,
   Proposal,
-  RawNote,
-  RawNoteIndexingTrace,
   RawSource,
   RawSourceRole,
+  SourceIndexingTrace,
   SourceProject,
   ThemeMode,
   Topic,
@@ -44,21 +43,21 @@ type RoleFilter = 'all' | RawSourceRole
 type LifecycleFilter = 'all' | SourceLifecycle['tone']
 type FolderFilter = 'all' | 'uncategorized' | string
 
-function getRunRawNoteId(agentRun: AgentRun) {
+function getRunSourceId(agentRun: AgentRun) {
   if (!agentRun.input || typeof agentRun.input !== 'object') {
     return null
   }
 
-  const input = agentRun.input as { rawNoteId?: unknown }
-  return typeof input.rawNoteId === 'string' ? input.rawNoteId : null
+  const input = agentRun.input as { rawSourceId?: unknown }
+  return typeof input.rawSourceId === 'string' ? input.rawSourceId : null
 }
 
-function getLifecycle(note: RawNote, proposals: Proposal[], agentRuns: AgentRun[]): SourceLifecycle {
-  const noteProposals = proposals.filter((proposal) => proposal.rawNoteId === note.id)
-  const noteRuns = agentRuns.filter((agentRun) => getRunRawNoteId(agentRun) === note.id)
-  const hasActiveRun = noteRuns.some((agentRun) => ['queued', 'running'].includes(agentRun.status))
-  const latestProposal = noteProposals[0] ?? null
-  const latestFailedRun = noteRuns.find((agentRun) => agentRun.status === 'failed')
+function getLifecycle(source: RawSource, proposals: Proposal[], agentRuns: AgentRun[]): SourceLifecycle {
+  const sourceProposals = proposals.filter((proposal) => proposal.rawSourceId === source.id)
+  const sourceRuns = agentRuns.filter((agentRun) => getRunSourceId(agentRun) === source.id)
+  const hasActiveRun = sourceRuns.some((agentRun) => ['queued', 'running'].includes(agentRun.status))
+  const latestProposal = sourceProposals[0] ?? null
+  const latestFailedRun = sourceRuns.find((agentRun) => agentRun.status === 'failed')
 
   if (hasActiveRun) {
     return { label: 'Indexing', tone: 'active' }
@@ -101,8 +100,8 @@ function sourceTypeLabel(sourceType: string) {
   return sourceType.replaceAll('_', ' ')
 }
 
-function sourceTitle(note: RawNote | null | undefined, source: RawSource | null | undefined) {
-  return source?.title ?? note?.title ?? 'Untitled source'
+function sourceTitle(source: RawSource | null | undefined) {
+  return source?.title ?? 'Untitled source'
 }
 
 function projectSourceCount(project: SourceProject | undefined, fallbackCount: number) {
@@ -156,19 +155,17 @@ function SourceGroupButton({
 function SourceSidebarItem({
   isSelected,
   lifecycle,
-  note,
   onSelect,
   source,
   topics,
 }: {
   isSelected: boolean
   lifecycle: SourceLifecycle
-  note: RawNote
   onSelect: () => void
-  source: RawSource | null
+  source: RawSource
   topics: Topic[]
 }) {
-  const sourceTopics = topics.filter((topic) => source?.topicIds.includes(topic.id))
+  const sourceTopics = topics.filter((topic) => source.topicIds.includes(topic.id))
   return (
     <div
       className={`ml-6 w-[calc(100%-1.5rem)] rounded-md border px-2.5 py-2 text-left transition ${
@@ -188,15 +185,15 @@ function SourceSidebarItem({
     >
       <div className="flex items-start gap-2">
         <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-500">
-          {note.sourceRole === 'reference' ? <BookOpen size={13} /> : <FileText size={13} />}
+          {source.sourceRole === 'reference' ? <BookOpen size={13} /> : <FileText size={13} />}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-extrabold leading-5 text-ink">
-            {sourceTitle(note, source)}
+            {sourceTitle(source)}
           </p>
           <div className="mt-1 flex min-w-0 flex-wrap gap-1">
             <span className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500">
-              {formatDate(source?.updatedAt ?? note.createdAt)}
+              {formatDate(source.updatedAt)}
             </span>
             <span
               className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase ${lifecycleClass(lifecycle.tone)}`}
@@ -227,15 +224,14 @@ function SmallPill({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function RawNoteEditorPage({
+export function SourceEditorPage({
   indexingTrace,
-  rawNotes,
   rawSources,
   sourceProjects,
   topics,
   proposals,
   agentRuns,
-  selectedRawNoteId,
+  selectedSourceId,
   isDirty,
   title,
   sourceRole,
@@ -251,7 +247,7 @@ export function RawNoteEditorPage({
   onSourceRoleChange,
   onTopicIdsChange,
   onNewNote,
-  onSelectRawNote,
+  onSelectSource,
   onSave,
   onDelete,
   onSubmit,
@@ -270,14 +266,13 @@ export function RawNoteEditorPage({
   onThemeToggle,
   agentActivitySummary,
 }: {
-  indexingTrace: RawNoteIndexingTrace | null
-  rawNotes: RawNote[]
+  indexingTrace: SourceIndexingTrace | null
   rawSources: RawSource[]
   sourceProjects: SourceProject[]
   topics: Topic[]
   proposals: Proposal[]
   agentRuns: AgentRun[]
-  selectedRawNoteId: string | null
+  selectedSourceId: string | null
   isDirty: boolean
   title: string
   sourceRole: RawSourceRole
@@ -293,7 +288,7 @@ export function RawNoteEditorPage({
   onSourceRoleChange: (value: RawSourceRole) => void
   onTopicIdsChange: (topicIds: string[]) => void
   onNewNote: () => void
-  onSelectRawNote: (note: RawNote) => void
+  onSelectSource: (source: RawSource) => void
   onSave: () => void
   onDelete: () => void
   onSubmit: (event: React.FormEvent) => void
@@ -325,14 +320,10 @@ export function RawNoteEditorPage({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [expandedSourceGroups, setExpandedSourceGroups] = useState<string[]>(['all'])
   const [topicInput, setTopicInput] = useState('')
-  const selectedRawNote = rawNotes.find((note) => note.id === selectedRawNoteId) ?? null
-  const sourceById = useMemo(() => new Map(rawSources.map((source) => [source.id, source])), [rawSources])
-  const selectedRawSource = selectedRawNote?.rawSourceId
-    ? sourceById.get(selectedRawNote.rawSourceId) ?? null
-    : null
-  const selectedChunks = selectedRawSource?.chunks ?? []
-  const selectedLifecycle = selectedRawNote
-    ? getLifecycle(selectedRawNote, proposals, agentRuns)
+  const selectedSource = rawSources.find((source) => source.id === selectedSourceId) ?? null
+  const selectedChunks = selectedSource?.chunks ?? []
+  const selectedLifecycle = selectedSource
+    ? getLifecycle(selectedSource, proposals, agentRuns)
     : { label: 'Draft', tone: 'idle' as const }
   const pendingCount = proposals.filter((proposal) => proposal.status === 'pending').length
   const agentAttentionCount =
@@ -368,13 +359,13 @@ export function RawNoteEditorPage({
   }, [selectedFolderFilter, selectedProject])
 
   useEffect(() => {
-    setMoveProjectId(selectedRawSource?.projectId ?? sourceProjects[0]?.id ?? '')
-    setMoveFolderId(selectedRawSource?.folderId ?? '')
-  }, [selectedRawSource?.folderId, selectedRawSource?.projectId, sourceProjects])
+    setMoveProjectId(selectedSource?.projectId ?? sourceProjects[0]?.id ?? '')
+    setMoveFolderId(selectedSource?.folderId ?? '')
+  }, [selectedSource?.folderId, selectedSource?.projectId, sourceProjects])
 
   useEffect(() => {
     setTopicInput('')
-  }, [selectedRawSource?.id])
+  }, [selectedSource?.id])
 
   useEffect(() => {
     setRenameProjectName(selectedProject?.name ?? '')
@@ -385,16 +376,15 @@ export function RawNoteEditorPage({
   }, [selectedFolder?.id, selectedFolder?.name])
 
   const sourceRows = useMemo(() => {
-    return rawNotes.map((note) => {
-      const source = note.rawSourceId ? sourceById.get(note.rawSourceId) ?? null : null
-      const lifecycle = getLifecycle(note, proposals, agentRuns)
-      return { lifecycle, note, source }
+    return rawSources.map((source) => {
+      const lifecycle = getLifecycle(source, proposals, agentRuns)
+      return { lifecycle, source }
     })
-  }, [agentRuns, proposals, rawNotes, sourceById])
+  }, [agentRuns, proposals, rawSources])
 
   const filterVisibleRows = (rows: typeof sourceRows) =>
-    rows.filter(({ lifecycle, note }) => {
-      const matchesRole = roleFilter === 'all' || note.sourceRole === roleFilter
+    rows.filter(({ lifecycle, source }) => {
+      const matchesRole = roleFilter === 'all' || source.sourceRole === roleFilter
       const matchesLifecycle = lifecycleFilter === 'all' || lifecycle.tone === lifecycleFilter
       return matchesRole && matchesLifecycle
     })
@@ -421,9 +411,9 @@ export function RawNoteEditorPage({
 
   const activeProposal = indexingTrace?.proposals[0] ?? null
   const pendingTopicsChanged =
-    selectedRawSource !== null &&
+    selectedSource !== null &&
     JSON.stringify([...topicIds].sort()) !==
-      JSON.stringify([...(selectedRawSource?.topicIds ?? [])].sort())
+      JSON.stringify([...(selectedSource?.topicIds ?? [])].sort())
   const filteredTopics = topics.filter((topic) =>
     topicInput.trim() ? topic.name.toLowerCase().includes(topicInput.toLowerCase()) : true,
   )
@@ -431,9 +421,9 @@ export function RawNoteEditorPage({
     topicInput.trim().length > 0 &&
     !topics.some((topic) => topic.name.toLowerCase() === topicInput.trim().toLowerCase())
   const canMoveSource =
-    Boolean(selectedRawSource) &&
+    Boolean(selectedSource) &&
     Boolean(moveProjectId) &&
-    (selectedRawSource?.projectId !== moveProjectId || (selectedRawSource?.folderId ?? '') !== moveFolderId)
+    (selectedSource?.projectId !== moveProjectId || (selectedSource?.folderId ?? '') !== moveFolderId)
   const isDark = themeMode === 'dark'
   const appNavClass = (isActive: boolean) =>
     `flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] ${
@@ -514,13 +504,12 @@ export function RawNoteEditorPage({
           />
           {sourceGroupIsExpanded('all') ? (
             <div className="space-y-1">
-              {filteredSourceRows.map(({ lifecycle, note, source }) => (
+              {filteredSourceRows.map(({ lifecycle, source }) => (
                 <SourceSidebarItem
-                  isSelected={note.id === selectedRawNoteId}
-                  key={note.id}
+                  isSelected={source.id === selectedSourceId}
+                  key={source.id}
                   lifecycle={lifecycle}
-                  note={note}
-                  onSelect={() => onSelectRawNote(note)}
+                  onSelect={() => onSelectSource(source)}
                   source={source}
                   topics={topics}
                 />
@@ -567,13 +556,12 @@ export function RawNoteEditorPage({
                     />
                     {sourceGroupIsExpanded(uncategorizedKey) ? (
                       <div className="space-y-1">
-                        {uncategorizedRows.map(({ lifecycle, note, source }) => (
+                        {uncategorizedRows.map(({ lifecycle, source }) => (
                           <SourceSidebarItem
-                            isSelected={note.id === selectedRawNoteId}
-                            key={note.id}
+                            isSelected={source.id === selectedSourceId}
+                            key={source.id}
                             lifecycle={lifecycle}
-                            note={note}
-                            onSelect={() => onSelectRawNote(note)}
+                            onSelect={() => onSelectSource(source)}
                             source={source}
                             topics={topics}
                           />
@@ -602,13 +590,12 @@ export function RawNoteEditorPage({
                           />
                           {sourceGroupIsExpanded(folderKey) ? (
                             <div className="space-y-1">
-                              {folderRows.map(({ lifecycle, note, source }) => (
+                              {folderRows.map(({ lifecycle, source }) => (
                                 <SourceSidebarItem
-                                  isSelected={note.id === selectedRawNoteId}
-                                  key={note.id}
+                                  isSelected={source.id === selectedSourceId}
+                                  key={source.id}
                                   lifecycle={lifecycle}
-                                  note={note}
-                                  onSelect={() => onSelectRawNote(note)}
+                                  onSelect={() => onSelectSource(source)}
                                   source={source}
                                   topics={topics}
                                 />
@@ -692,7 +679,7 @@ export function RawNoteEditorPage({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                {selectedRawNote ? (isDirty ? 'Unsaved changes' : 'Saved source') : 'New source'}
+                {selectedSource ? (isDirty ? 'Unsaved changes' : 'Saved source') : 'New source'}
               </p>
               <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${lifecycleClass(selectedLifecycle.tone)}`}
@@ -701,7 +688,7 @@ export function RawNoteEditorPage({
               </span>
             </div>
             <p className="mt-1 truncate text-sm font-extrabold text-ink">
-              {selectedRawNote ? sourceTitle(selectedRawNote, selectedRawSource) : 'Capture source evidence'}
+              {selectedSource ? sourceTitle(selectedSource) : 'Capture source evidence'}
             </p>
           </div>
 
@@ -759,7 +746,7 @@ export function RawNoteEditorPage({
             >
               {isPreviewOpen ? <PanelRight size={16} /> : <Eye size={16} />}
             </button>
-            {selectedRawNote ? (
+            {selectedSource ? (
               <>
                 <button
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-ink disabled:opacity-50"
@@ -788,7 +775,7 @@ export function RawNoteEditorPage({
               type="submit"
             >
               <Sparkles size={14} />
-              {isSubmitting ? 'Indexing' : selectedRawNote ? 'Index source' : 'Save & index'}
+              {isSubmitting ? 'Indexing' : selectedSource ? 'Index source' : 'Save & index'}
             </button>
           </div>
         </header>
@@ -803,7 +790,7 @@ export function RawNoteEditorPage({
             {notice}
           </div>
         ) : null}
-        {!filteredSourceRows.length && rawNotes.length ? (
+        {!filteredSourceRows.length && rawSources.length ? (
           <div className="mx-5 mt-4 rounded-lg border border-dashed border-gray-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-gray-600">
             No sources match the current filters. Adjust role or state filters in the header to widen the list.
           </div>
@@ -986,7 +973,7 @@ export function RawNoteEditorPage({
             </div>
             <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold uppercase">
               {([
-                ['Saved', Boolean(selectedRawNote)],
+                ['Saved', Boolean(selectedSource)],
                 ['Chunked', selectedChunks.length > 0],
                 ['Indexed', indexingTrace ? indexingTrace.agentRuns.length > 0 : false],
                 ['Review', indexingTrace ? indexingTrace.proposals.length > 0 : false],
@@ -1006,7 +993,7 @@ export function RawNoteEditorPage({
             </div>
           </section>
 
-          {selectedRawNote && indexingTrace ? (
+          {selectedSource && indexingTrace ? (
             <section className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[12px] font-extrabold text-ink">Index trace</p>
@@ -1160,7 +1147,7 @@ export function RawNoteEditorPage({
                     ) : null}
                   </div>
                 ) : null}
-                {selectedRawSource ? (
+                {selectedSource ? (
                   <button
                     className={`mt-2 h-7 w-full rounded-md px-2 text-xs font-extrabold ${
                       pendingTopicsChanged
@@ -1168,7 +1155,7 @@ export function RawNoteEditorPage({
                         : 'border border-gray-200 bg-slate-100 text-gray-500'
                     }`}
                     disabled={isSubmitting || !pendingTopicsChanged}
-                    onClick={() => onApplyTopics(selectedRawSource.id, topicIds)}
+                    onClick={() => onApplyTopics(selectedSource.id, topicIds)}
                     type="button"
                   >
                     {pendingTopicsChanged ? 'Apply topics' : 'Topics up to date'}
@@ -1180,7 +1167,7 @@ export function RawNoteEditorPage({
                 )}
               </div>
 
-              {selectedRawSource ? (
+              {selectedSource ? (
                 <div className="rounded-md border border-gray-200 bg-white p-3">
                   <p className="mb-2 text-[11px] font-bold uppercase text-gray-500">Location</p>
                   <div className="space-y-2">
@@ -1220,8 +1207,8 @@ export function RawNoteEditorPage({
                       }`}
                       disabled={isSubmitting || !canMoveSource}
                       onClick={() => {
-                        if (!selectedRawSource || !moveProjectId) return
-                        onMoveSource(selectedRawSource.id, {
+                        if (!selectedSource || !moveProjectId) return
+                        onMoveSource(selectedSource.id, {
                           projectId: moveProjectId,
                           folderId: moveFolderId || null,
                         })
@@ -1240,11 +1227,11 @@ export function RawNoteEditorPage({
               </p>
               <p>
                 <span className="font-bold text-gray-500">Type:</span>{' '}
-                {sourceTypeLabel(selectedRawSource?.sourceType ?? (sourceRole === 'reference' ? 'paper' : 'manual'))}
+                {sourceTypeLabel(selectedSource?.sourceType ?? (sourceRole === 'reference' ? 'paper' : 'manual'))}
               </p>
               <p>
                 <span className="font-bold text-gray-500">Updated:</span>{' '}
-                {formatDate(selectedRawSource?.updatedAt ?? selectedRawNote?.createdAt)}
+                {formatDate(selectedSource?.updatedAt)}
               </p>
             </div>
           </section>

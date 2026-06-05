@@ -8,21 +8,9 @@ export type Topic = {
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
 export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
-export type ActiveView = 'knowledge_map' | 'raw_note_editor' | 'update_proposals' | 'agent_activity'
+export type ActiveView = 'knowledge_map' | 'source_editor' | 'update_proposals' | 'agent_activity'
 export type ThemeMode = 'light' | 'dark'
 export type RawSourceRole = 'reference' | 'personal_note'
-
-export type RawNote = {
-  id: string
-  rawSourceId: string | null
-  title: string | null
-  domain: string | null
-  sourceType: string
-  sourceRole: RawSourceRole
-  bodyMarkdown: string
-  extractedData: unknown
-  createdAt: string
-}
 
 export type RawSourceChunk = {
   id: string
@@ -98,7 +86,6 @@ export type ProposalItem = {
 
 export type Proposal = {
   id: string
-  rawNoteId: string | null
   rawSourceId: string | null
   detectedDomain: string | null
   detectedKnowledgeType: string | null
@@ -269,8 +256,8 @@ export type ExtractionEval = {
   createdAt: string
 }
 
-export type RawNoteIndexingTrace = {
-  rawNote: RawNote
+export type SourceIndexingTrace = {
+  rawSource: RawSource
   status: 'Not compiled' | 'Indexing' | 'Proposed' | 'Approved' | 'Rejected' | 'Failed'
   agentRuns: AgentRun[]
   proposals: Proposal[]
@@ -278,7 +265,6 @@ export type RawNoteIndexingTrace = {
 }
 
 export type WorkspaceData = {
-  rawNotes: RawNote[]
   rawSources: RawSource[]
   sourceOrganization: SourceOrganization
   topics: Topic[]

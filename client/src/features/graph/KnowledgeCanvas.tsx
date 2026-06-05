@@ -250,7 +250,7 @@ export function KnowledgeCanvas({
   const noteById = useMemo(() => new globalThis.Map(notes.map((note) => [note.id, note])), [notes])
   const sourceCards = useMemo(
     () => buildSourceGraphCards(data),
-    [data.proposals, data.rawNotes, data.rawSources],
+    [data.proposals, data.rawSources],
   )
   const sourceCardByKey = useMemo(
     () => new globalThis.Map(sourceCards.map((source) => [source.key, source])),

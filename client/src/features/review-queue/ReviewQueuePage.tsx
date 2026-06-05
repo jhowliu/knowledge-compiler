@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { actionLabel, payloadLabel, payloadText } from '../../lib/knowledge'
-import type { CompiledNote, NoteLink, Proposal, ProposalItem, RawNote, RawSource } from '../../types/domain'
+import type { CompiledNote, NoteLink, Proposal, ProposalItem, RawSource } from '../../types/domain'
 
 type ReviewTab = 'updates' | 'links' | 'done'
 type IndexingOutcomeOverride = 'keep_searchable' | 'create_knowledge'
@@ -87,8 +87,8 @@ function itemRequiresAcknowledgement(item: ProposalItem) {
   return item.conflictResolution === 'needs_user_decision' || item.evalVerdict === 'fail'
 }
 
-function sourceTitle(rawNote: RawNote | undefined, rawSource: RawSource | undefined) {
-  return rawSource?.title ?? rawNote?.title ?? 'Untitled source'
+function sourceTitle(rawSource: RawSource | undefined) {
+  return rawSource?.title ?? 'Untitled source'
 }
 
 function sourceRoleLabel(role: string | undefined) {
@@ -100,14 +100,9 @@ function sourceTypeLabel(type: string | undefined) {
   return type.replaceAll('_', ' ')
 }
 
-function proposalRawNote(proposal: Proposal | null, rawNotes: RawNote[]) {
-  return proposal?.rawNoteId ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId) : undefined
-}
-
-function proposalRawSource(proposal: Proposal | null, rawNote: RawNote | undefined, rawSources: RawSource[]) {
+function proposalRawSource(proposal: Proposal | null, rawSources: RawSource[]) {
   const rawSourceId =
     proposal?.rawSourceId ??
-    rawNote?.rawSourceId ??
     proposal?.items
       .map((item) => item.payload)
       .find((payload): payload is { rawSourceId: string } =>
@@ -597,7 +592,6 @@ function ReviewDetailModal({
   onRejectProposal,
   onToggleAdvancedDetails,
   proposal,
-  rawNotes,
   rawSources,
   showAdvancedDetails,
 }: {
@@ -608,12 +602,10 @@ function ReviewDetailModal({
   onRejectProposal: (proposalId: string) => void
   onToggleAdvancedDetails: () => void
   proposal: Proposal
-  rawNotes: RawNote[]
   rawSources: RawSource[]
   showAdvancedDetails: boolean
 }) {
-  const sourceRawNote = proposalRawNote(proposal, rawNotes)
-  const sourceRawSource = proposalRawSource(proposal, sourceRawNote, rawSources)
+  const sourceRawSource = proposalRawSource(proposal, rawSources)
   const sourceChunks = sourceRawSource?.chunks ?? []
   const selectedKnowledgeItems = knowledgeItems(proposal)
   const selectedLinkItems = linkItems(proposal)
@@ -650,7 +642,7 @@ function ReviewDetailModal({
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Update review</p>
               <h2 className="mt-1 truncate text-2xl font-extrabold text-ink">
-                {sourceTitle(sourceRawNote, sourceRawSource)}
+                {sourceTitle(sourceRawSource)}
               </h2>
               <p className="mt-2 max-w-[760px] text-sm leading-6 text-gray-500">
                 Confirm source evidence, inspect the proposed knowledge diff, then apply it.
@@ -896,7 +888,7 @@ function ReviewDetailModal({
                   </span>
                   <div className="min-w-0">
                     <p className="line-clamp-2 text-[13px] font-extrabold text-ink">
-                      {sourceTitle(sourceRawNote, sourceRawSource)}
+                      {sourceTitle(sourceRawSource)}
                     </p>
                     <p className="mt-1 text-[11px] font-bold uppercase text-gray-500">
                       {proposalLifecycle(proposal)}
@@ -904,14 +896,12 @@ function ReviewDetailModal({
                   </div>
                 </div>
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <MetadataPill>{sourceRoleLabel(sourceRawSource?.sourceRole ?? sourceRawNote?.sourceRole)}</MetadataPill>
-                  <MetadataPill>{sourceTypeLabel(sourceRawSource?.sourceType ?? sourceRawNote?.sourceType)}</MetadataPill>
+                  <MetadataPill>{sourceRoleLabel(sourceRawSource?.sourceRole)}</MetadataPill>
+                  <MetadataPill>{sourceTypeLabel(sourceRawSource?.sourceType)}</MetadataPill>
                   <MetadataPill>{sourceChunks.length} chunks</MetadataPill>
                 </div>
                 <p className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
-                  {sourceRawSource?.bodyMarkdown ??
-                    sourceRawNote?.bodyMarkdown ??
-                    'The source text is no longer available.'}
+                  {sourceRawSource?.bodyMarkdown ?? 'The source text is no longer available.'}
                 </p>
               </article>
             </section>
@@ -962,7 +952,6 @@ function ReviewDetailModal({
 export function ReviewQueuePage({
   compiledNotes,
   proposals,
-  rawNotes,
   rawSources,
   noteLinks,
   selectedProposalId,
@@ -978,7 +967,6 @@ export function ReviewQueuePage({
 }: {
   compiledNotes: CompiledNote[]
   proposals: Proposal[]
-  rawNotes: RawNote[]
   rawSources: RawSource[]
   noteLinks: NoteLink[]
   selectedProposalId: string | null
@@ -1138,10 +1126,7 @@ export function ReviewQueuePage({
                 <span>Status</span>
               </div>
               {activeList.map((proposal) => {
-                const source = proposal.rawNoteId
-                  ? rawNotes.find((rawNote) => rawNote.id === proposal.rawNoteId)
-                  : undefined
-                const rawSource = proposalRawSource(proposal, source, rawSources)
+                const rawSource = proposalRawSource(proposal, rawSources)
                 const hasConflict = proposal.items.some((item) => item.conflictDetected)
                 const hasFailedEval = proposal.items.some((item) => item.evalVerdict === 'fail')
                 const hasWarnEval = proposal.items.some((item) => item.evalVerdict === 'warn')
@@ -1158,7 +1143,7 @@ export function ReviewQueuePage({
                   >
                     <div className="min-w-0">
                       <p className="line-clamp-1 text-sm font-extrabold text-ink">
-                        {sourceTitle(source, rawSource)}
+                        {sourceTitle(rawSource)}
                       </p>
                       <p className="mt-1 text-xs font-bold text-gray-500">
                         {new Date(proposal.createdAt).toLocaleDateString([], {
@@ -1177,7 +1162,7 @@ export function ReviewQueuePage({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
-                        {sourceRoleLabel(rawSource?.sourceRole ?? source?.sourceRole)}
+                        {sourceRoleLabel(rawSource?.sourceRole)}
                       </span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-500">
                         {rawSource?.chunks.length ?? 0} chunks
@@ -1222,7 +1207,6 @@ export function ReviewQueuePage({
           onRejectProposal={onRejectProposal}
           onToggleAdvancedDetails={() => setShowAdvancedDetails((current) => !current)}
           proposal={modalProposal}
-          rawNotes={rawNotes}
           rawSources={rawSources}
           showAdvancedDetails={showAdvancedDetails}
         />

@@ -80,7 +80,7 @@ function mapProposalItem(row: ProposalItemRow): ProposalItem {
 export interface ProposalRepository {
   create(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawNoteId?: string | null;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems>;
@@ -100,7 +100,7 @@ export interface ProposalRepository {
 export class PostgresProposalRepository implements ProposalRepository {
   async create(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawNoteId?: string | null;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }) {
@@ -121,7 +121,7 @@ export class PostgresProposalRepository implements ProposalRepository {
       `,
       [
         input.userId ?? null,
-        input.rawNoteId,
+        input.rawNoteId ?? null,
         input.rawSourceId ?? null,
         input.draft.detectedDomain,
         input.draft.detectedKnowledgeType,
@@ -137,7 +137,7 @@ export class PostgresProposalRepository implements ProposalRepository {
     for (const item of input.draft.items) {
       const payload = normalizeProposalItemPayload(item.payload, {
         actionType: item.actionType,
-        rawNoteId: input.rawNoteId,
+        rawNoteId: input.rawNoteId ?? null,
         rawSourceId: input.rawSourceId ?? null,
       });
       const itemResult = await query<ProposalItemRow>(
@@ -292,7 +292,7 @@ export class PostgresProposalRepository implements ProposalRepository {
 
 function normalizeProposalItemPayload(
   payload: Record<string, unknown>,
-  context: { actionType: string; rawNoteId: string; rawSourceId: string | null },
+  context: { actionType: string; rawNoteId: string | null; rawSourceId: string | null },
 ) {
   if (context.actionType !== "keep_source_searchable") {
     return payload;

@@ -11,14 +11,14 @@ export class InMemoryProposalRepository implements ProposalRepository {
 
   async create(input: {
     userId?: string | null;
-    rawNoteId: string;
+    rawNoteId?: string | null;
     rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems> {
     const proposal: ProposalWithItems = {
       id: `proposal-${this.proposals.length + 1}`,
       userId: input.userId ?? null,
-      rawNoteId: input.rawNoteId,
+      rawNoteId: input.rawNoteId ?? null,
       rawSourceId: input.rawSourceId ?? null,
       detectedDomain: input.draft.detectedDomain,
       detectedKnowledgeType: input.draft.detectedKnowledgeType,
@@ -38,7 +38,7 @@ export class InMemoryProposalRepository implements ProposalRepository {
           item.actionType === "keep_source_searchable"
             ? {
                 ...item.payload,
-                rawNoteId: typeof item.payload.rawNoteId === "string" ? item.payload.rawNoteId : input.rawNoteId,
+                rawNoteId: typeof item.payload.rawNoteId === "string" ? item.payload.rawNoteId : input.rawNoteId ?? null,
                 rawSourceId:
                   typeof item.payload.rawSourceId === "string" ? item.payload.rawSourceId : input.rawSourceId ?? null,
               }

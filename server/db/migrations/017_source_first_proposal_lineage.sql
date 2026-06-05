@@ -50,7 +50,11 @@ select
   greatest(1, ceil(length(raw_sources.body_markdown)::numeric / 4)::integer),
   jsonb_build_object('backfilledFrom', 'raw_notes', 'backfilledBy', '017_source_first_proposal_lineage')
 from raw_sources
-where not exists (
+-- Only the sources this migration just created from legacy raw_notes get a
+-- synthetic chunk-0. Sources created through normal ingestion already chunk
+-- themselves, so we must not inject a spurious full-body chunk for them.
+where raw_sources.metadata ->> 'backfilledBy' = '017_source_first_proposal_lineage'
+  and not exists (
   select 1
   from raw_source_chunks
   where raw_source_chunks.raw_source_id = raw_sources.id

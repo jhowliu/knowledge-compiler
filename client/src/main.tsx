@@ -7,12 +7,14 @@ import {
   summarizeAgentActivity,
 } from './features/agent-runs/AgentActivityCenter'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
+import { AskPanel } from './features/ask/AskPanel'
 import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { SourceEditorPage } from './features/sources/SourceEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
   applySourceTopics,
+  askKnowledgeBase,
   createAgentRunEventSource,
   createTopic,
   loadAgentRunDetail,
@@ -27,6 +29,7 @@ import type {
   ActiveView,
   AgentRun,
   AgentRunDetail,
+  AskResponse,
   KnowledgeSearchResult,
   NoteCardPosition,
   Proposal,
@@ -63,6 +66,12 @@ function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [includeArchivedSearch, setIncludeArchivedSearch] = useState(false)
+  const [askQuery, setAskQuery] = useState('')
+  const [askResponse, setAskResponse] = useState<AskResponse | null>(null)
+  const [askError, setAskError] = useState<string | null>(null)
+  const [isAskOpen, setIsAskOpen] = useState(false)
+  const [isAskLoading, setIsAskLoading] = useState(false)
+  const [askTopicIds, setAskTopicIds] = useState<string[]>([])
   const [isSourceDirty, setIsSourceDirty] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -181,6 +190,31 @@ function App() {
     if (isSearchOpen && searchQuery.trim()) {
       void runKnowledgeSearch(searchQuery, value)
     }
+  }
+
+  async function runKnowledgeAsk(nextQuery = askQuery, topicIds = askTopicIds) {
+    const trimmedQuery = nextQuery.trim()
+    setIsAskOpen(true)
+    setAskError(null)
+
+    if (!trimmedQuery) {
+      setAskResponse(null)
+      return
+    }
+
+    setIsAskLoading(true)
+    try {
+      setAskResponse(await askKnowledgeBase(trimmedQuery, topicIds))
+    } catch (nextError) {
+      setAskError(nextError instanceof Error ? nextError.message : 'Unable to ask knowledge')
+      setAskResponse(null)
+    } finally {
+      setIsAskLoading(false)
+    }
+  }
+
+  function updateAskTopicIds(topicIds: string[]) {
+    setAskTopicIds(topicIds)
   }
 
   function openProposalFromAgentRun(proposalId: string) {
@@ -829,6 +863,7 @@ function App() {
             isAgentRunning={isAgentRunning}
             noteCount={workspaceData.rawSources.length}
             onAgentActivityClick={openAgentActivityView}
+            onAskClick={() => setIsAskOpen(true)}
             onReindexLinks={() => void startReindexLinksRun()}
             onSearchQueryChange={setSearchQuery}
             onSearchSubmit={() => void runKnowledgeSearch()}
@@ -960,6 +995,19 @@ function App() {
         onSubmit={() => void runKnowledgeSearch()}
         query={searchQuery}
         results={searchResults}
+      />
+      <AskPanel
+        error={askError}
+        isLoading={isAskLoading}
+        isOpen={isAskOpen}
+        onClose={() => setIsAskOpen(false)}
+        onQueryChange={setAskQuery}
+        onSubmit={() => void runKnowledgeAsk()}
+        onTopicIdsChange={updateAskTopicIds}
+        query={askQuery}
+        response={askResponse}
+        selectedTopicIds={askTopicIds}
+        topics={workspaceData.topics}
       />
     </main>
   )

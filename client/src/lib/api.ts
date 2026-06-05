@@ -2,6 +2,7 @@ import { apiBaseUrl, graphBoardKey } from './constants'
 import type {
   AgentRun,
   AgentRunDetail,
+  AskResponse,
   CompiledNote,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
@@ -193,4 +194,33 @@ export async function searchKnowledgeBlocks(query: string, includeArchived: bool
     `/search?${params.toString()}`,
   )
   return result.results
+}
+
+type AskApiResponse = {
+  answer: string
+  citations: Array<{
+    block_id: string
+    title: string
+    chunk_text: string
+    source_note_title: string
+    source_note_id: string
+  }>
+}
+
+export async function askKnowledgeBase(query: string, topicIds: string[] = []): Promise<AskResponse> {
+  const result = await requestJson<AskApiResponse>('/ask', {
+    method: 'POST',
+    body: JSON.stringify({ query, topic_ids: topicIds }),
+  })
+
+  return {
+    answer: result.answer,
+    citations: result.citations.map((citation) => ({
+      blockId: citation.block_id,
+      title: citation.title,
+      chunkText: citation.chunk_text,
+      sourceNoteTitle: citation.source_note_title,
+      sourceNoteId: citation.source_note_id,
+    })),
+  }
 }

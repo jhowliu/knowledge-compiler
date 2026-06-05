@@ -1,6 +1,9 @@
 # Recap
 
 ## Summary
+- Implemented issue #130 Layer 1 RAG Ask Panel UI on `codex/layer-1-ask-panel-130`: added a toolbar Ask entry beside Knowledge Search, a dedicated `AskPanel` overlay, `/ask` client API helper, and client Ask response/citation types.
+- Ask Panel supports multiline question input, submit/loading/error/empty/answer/not-enough-info states, citation marker buttons, citation list/detail snippets, and optional topic filter chips wired to backend `topic_ids`.
+- Issue #130 validation passed: `npm run typecheck --workspace=client`, `npm run build --workspace=client`, `npm run test --workspace=server -- ask.routes.test.ts`, `npm run typecheck`, and `git diff --check`. Browser smoke at `http://127.0.0.1:5179/` verified Ask opens, a Binary Search question returns a grounded answer with citation `[1]`, a no-match query shows the not-enough-info state, desktop width has no horizontal overflow, and console errors were 0.
 - Adjusted compile agent `body_markdown` authoring rules so readable knowledge notes preserve useful source-visible structure (numbered steps, examples, caveats, decision rules, code blocks) without forcing every note into a fixed facets/template layout. Added a compile-agent prompt contract test for the preservation rule.
 - Finished issue #126 client migration on `feat/client-sources-migration-126`: the client no longer loads or writes `/raw-notes`, `WorkspaceData` is source-only, the editor moved to `client/src/features/sources/SourceEditorPage.tsx`, and app state now uses `selectedSourceId` / `SourceIndexingTrace`.
 - Source editor create/save/delete/indexing now calls `/sources`, `/sources/:id`, `/sources/:id/compile`, and `/sources/:id/indexing-trace`; new-source "Save & index" now creates the source and immediately compiles it instead of stopping after creation.

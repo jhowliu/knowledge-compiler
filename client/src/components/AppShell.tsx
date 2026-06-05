@@ -1,6 +1,7 @@
 import type React from 'react'
 import {
   Activity,
+  Bot,
   Map,
   Moon,
   PencilLine,
@@ -155,6 +156,7 @@ export function TopToolbar({
   isAgentRunning,
   noteCount,
   onAgentActivityClick,
+  onAskClick,
   onReindexLinks,
   onSearchQueryChange,
   onSearchSubmit,
@@ -170,6 +172,7 @@ export function TopToolbar({
   compiledCount: number
   isAgentRunning: boolean
   onAgentActivityClick: () => void
+  onAskClick: () => void
   onReindexLinks: () => void
   onSearchQueryChange: (value: string) => void
   onSearchSubmit: () => void
@@ -204,23 +207,33 @@ export function TopToolbar({
   return (
     <header className="flex h-[72px] items-center gap-4 border-b border-gray-300 bg-white px-6">
       {activeView === 'knowledge_map' ? (
-        <form
-          className="flex h-10 w-[360px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
-          onSubmit={(event) => {
-            event.preventDefault()
-            onSearchSubmit()
-          }}
-        >
-          <Search size={16} />
-          <input
-            aria-label="Search knowledge"
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            placeholder="Search knowledge and evidence..."
-            type="search"
-            value={searchQuery}
-          />
-        </form>
+        <>
+          <form
+            className="flex h-10 w-[360px] items-center gap-2.5 rounded-lg border border-gray-300 bg-canvas px-3.5 text-[13px] text-gray-500 focus-within:border-violet focus-within:bg-white"
+            onSubmit={(event) => {
+              event.preventDefault()
+              onSearchSubmit()
+            }}
+          >
+            <Search size={16} />
+            <input
+              aria-label="Search knowledge"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-gray-500"
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="Search knowledge and evidence..."
+              type="search"
+              value={searchQuery}
+            />
+          </form>
+          <button
+            className="flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-[13px] font-bold text-ink hover:bg-gray-50"
+            onClick={onAskClick}
+            type="button"
+          >
+            <Bot size={16} />
+            Ask
+          </button>
+        </>
       ) : null}
 
       <div className="min-w-0 flex-1">

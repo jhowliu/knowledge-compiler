@@ -106,6 +106,10 @@ The system is a two-tier knowledge base: raw **sources** are preserved verbatim,
 and an agent promotes the reusable parts into a canonical **knowledge** corpus
 that retrieval answers from.
 
+> Editable diagram: [`docs/architecture.excalidraw`](docs/architecture.excalidraw)
+> — drag it into [excalidraw.com](https://excalidraw.com) or the desktop app
+> (regenerate with `node docs/gen-architecture-excalidraw.mjs`).
+
 ### Storage tiers
 
 | Tier | Tables | Role |

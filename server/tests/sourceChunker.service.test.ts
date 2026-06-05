@@ -39,22 +39,21 @@ describe("chunkKnowledgeMarkdown semantic chunking", () => {
     expect(examples?.bodyMarkdown).not.toContain("search bounds");
   });
 
-  test("records semantic role and strategy version metadata", () => {
+  test("records section path and strategy version metadata", () => {
     const blocks = chunkKnowledgeMarkdown(binarySearchNote);
 
     const steps = blocks.find((block) => block.heading === "Steps");
     expect(steps?.metadata).toMatchObject({
-      semanticRole: "steps",
       sourceHeading: "Steps",
       chunkStrategyVersion: "semantic-v1",
     });
     expect(steps?.metadata?.sectionPath).toEqual(["Binary Search on Answer", "Steps"]);
-
-    const mistakes = blocks.find((block) => block.heading === "Common mistakes");
-    expect(mistakes?.metadata).toMatchObject({ semanticRole: "common-mistakes" });
+    // Semantic role tagging was intentionally dropped; retrieval relies on
+    // section-path context instead.
+    expect(steps?.metadata).not.toHaveProperty("semanticRole");
   });
 
-  test("recognizes inline section labels without headings", () => {
+  test("recognizes inline section labels without headings as chunk boundaries", () => {
     const note = [
       "Dijkstra finds shortest paths from a source in a weighted graph.",
       "",
@@ -67,9 +66,10 @@ describe("chunkKnowledgeMarkdown semantic chunking", () => {
     ].join("\n");
 
     const blocks = chunkKnowledgeMarkdown(note);
-    const roles = blocks.map((block) => block.metadata?.semanticRole);
-    expect(roles).toContain("steps");
-    expect(roles).toContain("examples");
+    const headings = blocks.map((block) => block.heading);
+    expect(headings).toContain("Steps");
+    expect(headings).toContain("Examples");
+    expect(blocks.length).toBeGreaterThanOrEqual(3);
   });
 
   test("never splits a code fence mid-fence", () => {
@@ -101,7 +101,7 @@ describe("chunkKnowledgeMarkdown semantic chunking", () => {
     expect(blocks[0].metadata?.chunkStrategyVersion).toBe("semantic-v1");
   });
 
-  test("merges adjacent sections that share the same semantic role", () => {
+  test("merges adjacent tiny sections that share the same heading", () => {
     const note = [
       "## Example",
       "- First example.",

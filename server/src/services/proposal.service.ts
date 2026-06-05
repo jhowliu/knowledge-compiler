@@ -290,7 +290,14 @@ export class ProposalService {
     }
   }
 
-  private async embedSnapshotBlocks(blocks: { id: string; heading?: string | null; bodyMarkdown: string }[]) {
+  private async embedSnapshotBlocks(
+    blocks: {
+      id: string;
+      heading?: string | null;
+      bodyMarkdown: string;
+      metadata?: Record<string, unknown> | null;
+    }[],
+  ) {
     for (const block of blocks) {
       const embedding = await embedKnowledgeBlock(this.embeddingService, block);
       if (embedding) {

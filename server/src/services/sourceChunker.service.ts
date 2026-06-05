@@ -10,32 +10,32 @@ const semanticMergeCharacters = 1400;
 const chunkStrategyVersion = "semantic-v1";
 
 // Section labels commonly produced by the compiler or preserved from sources.
-// Mapping a label to a stable semantic role lets retrieval target a specific
-// section (e.g. "give me examples" -> the examples block).
-const semanticLabelRoles: Record<string, string> = {
-  definition: "definition",
-  overview: "overview",
-  summary: "summary",
-  steps: "steps",
-  step: "steps",
-  algorithm: "steps",
-  example: "examples",
-  examples: "examples",
-  "typical uses": "typical-uses",
-  "typical use": "typical-uses",
-  "use cases": "typical-uses",
-  "when to use": "when-to-use",
-  "when not to use": "when-not-to-use",
-  "common mistake": "common-mistakes",
-  "common mistakes": "common-mistakes",
-  pitfalls: "common-mistakes",
-  caveat: "caveats",
-  caveats: "caveats",
-  constraint: "constraints",
-  constraints: "constraints",
-  complexity: "complexity",
-  notes: "notes",
-};
+// Recognizing them lets a standalone label line (e.g. `**Steps:**`) act as a
+// chunk boundary even when the author did not use a Markdown heading.
+const knownSectionLabels = new Set<string>([
+  "definition",
+  "overview",
+  "summary",
+  "steps",
+  "step",
+  "algorithm",
+  "example",
+  "examples",
+  "typical uses",
+  "typical use",
+  "use cases",
+  "when to use",
+  "when not to use",
+  "common mistake",
+  "common mistakes",
+  "pitfalls",
+  "caveat",
+  "caveats",
+  "constraint",
+  "constraints",
+  "complexity",
+  "notes",
+]);
 
 function tokenEstimateFor(markdown: string) {
   return Math.max(1, Math.ceil(markdown.length / 4));
@@ -49,10 +49,6 @@ function headingFrom(markdown: string) {
   return heading ? heading.replace(/^#+\s*/, "").trim() || null : null;
 }
 
-function roleForLabel(text: string): string | null {
-  return semanticLabelRoles[text.trim().toLowerCase()] ?? null;
-}
-
 function isFenceLine(line: string) {
   return /^\s*(```|~~~)/.test(line);
 }
@@ -63,7 +59,7 @@ function isFenceClose(line: string) {
 
 // A standalone label line such as `Steps:`, `**Examples**`, or `_Caveats_`.
 // Headings are handled separately, so this only matches inline section markers.
-function labelFrom(line: string): { text: string; role: string } | null {
+function labelFrom(line: string): { text: string } | null {
   const trimmed = line.trim();
   if (!trimmed || trimmed.length > 40) {
     return null;
@@ -73,8 +69,7 @@ function labelFrom(line: string): { text: string; role: string } | null {
     .replace(/[*_~`]+$/, "")
     .replace(/:$/, "")
     .trim();
-  const role = roleForLabel(cleaned);
-  return role ? { text: cleaned, role } : null;
+  return knownSectionLabels.has(cleaned.toLowerCase()) ? { text: cleaned } : null;
 }
 
 export function chunkSourceMarkdown(markdown: string): CreateRawSourceChunkInput[] {
@@ -88,7 +83,6 @@ export function chunkKnowledgeMarkdown(markdown: string): CreateKnowledgeBlockIn
 type RawSection = {
   headingPath: string[];
   heading: string | null;
-  semanticRole: string | null;
   sourceHeading: string | null;
   lines: string[];
 };
@@ -107,7 +101,6 @@ function parseSections(markdown: string): RawSection[] {
   let current: RawSection = {
     headingPath: [],
     heading: null,
-    semanticRole: null,
     sourceHeading: null,
     lines: [],
   };
@@ -144,7 +137,6 @@ function parseSections(markdown: string): RawSection[] {
       current = {
         headingPath: headingStack.map((entry) => entry.title),
         heading: title,
-        semanticRole: roleForLabel(title),
         sourceHeading: title,
         lines: [line],
       };
@@ -157,7 +149,6 @@ function parseSections(markdown: string): RawSection[] {
       current = {
         headingPath: [...headingStack.map((entry) => entry.title), label.text],
         heading: label.text,
-        semanticRole: label.role,
         sourceHeading: headingStack.length ? headingStack[headingStack.length - 1].title : null,
         lines: [line],
       };
@@ -171,17 +162,18 @@ function parseSections(markdown: string): RawSection[] {
   return sections;
 }
 
-// Merge adjacent sections only when they share the same recognized semantic role
-// and stay small. This avoids fragmenting e.g. several short "Example" subsections
-// while never collapsing distinct sections (definition vs steps vs examples).
+// Merge adjacent sections only when they carry the same heading and stay small.
+// This avoids fragmenting e.g. several short "Example" subsections while never
+// collapsing distinct sections (definition vs steps vs examples).
 function mergeCompatibleSections(sections: RawSection[]): RawSection[] {
   const merged: RawSection[] = [];
   for (const section of sections) {
     const previous = merged[merged.length - 1];
     const compatible =
       previous &&
-      previous.semanticRole !== null &&
-      previous.semanticRole === section.semanticRole &&
+      previous.heading !== null &&
+      section.heading !== null &&
+      previous.heading.toLowerCase() === section.heading.toLowerCase() &&
       sectionText(previous).length + sectionText(section).length <= semanticMergeCharacters;
     if (compatible) {
       previous.lines.push("", ...section.lines);
@@ -267,7 +259,6 @@ function chunkKnowledgeSemantically(markdown: string): CreateKnowledgeBlockInput
         tokenEstimate: tokenEstimateFor(body || markdown),
         metadata: {
           sectionPath: [],
-          semanticRole: "prose",
           sourceHeading: null,
           chunkStrategyVersion,
         },
@@ -285,7 +276,6 @@ function chunkKnowledgeSemantically(markdown: string): CreateKnowledgeBlockInput
     pieces.forEach((piece, pieceIndex) => {
       const metadata: Record<string, unknown> = {
         sectionPath: section.headingPath,
-        semanticRole: section.semanticRole ?? "prose",
         sourceHeading: section.sourceHeading,
         chunkStrategyVersion,
       };

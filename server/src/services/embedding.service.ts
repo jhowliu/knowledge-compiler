@@ -44,10 +44,33 @@ export class OpenAIEmbeddingService implements EmbeddingService {
 
 export async function embedKnowledgeBlock(
   embeddingService: EmbeddingService,
-  block: { id: string; heading?: string | null; bodyMarkdown: string },
+  block: {
+    id: string;
+    heading?: string | null;
+    bodyMarkdown: string;
+    metadata?: Record<string, unknown> | null;
+  },
 ) {
-  const text = [block.heading, block.bodyMarkdown].filter(Boolean).join("\n\n");
+  const text = [sectionContextFrom(block), block.bodyMarkdown].filter(Boolean).join("\n\n");
   return embeddingService.embedText(text);
+}
+
+// Contextual Retrieval: prepend the block's section path (e.g.
+// "Binary Search on Answer › Examples") so a small chunk keeps the parent
+// context it would otherwise lose once retrieved on its own. Falls back to the
+// block heading when no path is stored.
+function sectionContextFrom(block: {
+  heading?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): string | null {
+  const rawPath = block.metadata?.sectionPath;
+  const path = Array.isArray(rawPath)
+    ? rawPath.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
+  if (path.length) {
+    return path.join(" › ");
+  }
+  return block.heading?.trim() || null;
 }
 
 function parseEmbeddingResponse(response: unknown) {

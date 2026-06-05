@@ -44,10 +44,30 @@ export class OpenAIEmbeddingService implements EmbeddingService {
 
 export async function embedKnowledgeBlock(
   embeddingService: EmbeddingService,
-  block: { id: string; heading?: string | null; bodyMarkdown: string },
+  block: {
+    id: string;
+    heading?: string | null;
+    bodyMarkdown: string;
+    metadata?: Record<string, unknown> | null;
+  },
 ) {
-  const text = [block.heading, block.bodyMarkdown].filter(Boolean).join("\n\n");
+  const text = [sectionContextFrom(block), block.bodyMarkdown].filter(Boolean).join("\n\n");
   return embeddingService.embedText(text);
+}
+
+// Contextual Retrieval: prepend the LLM-generated situating context (stored on
+// the block as metadata.context) so a small chunk keeps the parent context it
+// would otherwise lose once retrieved on its own. Falls back to the block
+// heading when no context was generated.
+function sectionContextFrom(block: {
+  heading?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): string | null {
+  const context = block.metadata?.context;
+  if (typeof context === "string" && context.trim()) {
+    return context.trim();
+  }
+  return block.heading?.trim() || null;
 }
 
 function parseEmbeddingResponse(response: unknown) {

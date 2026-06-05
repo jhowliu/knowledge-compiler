@@ -8,7 +8,12 @@ import {
   type EmbeddingService,
 } from "./embedding.service.js";
 import { renderKnowledgeFacetsMarkdown } from "./knowledgeFacets.service.js";
+import {
+  NoopKnowledgeContextualizer,
+  type KnowledgeContextualizer,
+} from "./knowledgeContextualizer.service.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
+import type { CreateKnowledgeBlockInput } from "../domain/knowledge.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -39,6 +44,7 @@ export class ProposalService {
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly noteLinkRepository: NoteLinkRepository,
     private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
+    private readonly contextualizer: KnowledgeContextualizer = new NoopKnowledgeContextualizer(),
   ) {}
 
   async listRecentProposals() {
@@ -202,7 +208,7 @@ export class ProposalService {
         compiledNoteId: compiledNote.id,
         proposalId: proposal.id,
         changeSummary: item.rationale ?? proposal.rationale,
-        blocks: chunkKnowledgeMarkdown(compiledNote.bodyMarkdown),
+        blocks: await this.buildKnowledgeBlocks(compiledNote.bodyMarkdown),
       });
       await this.embedSnapshotBlocks(knowledgeSnapshot.blocks);
 
@@ -290,7 +296,36 @@ export class ProposalService {
     }
   }
 
-  private async embedSnapshotBlocks(blocks: { id: string; heading?: string | null; bodyMarkdown: string }[]) {
+  // Fixed-size chunk the note, then enrich each chunk with an LLM-generated
+  // situating context (Contextual Retrieval) stored on the block metadata so it
+  // can be prepended at embed time and reused later (e.g. for lexical search).
+  private async buildKnowledgeBlocks(noteMarkdown: string): Promise<CreateKnowledgeBlockInput[]> {
+    const chunks = chunkKnowledgeMarkdown(noteMarkdown);
+    const enriched: CreateKnowledgeBlockInput[] = [];
+    for (const chunk of chunks) {
+      const context = await this.contextualizer.contextualize({
+        note: noteMarkdown,
+        chunk: chunk.bodyMarkdown,
+      });
+      enriched.push({
+        ...chunk,
+        metadata: {
+          ...(chunk.metadata ?? {}),
+          ...(context ? { context } : {}),
+        },
+      });
+    }
+    return enriched;
+  }
+
+  private async embedSnapshotBlocks(
+    blocks: {
+      id: string;
+      heading?: string | null;
+      bodyMarkdown: string;
+      metadata?: Record<string, unknown> | null;
+    }[],
+  ) {
     for (const block of blocks) {
       const embedding = await embedKnowledgeBlock(this.embeddingService, block);
       if (embedding) {

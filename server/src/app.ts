@@ -46,6 +46,11 @@ import {
   OpenAIEmbeddingService,
   type EmbeddingService,
 } from "./services/embedding.service.js";
+import {
+  NoopKnowledgeContextualizer,
+  OpenAIKnowledgeContextualizer,
+  type KnowledgeContextualizer,
+} from "./services/knowledgeContextualizer.service.js";
 import { NoteLinkService } from "./services/noteLink.service.js";
 import { NoteCardPositionService } from "./services/noteCardPosition.service.js";
 import { ProposalService } from "./services/proposal.service.js";
@@ -73,6 +78,7 @@ export type AppDependencies = {
   linkJudge?: LinkJudge;
   askAnswerer?: AskAnswerer;
   embeddingService?: EmbeddingService;
+  knowledgeContextualizer?: KnowledgeContextualizer;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -113,11 +119,17 @@ export function createApp(dependencies: AppDependencies = {}) {
   const embeddingService =
     dependencies.embeddingService ??
     (usingDefaultRepositories ? new OpenAIEmbeddingService() : new NoopEmbeddingService());
+  const knowledgeContextualizer =
+    dependencies.knowledgeContextualizer ??
+    (usingDefaultRepositories
+      ? new OpenAIKnowledgeContextualizer()
+      : new NoopKnowledgeContextualizer());
   const proposalService = new ProposalService(
     proposalRepository,
     knowledgeRepository,
     noteLinkRepository,
     embeddingService,
+    knowledgeContextualizer,
   );
   const dashboardService = new DashboardService(knowledgeRepository, embeddingService);
   const noteLinkService = new NoteLinkService(noteLinkRepository);

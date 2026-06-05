@@ -36,6 +36,7 @@ const envSchema = z.object({
   COMPILE_AGENT_MODEL: z.string().default("gpt-5-mini"),
   EVAL_JUDGE_MODEL: z.string().default("gpt-5-mini"),
   ASK_MODEL: z.string().default("gpt-5-mini"),
+  CONTEXT_MODEL: z.string().default("gpt-5-mini"),
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
 });
 

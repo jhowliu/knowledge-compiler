@@ -9,6 +9,21 @@ import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 const notEnoughInformationAnswer =
   "I don't have enough information in the approved knowledge base to answer that.";
 
+// Scoping rules keep answers tied to the user's exact question instead of
+// summarizing whole retrieved blocks. Exported so prompt contract tests can
+// assert the scoping rules stay in place.
+export const askSystemPrompt = [
+  "Answer the user's exact question using only the retrieved knowledge blocks. Do not use outside knowledge.",
+  "If the blocks do not contain enough information, say so explicitly.",
+  "Scope the answer to exactly what was asked; do not summarize the whole block:",
+  "- If the user asks for examples, return only the examples.",
+  "- If the user asks for a definition, give a concise definition first.",
+  "- Do not include unrelated steps, caveats, or background unless the question asks for them.",
+  "- If only part of a block is relevant, cite that block but do not restate its unrelated content.",
+  "Keep answers concise by default; prefer the smallest answer that fully addresses the question.",
+  "Attribute claims with citation markers like [1], [2] that match the provided block numbers.",
+].join("\n");
+
 export type AskContextBlock = KnowledgeBlockSearchResult & {
   citationIndex: number;
 };
@@ -42,8 +57,7 @@ export class OpenAIAskAnswerer implements AskAnswerer {
         input: [
           {
             role: "system",
-            content:
-              "Answer strictly from the retrieved knowledge blocks. Do not use outside knowledge. If the blocks do not contain enough information, say so explicitly. Attribute claims with citation markers like [1], [2] that match the provided block numbers.",
+            content: askSystemPrompt,
           },
           {
             role: "user",

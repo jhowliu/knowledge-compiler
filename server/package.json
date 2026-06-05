@@ -13,6 +13,7 @@
     "pretest": "npm run build --workspace=@knowledge-compiler/agent-contracts",
     "test": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --runInBand",
     "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx src/scripts/seedFromNotes.ts",
     "prebackfill:embeddings": "npm run build",
     "backfill:embeddings": "node dist/scripts/backfillEmbeddings.js",
     "preeval": "npm run build",

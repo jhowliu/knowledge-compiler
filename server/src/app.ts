@@ -150,7 +150,12 @@ export function createApp(dependencies: AppDependencies = {}) {
     [compileRawNoteHandler, reindexLinksHandler],
   );
   const rawSourceService = rawSourceRepository
-    ? new RawSourceService(rawSourceRepository, agentRunQueueService)
+    ? new RawSourceService(
+        rawSourceRepository,
+        agentRunQueueService,
+        proposalRepository,
+        agentRunRepository,
+      )
     : null;
 
   app.use(cors(corsOptions));

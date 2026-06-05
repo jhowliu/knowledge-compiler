@@ -491,4 +491,32 @@ describe("raw source routes", () => {
     expect(proposalRepository.proposals).toHaveLength(1);
     expect(proposalRepository.proposals[0].rawSourceId).toBe(createResponse.body.rawSource.id);
   });
+
+  test("GET /sources/:id/indexing-trace returns a source-keyed trace", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const app = createApp({
+      rawSourceRepository,
+      agentRunRepository,
+      proposalRepository,
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+    });
+    const createResponse = await request(app).post("/sources").send({
+      title: "Trace source",
+      bodyMarkdown: "A note to trace.",
+    });
+    const sourceId = createResponse.body.rawSource.id;
+
+    const traceResponse = await request(app).get(`/sources/${sourceId}/indexing-trace`);
+
+    expect(traceResponse.status).toBe(200);
+    expect(traceResponse.body.indexingTrace).toMatchObject({
+      rawSource: { id: sourceId, title: "Trace source" },
+      status: "Not compiled",
+      agentRuns: [],
+      proposals: [],
+    });
+  });
 });

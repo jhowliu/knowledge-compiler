@@ -100,7 +100,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       agentRunId,
       ...agentRunEvents.source.rawNoteLoaded,
       payload: {
-        rawNoteId: source.rawNoteId,
         rawSourceId: source.rawSourceId,
         sourceRole: source.sourceRole,
         sourceType: source.sourceType,
@@ -195,7 +194,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       const draft = this.wikiIndexerService.draftProposal(source, extractedResult, relatedNotes);
       const proposal = await proposalRepository.create({
         userId: source.userId,
-        rawNoteId: source.rawNoteId,
         rawSourceId: source.rawSourceId,
         draft,
       });

@@ -5,7 +5,6 @@ import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repositor
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
-import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 
@@ -110,7 +109,6 @@ describe("agent run routes", () => {
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
     try {
       const agentRunRepository = new InMemoryAgentRunRepository();
-      const rawNoteRepository = new InMemoryRawNoteRepository();
       const rawSourceRepository = new InMemoryRawSourceRepository();
       const proposalRepository = new InMemoryProposalRepository();
       const body = "Dijkstra needs extra state for k stops: dist[n][k+2].";
@@ -120,7 +118,6 @@ describe("agent run routes", () => {
       );
       const app = createApp({
         agentRunRepository,
-        rawNoteRepository,
         rawSourceRepository,
         proposalRepository,
         knowledgeRepository: new InMemoryKnowledgeRepository(),

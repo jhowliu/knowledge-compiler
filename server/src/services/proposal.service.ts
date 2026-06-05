@@ -168,7 +168,7 @@ export class ProposalService {
       const targetCompiledNoteId = stringValue(payload, "targetCompiledNoteId") || null;
       const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
       const sourceType = proposal.rawSourceId ? "raw_source" : "raw_note";
-      const sourceId = proposal.rawSourceId ?? proposal.rawNoteId ?? proposal.id;
+      const sourceId = proposal.rawSourceId ?? proposal.id;
       const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
         userId: proposal.userId,
         targetCompiledNoteId,

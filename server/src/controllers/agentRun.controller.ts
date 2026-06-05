@@ -3,12 +3,10 @@ import type { AgentRunRepository } from "../repositories/agentRun.repository.js"
 import type { ExtractionEvalRepository } from "../repositories/extractionEval.repository.js";
 import type { AgentRunQueueService } from "../services/agentRunQueue.service.js";
 import { agentRunEventStreamService } from "../services/agentRunEventStream.service.js";
-import type { PhaseOneWorkflowService } from "../services/phaseOneWorkflow.service.js";
 import { requireStringParam } from "./requestParams.js";
 
 export class AgentRunController {
   constructor(
-    private readonly phaseOneWorkflowService: PhaseOneWorkflowService,
     private readonly agentRunRepository: AgentRunRepository,
     private readonly agentRunQueueService: AgentRunQueueService,
     private readonly extractionEvalRepository: ExtractionEvalRepository,
@@ -41,15 +39,6 @@ export class AgentRunController {
       const agentRun = await this.agentRunQueueService.retry(requireStringParam(request, "id"));
       this.processSoon(agentRun.id);
       response.status(202).json({ agentRun });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  ingestRawNote = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      const result = await this.phaseOneWorkflowService.ingestRawNote(request.body.rawNoteId);
-      response.status(201).json(result);
     } catch (error) {
       next(error);
     }

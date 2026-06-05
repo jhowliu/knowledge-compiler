@@ -9,7 +9,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app)
@@ -35,7 +34,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository: new InMemoryNoteLinkRepository(),
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app)
@@ -64,7 +62,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const listResponse = await request(app).get("/note-links");
@@ -92,7 +89,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const updateResponse = await request(app)
@@ -129,7 +125,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app)
@@ -162,7 +157,6 @@ describe("note link routes", () => {
     const app = createApp({
       knowledgeRepository: new InMemoryKnowledgeRepository(),
       noteLinkRepository,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).get("/note-links/notes/compiled-2");

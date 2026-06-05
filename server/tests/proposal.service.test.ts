@@ -10,7 +10,6 @@ describe("ProposalService", () => {
     const noteLinks = new InMemoryNoteLinkRepository();
     const service = new ProposalService(proposals, knowledge, noteLinks);
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-interview-answer",
       rawSourceId: "raw-source-interview-answer",
       draft: {
         detectedDomain: "general",
@@ -47,7 +46,6 @@ describe("ProposalService", () => {
     expect(approved.rawSourceId).toBe("raw-source-interview-answer");
     expect(approved.items[0].payload).toMatchObject({
       rawSourceId: "raw-source-interview-answer",
-      rawNoteId: "raw-note-interview-answer",
     });
     expect(knowledge.compiledNotes).toHaveLength(0);
     expect(knowledge.knowledgeSources).toHaveLength(0);
@@ -62,7 +60,6 @@ describe("ProposalService", () => {
     const noteLinks = new InMemoryNoteLinkRepository();
     const service = new ProposalService(proposals, knowledge, noteLinks);
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-framework",
       rawSourceId: "raw-source-framework",
       draft: {
         detectedDomain: "general",
@@ -117,7 +114,6 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
     knowledge.rawSourceChunkIdsByRawSourceId.set("raw-source-1", ["raw-source-chunk-1", "raw-source-chunk-2"]);
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-1",
       rawSourceId: "raw-source-1",
       draft: {
         detectedDomain: "coding",
@@ -188,7 +184,6 @@ describe("ProposalService", () => {
       },
     ];
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-1",
       draft: {
         detectedDomain: "coding",
         detectedKnowledgeType: "knowledge_note",
@@ -228,7 +223,6 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
 
     const firstProposal = await proposals.create({
-      rawNoteId: "raw-note-1",
       draft: {
         detectedDomain: "coding",
         detectedKnowledgeType: "general_coding_note",
@@ -254,7 +248,6 @@ describe("ProposalService", () => {
     await service.approveProposal(firstProposal.id);
 
     const secondProposal = await proposals.create({
-      rawNoteId: "raw-note-2",
       draft: {
         detectedDomain: "coding",
         detectedKnowledgeType: "general_coding_note",
@@ -297,7 +290,6 @@ describe("ProposalService", () => {
     });
 
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-embedding",
       draft: {
         detectedDomain: "research",
         detectedKnowledgeType: "paper_note",
@@ -333,7 +325,6 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
 
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-facets",
       draft: {
         detectedDomain: "learning",
         detectedKnowledgeType: "knowledge_note",
@@ -427,7 +418,6 @@ describe("ProposalService", () => {
       structuredData: {},
     });
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-3",
       draft: {
         detectedDomain: "coding",
         detectedKnowledgeType: "algorithm",
@@ -507,7 +497,6 @@ describe("ProposalService", () => {
       blocks: [{ blockIndex: 0, heading: null, bodyMarkdown: existing.bodyMarkdown, tokenEstimate: 8 }],
     });
     const proposal = await proposals.create({
-      rawNoteId: "raw-note-rag-revision",
       draft: {
         detectedDomain: "general",
         detectedKnowledgeType: "knowledge_note",

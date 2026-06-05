@@ -50,7 +50,6 @@ describe("ask routes", () => {
       knowledgeRepository,
       noteLinkRepository,
       askAnswerer,
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({
@@ -81,7 +80,6 @@ describe("ask routes", () => {
           throw new Error("answerer should not be called without retrieved blocks");
         },
       },
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({
@@ -137,7 +135,6 @@ describe("ask routes", () => {
           return `Answered from ${input.blocks[0].title}. [1]`;
         },
       },
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({
@@ -201,7 +198,6 @@ describe("ask routes", () => {
           return `Concept-index retrieval found ${input.blocks[0].title}. [1]`;
         },
       },
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({
@@ -248,7 +244,6 @@ describe("ask routes", () => {
           return "Embedding retrieval found the semantic note. [1]";
         },
       },
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({
@@ -333,7 +328,6 @@ describe("ask routes", () => {
           return "RRF ranks retrieval results, and linked citation policy says answers cite supporting blocks. [1] [2]";
         },
       },
-      enablePhaseOneWorkflow: false,
     });
 
     const response = await request(app).post("/ask").send({

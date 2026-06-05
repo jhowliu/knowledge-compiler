@@ -18,7 +18,6 @@ import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repositor
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
-import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 import type { AgentToolReadRepository } from "../src/repositories/agentTool.repository.js";
@@ -26,7 +25,6 @@ import type { AgentRunRepository } from "../src/repositories/agentRun.repository
 import type { KnowledgeRepository } from "../src/repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../src/repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../src/repositories/proposal.repository.js";
-import type { RawNoteRepository } from "../src/repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../src/repositories/rawSource.repository.js";
 import type { ExtractionEvalRepository } from "../src/repositories/extractionEval.repository.js";
 
@@ -34,7 +32,6 @@ function createAgentRunQueueService(input: {
   agentRunRepository: AgentRunRepository;
   knowledgeRepository: KnowledgeRepository;
   noteLinkRepository: NoteLinkRepository;
-  rawNoteRepository?: RawNoteRepository;
   proposalRepository?: ProposalRepository;
   wikiIndexer?: WikiIndexer;
   rawSourceRepository?: RawSourceRepository | null;
@@ -496,14 +493,12 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -561,7 +556,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const keepSearchableIndexer = {
@@ -600,7 +594,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: keepSearchableIndexer,
       rawSourceRepository,
@@ -646,7 +639,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const seenSources: Array<{ rawSourceId: string | null; chunkCount: number; bodyMarkdown: string }> = [];
@@ -665,7 +657,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: sourceAwareIndexer,
       rawSourceRepository,
@@ -716,8 +707,6 @@ describe("agent run queue service", () => {
         bodyMarkdown: rawSource.bodyMarkdown,
       },
     ]);
-    // No raw note is created for a source-first compile.
-    expect(rawNoteRepository.notes).toHaveLength(0);
     expect(rawSourceRepository.sources[0].extractedData).toMatchObject({
       structuredData: {
         concepts: expect.arrayContaining([
@@ -738,7 +727,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -800,7 +788,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -844,7 +831,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -891,7 +877,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -927,7 +912,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -948,7 +932,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -1010,14 +993,12 @@ describe("agent run queue service", () => {
       const agentRunRepository = new InMemoryAgentRunRepository();
       const knowledgeRepository = new InMemoryKnowledgeRepository();
       const noteLinkRepository = new InMemoryNoteLinkRepository();
-      const rawNoteRepository = new InMemoryRawNoteRepository();
       const rawSourceRepository = new InMemoryRawSourceRepository();
       const proposalRepository = new InMemoryProposalRepository();
       const service = createAgentRunQueueService({
         agentRunRepository,
         knowledgeRepository,
         noteLinkRepository,
-        rawNoteRepository,
         proposalRepository,
         rawSourceRepository,
       });
@@ -1057,7 +1038,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -1116,7 +1096,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,
@@ -1187,7 +1166,6 @@ describe("agent run queue service", () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -1248,7 +1226,6 @@ describe("agent run queue service", () => {
       agentRunRepository,
       knowledgeRepository,
       noteLinkRepository,
-      rawNoteRepository,
       proposalRepository,
       wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,

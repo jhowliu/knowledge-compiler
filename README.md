@@ -56,13 +56,40 @@ The API runs on `http://localhost:4000`.
 
 ## Embeddings And Eval
 
-Phase E adds optional `pgvector` search over approved `knowledge_blocks`.
-Install the Postgres `vector` extension in the local database image if you want semantic search; without it, search continues to use full-text and concept ranking.
+`pgvector` powers semantic search over approved `knowledge_blocks`. The
+`docker compose` Postgres service uses the `pgvector/pgvector:pg16` image, which
+bundles the extension; `db/init/01-enable-pgvector.sql` enables it on first init
+and migration `015` then adds the `knowledge_blocks.embedding` column.
 
-Backfill active blocks after enabling `pgvector`:
+> Without the `vector` extension, `knowledge_blocks.embedding` is never created,
+> `hasEmbeddingSupport()` returns false, and **vector search is silently disabled**
+> — retrieval falls back to full-text + concept ranking only.
+
+If you previously ran the plain `postgres:16` image, the existing data volume has
+no `vector` extension and migration 015 already ran (and skipped the column). Recreate
+the volume so it initializes with pgvector (dev data is reconstructable from `seed-notes/`):
+
+```bash
+docker compose down -v
+docker compose up -d postgres
+npm run migrate
+# repopulate the dev corpus through the real ingest -> compile -> approve pipeline:
+npm run seed --workspace=server -- --yes
+```
+
+To embed any active blocks that are missing embeddings:
 
 ```bash
 npm run backfill:embeddings --workspace=server
+```
+
+Verify the extension and column are present:
+
+```bash
+docker exec -it knowledge-compiler-postgres \
+  psql -U knowledge -d knowledge_compiler \
+  -c "select extname from pg_extension where extname='vector';" \
+  -c "select count(embedding) as with_emb, count(*) as total from knowledge_blocks;"
 ```
 
 Run the offline golden eval set:

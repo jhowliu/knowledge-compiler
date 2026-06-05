@@ -37,7 +37,7 @@ import {
 
 export type DraftProposalContext = {
   agentRunId: string;
-  rawNoteId: string;
+  rawNoteId: string | null;
   sourceId: string;
   userId?: string | null;
   chunks: Array<{ chunk_index: number; body_markdown: string; id: string; heading: string | null; token_estimate: number }>;
@@ -218,7 +218,7 @@ function toDraftUpdateProposal(
   judgeOutput: Awaited<ReturnType<EvalJudgeService["judge"]>>,
   invalidItemIndexes: Set<number>,
   existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
-  sourceReference: { rawNoteId: string; rawSourceId: string },
+  sourceReference: { rawNoteId: string | null; rawSourceId: string },
 ): DraftUpdateProposal {
   return {
     detectedDomain: "general",

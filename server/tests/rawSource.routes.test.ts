@@ -504,7 +504,9 @@ describe("raw source routes", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(proposalRepository.proposals).toHaveLength(1);
-    expect(proposalRepository.proposals[0].rawNoteId).toBe(response.body.rawNote.id);
+    // Source-first: the proposal is anchored on the source, not the (still
+    // transitionally created) compatibility raw note.
+    expect(proposalRepository.proposals[0].rawNoteId).toBeNull();
     expect(proposalRepository.proposals[0].rawSourceId).toBe(createResponse.body.rawSource.id);
   });
 });

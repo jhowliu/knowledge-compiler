@@ -6,6 +6,7 @@ import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.reposit
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawNoteRepository } from "./support/inMemoryRawNote.repository.js";
+import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 
 describe("agent run routes", () => {
@@ -110,14 +111,17 @@ describe("agent run routes", () => {
     try {
       const agentRunRepository = new InMemoryAgentRunRepository();
       const rawNoteRepository = new InMemoryRawNoteRepository();
+      const rawSourceRepository = new InMemoryRawSourceRepository();
       const proposalRepository = new InMemoryProposalRepository();
-      const rawNote = await rawNoteRepository.create({
-        title: "K stops shortest path",
-        bodyMarkdown: "Dijkstra needs extra state for k stops: dist[n][k+2].",
-      });
+      const body = "Dijkstra needs extra state for k stops: dist[n][k+2].";
+      const rawSource = await rawSourceRepository.create(
+        { title: "K stops shortest path", sourceRole: "personal_note", sourceType: "markdown", bodyMarkdown: body },
+        [{ chunkIndex: 0, heading: "K stops shortest path", bodyMarkdown: body, tokenEstimate: 9 }],
+      );
       const app = createApp({
         agentRunRepository,
         rawNoteRepository,
+        rawSourceRepository,
         proposalRepository,
         knowledgeRepository: new InMemoryKnowledgeRepository(),
         noteLinkRepository: new InMemoryNoteLinkRepository(),
@@ -125,7 +129,7 @@ describe("agent run routes", () => {
 
       const response = await request(app)
         .post("/agent-runs")
-        .send({ runType: "compile_raw_note", input: { rawNoteId: rawNote.id } });
+        .send({ runType: "compile_raw_note", input: { rawSourceId: rawSource.id } });
 
       expect(response.status).toBe(202);
       await new Promise((resolve) => setTimeout(resolve, 10));

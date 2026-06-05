@@ -8,10 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rnd = () => Math.floor(Math.random() * 2 ** 31);
 const elements = [];
 
-function zone(id, x, y, w, h, bg) {
+function zone(id, x, y, w, h, bg, stroke = "#ced4da") {
   elements.push({
     id, type: "rectangle", x, y, width: w, height: h, angle: 0,
-    strokeColor: "#ced4da", backgroundColor: bg, fillStyle: "solid",
+    strokeColor: stroke, backgroundColor: bg, fillStyle: "solid",
     strokeWidth: 1, strokeStyle: "dashed", roughness: 0, opacity: 100,
     groupIds: [], frameId: null, roundness: { type: 3 }, seed: rnd(),
     version: 1, versionNonce: rnd(), isDeleted: false, boundElements: [],
@@ -19,19 +19,20 @@ function zone(id, x, y, w, h, bg) {
   });
 }
 
-function label(x, y, text, fontSize = 16, color = "#1e1e1e", w = 320) {
+function label(x, y, text, fontSize = 16, color = "#1e1e1e", w = 320, bold = false) {
+  const lines = text.split("\n").length;
   elements.push({
-    id: "t-" + rnd(), type: "text", x, y, width: w, height: fontSize * 1.5, angle: 0,
+    id: "t-" + rnd(), type: "text", x, y, width: w, height: fontSize * 1.25 * lines + 4, angle: 0,
     strokeColor: color, backgroundColor: "transparent", fillStyle: "solid",
     strokeWidth: 1, strokeStyle: "solid", roughness: 0, opacity: 100, groupIds: [],
     frameId: null, roundness: null, seed: rnd(), version: 1, versionNonce: rnd(),
     isDeleted: false, boundElements: [], updated: 1, link: null, locked: false,
-    text, fontSize, fontFamily: 2, textAlign: "left", verticalAlign: "top",
+    text, fontSize, fontFamily: bold ? 7 : 2, textAlign: "left", verticalAlign: "top",
     containerId: null, originalText: text, lineHeight: 1.25, baseline: fontSize,
   });
 }
 
-function box(id, x, y, w, h, text, { bg = "#ffffff", stroke = "#1e1e1e", shape = "rectangle", fs = 15 } = {}) {
+function box(id, x, y, w, h, text, { bg = "#ffffff", stroke = "#1e1e1e", shape = "rectangle", fs = 14 } = {}) {
   const tid = id + "-t";
   elements.push({
     id, type: shape, x, y, width: w, height: h, angle: 0,
@@ -87,55 +88,71 @@ const RET = { bg: "#b2f2bb", stroke: "#2f9e44" };
 const OUTC = { bg: "#ffd8a8", stroke: "#e8590c" };
 
 // ===== Title =====
-label(60, 24, "Knowledge Compiler — System Architecture", 30, "#1e1e1e", 760);
+label(60, 24, "Knowledge Compiler — System Architecture", 30, "#1e1e1e", 760, true);
 
 // ===== Zones =====
-zone("zone-idx", 40, 90, 600, 1180, "#fff9db");
-label(60, 100, "INDEXING  ·  ingest → compile → approve", 20, "#e8590c", 560);
-zone("zone-ret", 700, 90, 600, 760, "#ebfbee");
-label(720, 100, "RETRIEVAL  ·  hybrid fusion + graph", 20, "#2f9e44", 560);
-zone("zone-phi", 700, 880, 600, 390, "#f8f0fc");
-label(720, 890, "DESIGN PHILOSOPHY", 20, "#9c36b5", 560);
+zone("zone-idx", 40, 90, 640, 1470, "#fff9db");
+label(60, 100, "INDEXING  ·  ingest → compile → approve", 20, "#e8590c", 600, true);
+zone("zone-ret", 740, 90, 600, 760, "#ebfbee");
+label(760, 100, "RETRIEVAL  ·  hybrid fusion + graph", 20, "#2f9e44", 560, true);
+zone("zone-phi", 740, 890, 600, 360, "#f8f0fc");
+label(760, 900, "DESIGN PHILOSOPHY", 20, "#9c36b5", 560, true);
 
-// ===== Indexing lane (centered x≈ 250, width 280) =====
-const IX = 110, IW = 280;
-box("ing", IX, 150, IW, 64, "Ingest source\nPOST /sources", SRC);
-box("cmp", IX, 254, IW, 64, "Compile agent\nReAct loop + wiki indexer", AGENT);
-box("judge", IX - 10, 358, IW + 20, 96, "Judge\nkeep / create / update\n+ conflict detection", GATE);
-box("ks", 430, 374, 190, 64, "keep_searchable\nsource only · no block", SRC);
-box("prop", IX, 494, IW, 56, "Update proposal (pending)", AGENT);
-box("apr", IX, 590, IW, 56, "Human approve\nPOST /update-proposals/:id/approve", AGENT, );
-box("chunk", IX, 686, IW, 64, "Fixed-size chunk\n~200 tokens · CJK-aware", KNOW);
-box("ctx", IX, 790, IW, 64, "Contextual Retrieval header\nLLM situating text → metadata.context", KNOW);
-box("kb", IX, 894, IW, 56, "knowledge_blocks  (corpus)", KNOW);
-box("emb", IX, 990, IW, 64, "Embed (context + body)\n→ embedding · needs pgvector", KNOW);
-box("graph", IX, 1094, IW, 64, "concepts · concept_index (note-level)\nnote_links · evidence", GRAPH);
+// ===== Indexing lane =====
+const IX = 120, IW = 300;
+box("ing", IX, 150, IW, 58, "Ingest source\nPOST /sources", SRC);
+box("rs", 450, 148, 200, 70, "raw_sources +\nraw source chunks\n(chunked at INGEST)", SRC, { fs: 12 });
+arrow("ing", "rs", { fromSide: "right", toSide: "left" });
 
-arrow("ing", "cmp");
-arrow("cmp", "judge");
+// --- Compile agent sub-flow (ReAct) ---
+zone("zone-agent", 96, 244, 348, 470, "#fdf2ff", "#ae3ec9");
+label(108, 252, "COMPILE AGENT  ·  ReAct loop (wiki indexer)", 13, "#9c36b5", 320, true);
+box("extract", IX, 282, IW, 70, "1 · Extract facets\nsummary · concepts(typed) · claims\nmethods · examples · constraints", AGENT, { fs: 11 });
+box("search", IX, 372, IW, 58, "2 · Search existing KB\nsearchRelated by concept → candidates", AGENT, { fs: 12 });
+box("judge", IX - 10, 448, IW + 20, 92, "3 · Classify outcome (after search)\nkeep / create / update  +  conflict", GATE, { fs: 12 });
+box("ks", 470, 466, 180, 58, "keep_searchable\nsource only · no block", SRC, { fs: 12 });
+box("draft", IX, 560, IW, 56, "4 · Draft proposal\nnote body + concepts + link suggestions", AGENT, { fs: 12 });
+box("evaljudge", IX, 644, IW, 50, "5 · Eval / grounding check", AGENT, { fs: 13 });
+
+arrow("ing", "extract");
+arrow("extract", "search");
+arrow("search", "judge");
 arrow("judge", "ks", { fromSide: "right", toSide: "left" });
-arrow("judge", "prop");
+arrow("judge", "draft");
+arrow("draft", "evaljudge");
+
+// --- Proposal + approve ---
+box("prop", IX, 740, IW, 52, "Update proposal (pending)", AGENT);
+box("apr", IX, 824, IW, 60, "Human approve\nPOST /update-proposals/:id/approve", AGENT, { fs: 13 });
+arrow("evaljudge", "prop");
 arrow("prop", "apr");
+
+// --- APPROVE boundary marker ---
+label(110, 902, "▼  everything below runs at APPROVE  (not at compile)", 13, "#e03131", 540, true);
+
+// --- Post-approve: chunk -> contextualize -> embed ---
+box("chunk", IX, 936, IW, 60, "Fixed-size chunk\n~200 tokens · CJK-aware", KNOW, { fs: 13 });
+box("ctx", IX, 1024, IW, 64, "Contextual Retrieval header\nLLM situating text → metadata.context", KNOW, { fs: 12 });
+box("kb", IX, 1116, IW, 52, "knowledge_blocks  (corpus)", KNOW);
+box("emb", IX, 1200, IW, 62, "Embed (context + body)\n→ embedding · needs pgvector", KNOW, { fs: 13 });
+box("graph", IX, 1288, IW, 62, "concepts · concept_index (note-level)\nnote_links · evidence", GRAPH, { fs: 12 });
 arrow("apr", "chunk");
 arrow("chunk", "ctx");
 arrow("ctx", "kb");
 arrow("kb", "emb");
 arrow("apr", "graph", { fromSide: "left", toSide: "left", color: "#66a80f" });
 
-// raw source storage note
-box("rs", 430, 158, 190, 64, "raw_sources\nraw_source_chunks (verbatim)", SRC, { fs: 13 });
-arrow("ing", "rs", { fromSide: "right", toSide: "left" });
-
 // ===== Retrieval lane =====
-box("q", 880, 150, 240, 52, "Query", RET);
-box("bm25", 720, 250, 175, 72, "Full-text / BM25\n(block-level)", RET, { fs: 13 });
-box("con", 912, 250, 175, 72, "Concept match\n(note → blocks)", RET, { fs: 13 });
-box("vec", 1104, 250, 175, 72, "Vector cosine\n(block · pgvector)", RET, { fs: 13 });
-box("rrf", 880, 366, 240, 56, "RRF fusion (k = 60)", RET);
-box("hop", 880, 462, 240, 64, "One-hop graph expand\napproved note_links", RET, { fs: 14 });
-box("top", 880, 566, 240, 56, "Top-N blocks + citations", RET);
-box("ans", 880, 662, 240, 64, "Answerer\nexact-question scoping prompt", RET, { fs: 14 });
-box("out", 880, 766, 240, 56, "Answer + citations", OUTC);
+box("q", 920, 150, 240, 52, "Query", RET);
+box("bm25", 760, 250, 175, 72, "Full-text / BM25\n(block-level)", RET, { fs: 13 });
+box("con", 952, 250, 175, 72, "Concept match\n(note → blocks)", RET, { fs: 13 });
+box("vec", 1144, 250, 175, 72, "Vector cosine\n(block · pgvector)", RET, { fs: 13 });
+box("rrf", 920, 366, 240, 56, "RRF fusion (k = 60)", RET);
+box("hop", 920, 462, 240, 64, "One-hop graph expand\napproved note_links", RET, { fs: 14 });
+box("top", 920, 566, 240, 56, "Top-N blocks + citations", RET);
+box("ans", 920, 662, 240, 64, "Answerer\nexact-question scoping prompt", RET, { fs: 14 });
+box("out", 920, 766, 240, 56, "Answer + citations", OUTC);
+label(760, 328, "↑ all three signals search the knowledge_blocks corpus", 13, "#1971c2", 560);
 
 arrow("q", "bm25", { toSide: "top" });
 arrow("q", "con");
@@ -148,18 +165,16 @@ arrow("hop", "top");
 arrow("top", "ans");
 arrow("ans", "out");
 
-// knowledge_blocks feeds retrieval (annotation instead of a long cross arrow)
-label(720, 328, "↑ all three signals search the knowledge_blocks corpus", 13, "#1971c2", 560);
-
-// ===== Philosophy text =====
-label(720, 928,
-  "• Two tiers, three axes: provenance (keep originals) · retrievability · canonicalization.\n" +
-  "• Human-in-the-loop approval gates the knowledge corpus.\n" +
-  "• Agentic judgment keeps personal/contradicted notes out of canonical knowledge.\n" +
-  "• Mechanical chunk boundaries; LLM spent on per-chunk context (Anthropic-style), not segmentation.\n" +
-  "• Hybrid retrieval: concept graph = global recall @ note; vector + context = local precision @ chunk;\n" +
-  "  BM25 = lexical. Fused with RRF.",
-  15, "#5f3dc4", 560);
+// ===== Philosophy (stacked single-line labels so nothing clips) =====
+const phi = [
+  "• Two tiers, three axes: provenance · retrievability · canonicalization.",
+  "• Human-in-the-loop approval gates the knowledge corpus.",
+  "• Agentic judgment keeps personal / contradicted notes out of canon.",
+  "• Mechanical chunk boundaries; LLM spent on per-chunk context, not segmentation.",
+  "• Hybrid retrieval — concept graph: global recall @ note;",
+  "   vector + context: local precision @ chunk;  BM25: lexical.  Fused by RRF.",
+];
+phi.forEach((line, i) => label(762, 934 + i * 30, line, 14, "#5f3dc4", 566));
 
 const scene = {
   type: "excalidraw", version: 2, source: "knowledge-compiler",

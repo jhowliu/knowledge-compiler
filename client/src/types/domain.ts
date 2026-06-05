@@ -99,6 +99,7 @@ export type ProposalItem = {
 export type Proposal = {
   id: string
   rawNoteId: string | null
+  rawSourceId: string | null
   detectedDomain: string | null
   detectedKnowledgeType: string | null
   impactLevel: number

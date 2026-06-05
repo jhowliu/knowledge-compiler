@@ -11,6 +11,7 @@ type ProposalRow = {
   id: string;
   user_id: string | null;
   raw_note_id: string | null;
+  raw_source_id: string | null;
   detected_domain: string | null;
   detected_knowledge_type: string | null;
   impact_level: number;
@@ -44,6 +45,7 @@ function mapProposal(row: ProposalRow): UpdateProposal {
     id: row.id,
     userId: row.user_id,
     rawNoteId: row.raw_note_id,
+    rawSourceId: row.raw_source_id,
     detectedDomain: row.detected_domain,
     detectedKnowledgeType: row.detected_knowledge_type,
     impactLevel: row.impact_level,
@@ -79,6 +81,7 @@ export interface ProposalRepository {
   create(input: {
     userId?: string | null;
     rawNoteId: string;
+    rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems>;
   getById(id: string): Promise<ProposalWithItems | null>;
@@ -95,24 +98,31 @@ export interface ProposalRepository {
 }
 
 export class PostgresProposalRepository implements ProposalRepository {
-  async create(input: { userId?: string | null; rawNoteId: string; draft: DraftUpdateProposal }) {
+  async create(input: {
+    userId?: string | null;
+    rawNoteId: string;
+    rawSourceId?: string | null;
+    draft: DraftUpdateProposal;
+  }) {
     const proposalResult = await query<ProposalRow>(
       `
         insert into update_proposals (
           user_id,
           raw_note_id,
+          raw_source_id,
           detected_domain,
           detected_knowledge_type,
           impact_level,
           confidence,
           rationale
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         returning *
       `,
       [
         input.userId ?? null,
         input.rawNoteId,
+        input.rawSourceId ?? null,
         input.draft.detectedDomain,
         input.draft.detectedKnowledgeType,
         input.draft.impactLevel,
@@ -125,6 +135,11 @@ export class PostgresProposalRepository implements ProposalRepository {
     const items: ProposalItem[] = [];
 
     for (const item of input.draft.items) {
+      const payload = normalizeProposalItemPayload(item.payload, {
+        actionType: item.actionType,
+        rawNoteId: input.rawNoteId,
+        rawSourceId: input.rawSourceId ?? null,
+      });
       const itemResult = await query<ProposalItemRow>(
         `
           insert into proposal_items (
@@ -147,7 +162,7 @@ export class PostgresProposalRepository implements ProposalRepository {
           proposal.id,
           item.actionType,
           item.targetType,
-          item.payload,
+          payload,
           item.rationale,
           item.sourceSpans ?? null,
           item.conflictDetected ?? false,
@@ -273,4 +288,23 @@ export class PostgresProposalRepository implements ProposalRepository {
       [input.proposalId, input.userId ?? null, input.decision, input.comment ?? null],
     );
   }
+}
+
+function normalizeProposalItemPayload(
+  payload: Record<string, unknown>,
+  context: { actionType: string; rawNoteId: string; rawSourceId: string | null },
+) {
+  if (context.actionType !== "keep_source_searchable") {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    rawNoteId: typeof payload.rawNoteId === "string" && payload.rawNoteId.trim()
+      ? payload.rawNoteId
+      : context.rawNoteId,
+    rawSourceId: typeof payload.rawSourceId === "string" && payload.rawSourceId.trim()
+      ? payload.rawSourceId
+      : context.rawSourceId,
+  };
 }

@@ -11,6 +11,7 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
     const proposal = await proposals.create({
       rawNoteId: "raw-note-interview-answer",
+      rawSourceId: "raw-source-interview-answer",
       draft: {
         detectedDomain: "general",
         detectedKnowledgeType: "source_only",
@@ -43,6 +44,11 @@ describe("ProposalService", () => {
     const approved = await service.approveProposal(proposal.id);
 
     expect(approved.status).toBe("approved");
+    expect(approved.rawSourceId).toBe("raw-source-interview-answer");
+    expect(approved.items[0].payload).toMatchObject({
+      rawSourceId: "raw-source-interview-answer",
+      rawNoteId: "raw-note-interview-answer",
+    });
     expect(knowledge.compiledNotes).toHaveLength(0);
     expect(knowledge.knowledgeSources).toHaveLength(0);
     expect(knowledge.knowledgeVersions).toHaveLength(0);
@@ -57,6 +63,7 @@ describe("ProposalService", () => {
     const service = new ProposalService(proposals, knowledge, noteLinks);
     const proposal = await proposals.create({
       rawNoteId: "raw-note-framework",
+      rawSourceId: "raw-source-framework",
       draft: {
         detectedDomain: "general",
         detectedKnowledgeType: "source_only",
@@ -88,6 +95,14 @@ describe("ProposalService", () => {
 
     expect(knowledge.compiledNotes).toHaveLength(1);
     expect(knowledge.knowledgeSources).toHaveLength(1);
+    expect(knowledge.evidenceLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: "raw_source",
+          sourceId: "raw-source-framework",
+        }),
+      ]),
+    );
     expect(knowledge.compiledNotes[0]).toMatchObject({
       domain: "interviewing",
       noteType: "knowledge_note",

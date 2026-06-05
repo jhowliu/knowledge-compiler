@@ -17,7 +17,6 @@ import type {
   CompiledNote,
   KnowledgeSourceTimeline,
   NoteLink,
-  RawNote,
   RawSource,
   RelatedNoteMatch,
   WorkspaceData,
@@ -122,30 +121,22 @@ function outcomeReason(extractedData: unknown) {
 
 function buildSourceGraphCards(data: WorkspaceData): SourceGraphCard[] {
   const approvedRawSourceIds = new Set<string>()
-  const approvedRawNoteIds = new Set<string>()
   const sourceReasons = new globalThis.Map<string, string | null>()
-  const noteReasons = new globalThis.Map<string, string | null>()
-  const rawNoteById = new globalThis.Map(data.rawNotes.map((note) => [note.id, note]))
   for (const proposal of data.proposals) {
     if (proposal.status !== 'approved') continue
     for (const item of proposal.items) {
       if (item.actionType !== 'keep_source_searchable') continue
       const payload = recordValue(item.payload)
-      const rawNoteId = stringValue(payload.rawNoteId) ?? proposal.rawNoteId
-      const rawSourceId = stringValue(payload.rawSourceId) ?? (rawNoteId ? rawNoteById.get(rawNoteId)?.rawSourceId ?? null : null)
+      const rawSourceId = stringValue(payload.rawSourceId) ?? proposal.rawSourceId
       const reason = stringValue(payload.outcomeReason) ?? item.rationale ?? proposal.rationale
       if (rawSourceId) {
         approvedRawSourceIds.add(rawSourceId)
         sourceReasons.set(rawSourceId, reason)
       }
-      if (rawNoteId) {
-        approvedRawNoteIds.add(rawNoteId)
-        noteReasons.set(rawNoteId, reason)
-      }
     }
   }
 
-  const rawSourceCards = data.rawSources
+  return data.rawSources
     .filter((source) => approvedRawSourceIds.has(source.id))
     .map((source: RawSource) => ({
       key: `source:${source.id}`,
@@ -157,24 +148,9 @@ function buildSourceGraphCards(data: WorkspaceData): SourceGraphCard[] {
       outcomeReason: sourceReasons.get(source.id) ?? outcomeReason(source.extractedData),
       timestamp: source.updatedAt,
     }))
-  const rawSourceIds = new Set(data.rawSources.map((source) => source.id))
-  const rawNoteCards = data.rawNotes
-    .filter((note) => !note.rawSourceId || !rawSourceIds.has(note.rawSourceId))
-    .filter((note) => approvedRawNoteIds.has(note.id))
-    .map((note: RawNote) => ({
-      key: `source:${note.id}`,
-      id: note.id,
-      title: note.title ?? 'Untitled source',
-      bodyMarkdown: note.bodyMarkdown,
-      sourceRole: note.sourceRole,
-      sourceType: note.sourceType,
-      outcomeReason: noteReasons.get(note.id) ?? outcomeReason(note.extractedData),
-      timestamp: note.createdAt,
-    }))
-
-  return [...rawSourceCards, ...rawNoteCards].sort(
-    (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
-  )
+    .sort(
+      (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+    )
 }
 
 function connectedNoteId(link: NoteLink, noteId: string) {

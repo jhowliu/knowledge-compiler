@@ -721,6 +721,9 @@ describe("agent run queue service", () => {
       },
     });
     expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0]).toMatchObject({
+      rawSourceId: rawSource.id,
+    });
     expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
       expect.arrayContaining(["source.raw_source_loaded", "proposal.created", "lifecycle.completed"]),
     );
@@ -973,6 +976,9 @@ describe("agent run queue service", () => {
     expect(proposalRepository.proposals[0].items[0]).toMatchObject({
       actionType: "keep_source_searchable",
       incompleteReasoning: true,
+      payload: expect.objectContaining({
+        rawSourceId: rawSource.id,
+      }),
     });
     const searchCalls = agentRunRepository.events.filter(
       (event) =>

@@ -4,9 +4,17 @@
  * notes update/contradict earlier ones).
  *
  * Usage (from server/):
- *   npm run seed -- --yes            # wipe + seed against a running server
- *   npm run seed -- --dry-run        # print the plan, touch nothing
- *   npm run seed -- --yes --no-wipe  # seed without wiping
+ *   npm run seed -- --yes              # wipe + seed all notes (in order)
+ *   npm run seed -- --yes --phase=1    # Phase 1 only (A* base + B* keep-searchable)
+ *   npm run seed -- --yes --phase=2    # Phase 2 only (C/D/E; needs Phase 1 first)
+ *   npm run seed -- --yes C1 D1        # only specific notes (prefix match)
+ *   npm run seed -- --list             # print the scenario reference, do nothing
+ *   npm run seed -- --dry-run          # print the plan, touch nothing
+ *
+ * Selection: positional prefixes (A, A2, C1, …) and/or --phase=1|2. A subset run
+ * does NOT wipe by default (Phase 2 depends on Phase 1 already being seeded and
+ * approved); pass --wipe to force a wipe or --no-wipe to skip it. A full run
+ * (no selection) wipes by default.
  *
  * Requires the API server to be running (it drives the agent compile queue) and
  * OPENAI_API_KEY configured. Env:
@@ -21,10 +29,34 @@ import { closeDatabase, query } from "../db/postgres.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const args = new Set(process.argv.slice(2));
-const dryRun = args.has("--dry-run");
-const skipWipe = args.has("--no-wipe");
-const confirmed = args.has("--yes");
+const rawArgs = process.argv.slice(2);
+const flags = rawArgs.filter((arg) => arg.startsWith("--"));
+const positional = rawArgs.filter((arg) => !arg.startsWith("--"));
+const hasFlag = (name: string) => flags.includes(name);
+
+const dryRun = hasFlag("--dry-run");
+const confirmed = hasFlag("--yes");
+const listOnly = hasFlag("--list");
+
+// Scenario phases (see seed-notes/README.md): Phase 1 is base knowledge (A*) plus
+// keep-searchable notes (B*); Phase 2 is iteration/conflict/link cases (C/D/E)
+// which depend on Phase 1 being seeded and approved first.
+const phaseGroups: Record<string, string[]> = { "1": ["A", "B"], "2": ["C", "D", "E"] };
+const phaseValue = flags.find((flag) => flag.startsWith("--phase="))?.split("=")[1];
+const filters = [...positional, ...(phaseValue ? (phaseGroups[phaseValue] ?? []) : [])].map(
+  (token) => token.toLowerCase(),
+);
+const hasSelection = filters.length > 0;
+
+// Full run wipes by default; a subset run does not (so it won't drop the base
+// notes a later phase depends on). --wipe / --no-wipe override.
+const willWipe = hasFlag("--no-wipe") ? false : hasFlag("--wipe") ? true : !hasSelection;
+
+function selected(fileName: string) {
+  if (!filters.length) return true;
+  const lower = fileName.toLowerCase();
+  return filters.some((filter) => lower.startsWith(filter));
+}
 
 const baseUrl = (process.env.SEED_BASE_URL ?? `http://localhost:${env.SERVER_PORT}`).replace(
   /\/$/,
@@ -143,19 +175,39 @@ async function seedNote(fileName: string) {
 }
 
 async function run() {
-  const entries = (await readdir(seedNotesDir))
+  const allNotes = (await readdir(seedNotesDir))
     .filter((name) => /^[A-Z]\d.*\.md$/.test(name))
     .sort();
+  const entries = allNotes.filter(selected);
+
+  if (listOnly) {
+    console.log("Seed scenarios (seed-notes/README.md):");
+    console.log("  Phase 1 (base + keep-searchable):  A*, B*");
+    console.log("  Phase 2 (iteration/conflict/link): C*, D*, E*  (needs Phase 1 first)");
+    console.log(`\nAvailable notes:\n  ${allNotes.join("\n  ")}`);
+    return;
+  }
+
+  if (phaseValue && !phaseGroups[phaseValue]) {
+    throw new Error(`unknown --phase=${phaseValue} (expected 1 or 2)`);
+  }
 
   console.log(`Seed plan:`);
   console.log(`  API:       ${baseUrl}`);
   console.log(`  Database:  ${databaseHost()}`);
   console.log(`  Notes dir: ${seedNotesDir}`);
-  console.log(`  Notes:     ${entries.length} (${entries.join(", ")})`);
-  console.log(`  Wipe:      ${skipWipe ? "no" : "yes"}   Dry-run: ${dryRun}`);
+  console.log(`  Selection: ${hasSelection ? filters.join(", ") : "all"}`);
+  console.log(`  Notes:     ${entries.length} (${entries.join(", ") || "none"})`);
+  console.log(`  Wipe:      ${willWipe ? "yes" : "no"}   Dry-run: ${dryRun}`);
 
   if (!entries.length) {
-    throw new Error(`no seed notes matched in ${seedNotesDir}`);
+    throw new Error(`no seed notes matched selection in ${seedNotesDir}`);
+  }
+
+  if (hasSelection && willWipe) {
+    console.log(
+      "\n⚠️  Wiping with a subset selected — notes outside the selection will be gone.",
+    );
   }
 
   if (!dryRun && !confirmed) {
@@ -165,7 +217,7 @@ async function run() {
     return;
   }
 
-  if (!dryRun && !skipWipe) {
+  if (!dryRun && willWipe) {
     console.log("\nWiping database…");
     await wipeDatabase();
   }

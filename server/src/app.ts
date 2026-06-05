@@ -150,7 +150,6 @@ export function createApp(dependencies: AppDependencies = {}) {
   const compileRawNoteHandler = new CompileRawNoteHandler(
     agentRunRepository,
     knowledgeRepository,
-    rawNoteRepository,
     proposalRepository,
     dependencies.wikiIndexer,
     rawSourceRepository,

@@ -64,12 +64,11 @@ function createAgentRunQueueService(input: {
   const handlers: AgentRunHandler[] = [
     new ReindexLinksHandler(input.agentRunRepository, input.knowledgeRepository, input.noteLinkRepository, linkJudge),
   ];
-  if (input.rawNoteRepository && input.proposalRepository) {
+  if (input.proposalRepository) {
     handlers.push(
       new CompileRawNoteHandler(
         input.agentRunRepository,
         input.knowledgeRepository,
-        input.rawNoteRepository,
         input.proposalRepository,
         input.wikiIndexer,
         input.rawSourceRepository,

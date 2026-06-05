@@ -2,7 +2,6 @@ import type { AgentRun } from "../../domain/knowledge.js";
 import type { AgentRunRepository } from "../../repositories/agentRun.repository.js";
 import type { KnowledgeRepository } from "../../repositories/knowledge.repository.js";
 import type { ProposalRepository } from "../../repositories/proposal.repository.js";
-import type { RawNoteRepository } from "../../repositories/rawNote.repository.js";
 import type { RawSourceRepository } from "../../repositories/rawSource.repository.js";
 import type { RawSourceWithChunks } from "../../domain/rawSource.js";
 import { agentRunEvents } from "../../domain/agentRunEvents.js";
@@ -60,7 +59,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
   constructor(
     private readonly agentRunRepository: AgentRunRepository,
     private readonly knowledgeRepository: KnowledgeRepository,
-    private readonly rawNoteRepository: RawNoteRepository,
     private readonly proposalRepository: ProposalRepository,
     private readonly wikiIndexerService: WikiIndexer = new WikiIndexerService(),
     private readonly rawSourceRepository?: RawSourceRepository | null,
@@ -70,8 +68,8 @@ export class CompileRawNoteHandler implements AgentRunHandler {
   ) {}
 
   validateInput(input: Record<string, unknown>) {
-    if (typeof input.rawNoteId !== "string" && typeof input.rawSourceId !== "string") {
-      throw new Error("compile_raw_note requires rawSourceId or rawNoteId");
+    if (typeof input.rawSourceId !== "string") {
+      throw new Error("compile_raw_note requires rawSourceId");
     }
   }
 
@@ -82,14 +80,13 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         ? (agentRun.input as Record<string, unknown>)
         : {};
     return this.compileRawNote(agentRun.id, {
-      rawNoteId: typeof input.rawNoteId === "string" ? input.rawNoteId : null,
       rawSourceId: typeof input.rawSourceId === "string" ? input.rawSourceId : null,
     });
   }
 
   private async compileRawNote(
     agentRunId: string,
-    input: { rawNoteId: string | null; rawSourceId: string | null },
+    input: { rawSourceId: string | null },
   ) {
     if (!this.rawSourceRepository || !this.proposalRepository) {
       throw new Error("compile worker is not configured");
@@ -638,24 +635,15 @@ export class CompileRawNoteHandler implements AgentRunHandler {
     });
   }
 
-  private async resolveIndexingSource(input: { rawNoteId: string | null; rawSourceId: string | null }) {
+  private async resolveIndexingSource(input: { rawSourceId: string | null }) {
     if (!this.rawSourceRepository) {
       throw new Error("compile worker requires a raw source repository");
     }
-    // Source-first: resolve a raw_source. A legacy enqueue may still carry only
-    // rawNoteId; in that transitional case we read the note solely to find its
-    // raw_source_id (removed once the raw_notes layer is gone). We never create
-    // a compatibility raw_note anymore.
-    let rawSourceId = input.rawSourceId;
-    if (!rawSourceId && input.rawNoteId) {
-      const legacyNote = await this.rawNoteRepository?.getById(input.rawNoteId);
-      rawSourceId = legacyNote?.rawSourceId ?? null;
-    }
-    if (!rawSourceId) {
+    if (!input.rawSourceId) {
       throw new Error("Raw source not found");
     }
 
-    const rawSource = await this.rawSourceRepository.getById(rawSourceId);
+    const rawSource = await this.rawSourceRepository.getById(input.rawSourceId);
     if (!rawSource) {
       throw new Error("Raw source not found");
     }

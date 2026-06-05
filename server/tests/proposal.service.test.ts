@@ -115,9 +115,10 @@ describe("ProposalService", () => {
     const knowledge = new InMemoryKnowledgeRepository();
     const noteLinks = new InMemoryNoteLinkRepository();
     const service = new ProposalService(proposals, knowledge, noteLinks);
-    knowledge.rawNoteChunkIdsByRawNoteId.set("raw-note-1", ["raw-source-chunk-1", "raw-source-chunk-2"]);
+    knowledge.rawSourceChunkIdsByRawSourceId.set("raw-source-1", ["raw-source-chunk-1", "raw-source-chunk-2"]);
     const proposal = await proposals.create({
       rawNoteId: "raw-note-1",
+      rawSourceId: "raw-source-1",
       draft: {
         detectedDomain: "coding",
         detectedKnowledgeType: "problem_reflection",

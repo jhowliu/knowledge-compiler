@@ -217,10 +217,10 @@ export class ProposalService {
         approvalStatus: "approved",
       });
 
-      if (proposal.rawNoteId) {
-        await this.knowledgeRepository.createEvidenceLinksFromRawNoteChunks({
+      if (proposal.rawSourceId) {
+        await this.knowledgeRepository.createEvidenceLinksFromSourceChunks({
           userId: proposal.userId,
-          rawNoteId: proposal.rawNoteId,
+          rawSourceId: proposal.rawSourceId,
           targetType: "knowledge_version",
           targetId: knowledgeSnapshot.version.id,
           confidence: proposal.confidence,

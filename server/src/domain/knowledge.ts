@@ -212,7 +212,7 @@ export type AgentRunEvent = {
 
 export type SearchResult = {
   id: string;
-  targetType: "raw_note" | "compiled_note";
+  targetType: "raw_source" | "compiled_note";
   title: string | null;
   bodyMarkdown: string;
   domain: string | null;

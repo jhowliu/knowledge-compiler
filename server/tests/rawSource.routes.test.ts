@@ -505,5 +505,6 @@ describe("raw source routes", () => {
 
     expect(proposalRepository.proposals).toHaveLength(1);
     expect(proposalRepository.proposals[0].rawNoteId).toBe(response.body.rawNote.id);
+    expect(proposalRepository.proposals[0].rawSourceId).toBe(createResponse.body.rawSource.id);
   });
 });

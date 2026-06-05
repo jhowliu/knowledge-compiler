@@ -99,7 +99,7 @@ export class CompileRawNoteHandler implements AgentRunHandler {
     const proposalRepository = this.proposalRepository;
 
     const { rawNote, rawSource, source } = await this.resolveIndexingSource(input);
-    const agentToolService = this.createAgentToolService();
+    const agentToolService = source.rawSourceId ? this.createAgentToolService() : null;
 
     await this.agentRunRepository.addEvent({
       agentRunId,
@@ -202,6 +202,7 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       const proposal = await proposalRepository.create({
         userId: rawNote.userId,
         rawNoteId: rawNote.id,
+        rawSourceId: source.rawSourceId,
         draft,
       });
       await this.agentRunRepository.addEvent({

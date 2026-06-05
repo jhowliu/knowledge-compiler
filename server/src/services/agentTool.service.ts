@@ -185,6 +185,7 @@ export class AgentToolService {
     const proposal = await this.proposalRepository.create({
       userId: context.userId,
       rawNoteId: context.rawNoteId,
+      rawSourceId: context.sourceId,
       draft,
     });
 

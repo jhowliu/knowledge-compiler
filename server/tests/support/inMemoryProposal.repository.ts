@@ -12,12 +12,14 @@ export class InMemoryProposalRepository implements ProposalRepository {
   async create(input: {
     userId?: string | null;
     rawNoteId: string;
+    rawSourceId?: string | null;
     draft: DraftUpdateProposal;
   }): Promise<ProposalWithItems> {
     const proposal: ProposalWithItems = {
       id: `proposal-${this.proposals.length + 1}`,
       userId: input.userId ?? null,
       rawNoteId: input.rawNoteId,
+      rawSourceId: input.rawSourceId ?? null,
       detectedDomain: input.draft.detectedDomain,
       detectedKnowledgeType: input.draft.detectedKnowledgeType,
       impactLevel: input.draft.impactLevel,
@@ -32,7 +34,15 @@ export class InMemoryProposalRepository implements ProposalRepository {
         actionType: item.actionType,
         targetType: item.targetType,
         targetId: null,
-        payload: item.payload,
+        payload:
+          item.actionType === "keep_source_searchable"
+            ? {
+                ...item.payload,
+                rawNoteId: typeof item.payload.rawNoteId === "string" ? item.payload.rawNoteId : input.rawNoteId,
+                rawSourceId:
+                  typeof item.payload.rawSourceId === "string" ? item.payload.rawSourceId : input.rawSourceId ?? null,
+              }
+            : item.payload,
         rationale: item.rationale,
         status: "pending",
         sourceSpans: item.sourceSpans ?? null,

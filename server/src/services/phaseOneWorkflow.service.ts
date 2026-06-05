@@ -75,6 +75,7 @@ export class PhaseOneWorkflowService {
       const proposal = await this.proposalRepository.create({
         userId: rawNote.userId,
         rawNoteId: rawNote.id,
+        rawSourceId: rawNote.rawSourceId,
         draft,
       });
 

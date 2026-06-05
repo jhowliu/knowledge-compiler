@@ -106,7 +106,13 @@ function proposalRawNote(proposal: Proposal | null, rawNotes: RawNote[]) {
 
 function proposalRawSource(proposal: Proposal | null, rawNote: RawNote | undefined, rawSources: RawSource[]) {
   const rawSourceId =
+    proposal?.rawSourceId ??
     rawNote?.rawSourceId ??
+    proposal?.items
+      .map((item) => item.payload)
+      .find((payload): payload is { rawSourceId: string } =>
+        typeof payload.rawSourceId === 'string',
+      )?.rawSourceId ??
     proposal?.items
       .map((item) => item.payload.structuredData)
       .find((structuredData): structuredData is { rawSourceId: string } =>

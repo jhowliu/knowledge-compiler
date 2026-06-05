@@ -4,13 +4,32 @@ import type { CreateRawSourceChunkInput } from "../domain/rawSource.js";
 const maxChunkCharacters = 1800;
 
 // Knowledge blocks use mechanical fixed-size chunking (Anthropic-style): split
-// into small chunks of a few hundred tokens and let Contextual Retrieval add the
-// situating context per chunk. Token estimate is roughly chars / 4.
-const knowledgeChunkCharacters = 1600;
+// into small chunks of a couple hundred tokens and let Contextual Retrieval add
+// the situating context per chunk. Sizing is token-based so a typical structured
+// note (definition / steps / examples / caveats) splits into a few blocks for
+// retrieval precision rather than collapsing into one.
+const knowledgeChunkTokens = 200;
 const chunkStrategyVersion = "fixed-size-v1";
 
+// Legacy chars/4 estimate, kept for raw-source chunking which is unchanged.
 function tokenEstimateFor(markdown: string) {
   return Math.max(1, Math.ceil(markdown.length / 4));
+}
+
+// CJK-aware token estimate: latin text is ~4 chars/token, but CJK characters are
+// roughly one token each, so chars/4 badly under-counts Chinese/Japanese notes.
+// Counting CJK separately keeps chunk sizes consistent across languages.
+function estimateTokens(text: string) {
+  let cjk = 0;
+  let other = 0;
+  for (const char of text) {
+    if (/[　-鿿가-퟿豈-﫿＀-￯]/.test(char)) {
+      cjk += 1;
+    } else {
+      other += 1;
+    }
+  }
+  return Math.max(1, Math.ceil(cjk + other / 4));
 }
 
 function headingFrom(markdown: string) {
@@ -34,22 +53,22 @@ export function chunkSourceMarkdown(markdown: string): CreateRawSourceChunkInput
 }
 
 export function chunkKnowledgeMarkdown(markdown: string): CreateKnowledgeBlockInput[] {
-  const pieces = splitFixedSize(markdown, knowledgeChunkCharacters);
+  const pieces = splitFixedSize(markdown, knowledgeChunkTokens);
   const bodies = pieces.length ? pieces : [markdown.trim() || markdown];
 
   return bodies.map((bodyMarkdown, blockIndex) => ({
     blockIndex,
     heading: headingFrom(bodyMarkdown),
     bodyMarkdown,
-    tokenEstimate: tokenEstimateFor(bodyMarkdown),
+    tokenEstimate: estimateTokens(bodyMarkdown),
     metadata: { chunkStrategyVersion },
   }));
 }
 
-// Group paragraphs up to a character target, keeping code fences intact. This is
-// a fixed-size splitter with paragraph-aligned boundaries (no hardcoded section
+// Group paragraphs up to a token target, keeping code fences intact. This is a
+// fixed-size splitter with paragraph-aligned boundaries (no hardcoded section
 // vocabulary); a single oversized paragraph (e.g. a large code fence) stays whole.
-function splitFixedSize(markdown: string, targetCharacters: number): string[] {
+function splitFixedSize(markdown: string, targetTokens: number): string[] {
   const paragraphs = splitParagraphsPreservingFences(markdown);
   if (!paragraphs.length) {
     return [];
@@ -59,7 +78,7 @@ function splitFixedSize(markdown: string, targetCharacters: number): string[] {
   let current = "";
   for (const paragraph of paragraphs) {
     const next = current ? `${current}\n\n${paragraph}` : paragraph;
-    if (next.length > targetCharacters && current) {
+    if (estimateTokens(next) > targetTokens && current) {
       pieces.push(current);
       current = paragraph;
     } else {

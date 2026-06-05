@@ -458,14 +458,12 @@ describe("raw source routes", () => {
     expect(rawSourceRepository.sources).toHaveLength(0);
   });
 
-  test("POST /sources/:id/compile queues source-first indexing and creates compatibility raw note", async () => {
+  test("POST /sources/:id/compile queues source-first indexing without a raw note", async () => {
     const rawSourceRepository = new InMemoryRawSourceRepository();
-    const rawNoteRepository = new InMemoryRawNoteRepository();
     const agentRunRepository = new InMemoryAgentRunRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const app = createApp({
       rawSourceRepository,
-      rawNoteRepository,
       agentRunRepository,
       proposalRepository,
       knowledgeRepository: new InMemoryKnowledgeRepository(),
@@ -489,23 +487,19 @@ describe("raw source routes", () => {
       id: createResponse.body.rawSource.id,
       title: "Source-first note",
     });
-    expect(response.body.rawNote).toMatchObject({
-      rawSourceId: createResponse.body.rawSource.id,
-      title: "Source-first note",
-    });
+    // Source-first: no compatibility raw note is created or returned.
+    expect(response.body.rawNote).toBeUndefined();
     expect(agentRunRepository.agentRuns[0]).toMatchObject({
       runType: "compile_raw_note",
       input: {
         rawSourceId: createResponse.body.rawSource.id,
-        rawNoteId: response.body.rawNote.id,
       },
     });
+    expect(agentRunRepository.agentRuns[0].input).not.toHaveProperty("rawNoteId");
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(proposalRepository.proposals).toHaveLength(1);
-    // Source-first: the proposal is anchored on the source, not the (still
-    // transitionally created) compatibility raw note.
     expect(proposalRepository.proposals[0].rawNoteId).toBeNull();
     expect(proposalRepository.proposals[0].rawSourceId).toBe(createResponse.body.rawSource.id);
   });

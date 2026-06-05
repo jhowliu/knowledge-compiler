@@ -171,7 +171,6 @@ export function createApp(dependencies: AppDependencies = {}) {
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(
         rawSourceRepository,
-        rawNoteRepository,
         enablePhaseOneWorkflow ? agentRunQueueService : null,
       )
     : null;

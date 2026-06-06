@@ -75,6 +75,17 @@ export type CreateRawSourceChunkInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type SourceChunkSearchResult = {
+  chunkId: string;
+  rawSourceId: string;
+  title: string | null;
+  heading: string | null;
+  bodyMarkdown: string;
+  sourceRole: string;
+  rank: number;
+  createdAt: Date;
+};
+
 export type SourceFolder = {
   id: string;
   projectId: string;

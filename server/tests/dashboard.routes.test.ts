@@ -1,6 +1,7 @@
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
+import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 
 describe("dashboard routes", () => {
   test("GET /search returns active knowledge blocks with evidence references", async () => {
@@ -130,6 +131,62 @@ describe("dashboard routes", () => {
       blockId: snapshot.blocks[0].id,
       title: "Attention Mechanisms",
     });
+  });
+
+  test("GET /search surfaces raw sources as a labeled source tier, knowledge first (#143)", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "research",
+      knowledgeType: "paper_note",
+      title: "Vector Search",
+      bodyMarkdown: "Vector search retrieves by meaning.",
+      structuredData: {},
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Overview",
+          bodyMarkdown: "Vector search retrieves approved knowledge by meaning.",
+          tokenEstimate: 9,
+        },
+      ],
+    });
+
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    await rawSourceRepository.create(
+      {
+        bodyMarkdown: "Meeting notes: revisit vector search rollout next sprint.",
+        title: "Sync notes",
+        sourceRole: "personal_note",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: "Notes",
+          bodyMarkdown: "Meeting notes: revisit vector search rollout next sprint.",
+          tokenEstimate: 9,
+        },
+      ],
+    );
+
+    const app = createApp({ knowledgeRepository, rawSourceRepository });
+    const response = await request(app).get("/search?q=vector%20search");
+
+    expect(response.status).toBe(200);
+    const tiers = response.body.results.map((result: { tier: string }) => result.tier);
+    expect(tiers).toContain("knowledge");
+    expect(tiers).toContain("source");
+    // Knowledge is canonical, so it ranks ahead of the raw source.
+    expect(response.body.results[0].tier).toBe("knowledge");
+
+    const sourceHit = response.body.results.find(
+      (result: { tier: string }) => result.tier === "source",
+    );
+    expect(sourceHit).toMatchObject({
+      title: "Sync notes",
+      sourceRole: "personal_note",
+      bodyMarkdown: "Meeting notes: revisit vector search rollout next sprint.",
+    });
+    expect(typeof sourceHit.rawSourceId).toBe("string");
   });
 
   test("GET /knowledge-sources/:id/timeline returns versions and source evidence", async () => {

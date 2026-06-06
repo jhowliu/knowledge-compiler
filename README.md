@@ -181,7 +181,7 @@ flowchart TD
 
 ### Known gaps (tracked)
 
-- Source tier is not user-searchable yet — only `knowledge_blocks` are retrieved (#143).
+- `/search` now covers both tiers (knowledge-first, with `tier`-tagged raw sources, #143); `/ask` still grounds on `knowledge_blocks` only (labeled source fallback is a follow-up).
 - Vector search requires pgvector; without it retrieval silently degrades to
   full-text + concept only. CJK full-text needs a segmenting parser (#144).
 - Concept matching is substring-based; query-side concept extraction is pending (#142).

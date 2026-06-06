@@ -70,6 +70,14 @@ function sectionContextFrom(block: {
   return block.heading?.trim() || null;
 }
 
+export async function embedRawSourceChunk(
+  embeddingService: EmbeddingService,
+  chunk: { heading?: string | null; bodyMarkdown: string },
+) {
+  const text = [chunk.heading, chunk.bodyMarkdown].filter(Boolean).join("\n\n");
+  return embeddingService.embedText(text);
+}
+
 function parseEmbeddingResponse(response: unknown) {
   if (!response || typeof response !== "object") {
     return null;

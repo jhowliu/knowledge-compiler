@@ -1,0 +1,4539 @@
+{
+  "version": "2.11",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 0,
+      "y": 0,
+      "name": "Interview Knowledge Compiler - Web Workspace",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "#F6F7F9",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "QcuE3",
+          "x": 0,
+          "y": 0,
+          "name": "Left Navigation",
+          "width": 252,
+          "height": 960,
+          "fill": "#1A1A1A",
+          "layout": "vertical",
+          "gap": 18,
+          "padding": [
+            24,
+            18
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "VFKAt",
+              "name": "Brand Block",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GbcjE",
+                  "name": "brandTitle",
+                  "fill": "#FFFFFF",
+                  "content": "Interview Knowledge",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "gnMEz",
+                  "name": "brandSub",
+                  "fill": "#FFFFFF",
+                  "content": "Compiler",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "W6jKoC",
+              "name": "Primary Capture Button",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "#635BFF",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": [
+                12,
+                14
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "O2ZGw",
+                  "name": "plusIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "plus",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "yiqCC",
+                  "name": "newNoteText",
+                  "fill": "#FFFFFF",
+                  "content": "Capture raw note",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XqTsd",
+              "name": "Workspace Navigation",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FFaf1",
+                  "name": "navLabel1",
+                  "fill": "#9CA3AF",
+                  "content": "WORKSPACE",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "eVc8q",
+                  "name": "Nav Active",
+                  "width": "fill_container",
+                  "height": 36,
+                  "fill": "#2A2A2A",
+                  "cornerRadius": 6,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "lGw65",
+                      "name": "navItem1Icon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "network",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xb2FY",
+                      "name": "navItem1Text",
+                      "fill": "#FFFFFF",
+                      "content": "Knowledge map",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YfiHe",
+                  "name": "Nav Raw Notes",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "vxf8k",
+                      "name": "navItem2Icon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "sEHgT",
+                      "name": "navItem2Text",
+                      "fill": "#D1D5DB",
+                      "content": "Raw notes",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JXxgr",
+                  "name": "Nav Proposals",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "Iiw0w",
+                      "name": "navItem3Icon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "sparkles",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "hUYGw",
+                      "name": "navItem3Text",
+                      "fill": "#D1D5DB",
+                      "content": "Update proposals",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VrTO1",
+              "name": "Domain Navigation",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "A0O3l",
+                  "name": "navLabel2",
+                  "fill": "#9CA3AF",
+                  "content": "DOMAINS",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "jMyyf",
+                  "name": "Domain Coding",
+                  "width": "fill_container",
+                  "height": 32,
+                  "gap": 8,
+                  "padding": [
+                    7,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "kytPB",
+                      "name": "dot1",
+                      "fill": "#635BFF",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "yIANi",
+                      "name": "dom1Text",
+                      "fill": "#D1D5DB",
+                      "content": "Coding / LeetCode",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a1B9K",
+                  "name": "Domain System Design",
+                  "width": "fill_container",
+                  "height": 32,
+                  "gap": 8,
+                  "padding": [
+                    7,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "XAbgG",
+                      "name": "dot2",
+                      "fill": "#10B981",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "vP1DC",
+                      "name": "dom2Text",
+                      "fill": "#D1D5DB",
+                      "content": "System design",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "X1bh8",
+                  "name": "Domain Behavioral",
+                  "width": "fill_container",
+                  "height": 32,
+                  "gap": 8,
+                  "padding": [
+                    7,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "cRjhK",
+                      "name": "dot3",
+                      "fill": "#F59E0B",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "FJgXQ",
+                      "name": "dom3Text",
+                      "fill": "#D1D5DB",
+                      "content": "Behavioral stories",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iPH99",
+              "name": "Readiness Snapshot",
+              "width": "fill_container",
+              "fill": "#262626",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 10,
+              "padding": 14,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "j82ySo",
+                  "name": "statusTitle",
+                  "fill": "#FFFFFF",
+                  "content": "Readiness",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "NYMDn",
+                  "name": "statusLine",
+                  "fill": "#D1D5DB",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "3 weak areas need review today",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "SSy7t",
+          "x": 252,
+          "y": 0,
+          "name": "Top Toolbar",
+          "width": 1188,
+          "height": 72,
+          "fill": "#FFFFFF",
+          "stroke": {
+            "align": "inside",
+            "thickness": {
+              "bottom": 1
+            },
+            "fill": "#D1D5DB"
+          },
+          "gap": 16,
+          "padding": [
+            16,
+            24
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "JTpyF",
+              "name": "Search Box",
+              "width": 420,
+              "height": 40,
+              "fill": "#F6F7F9",
+              "cornerRadius": 8,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#D1D5DB"
+              },
+              "gap": 10,
+              "padding": [
+                10,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "gRJOV",
+                  "name": "searchIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "search",
+                  "iconFontFamily": "lucide",
+                  "fill": "#6B7280"
+                },
+                {
+                  "type": "text",
+                  "id": "KTEVP",
+                  "name": "searchText",
+                  "fill": "#6B7280",
+                  "content": "Search notes, patterns, mistakes...",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iQ7iE",
+              "name": "Board Breadcrumb",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mHKYr",
+                  "name": "crumbTitle",
+                  "fill": "#1A1A1A",
+                  "content": "Coding Knowledge Map",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "w2Th5",
+                  "name": "crumbSub",
+                  "fill": "#6B7280",
+                  "content": "24 raw notes -> 9 compiled notes -> 6 open actions",
+                  "fontFamily": "Geist",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "u8G7l",
+              "name": "Filter Button",
+              "width": 40,
+              "height": 40,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#D1D5DB"
+              },
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "olSBB",
+                  "name": "filterIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "sliders-horizontal",
+                  "iconFontFamily": "lucide",
+                  "fill": "#1A1A1A"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XUfbP",
+              "name": "Export Button",
+              "width": 40,
+              "height": 40,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#D1D5DB"
+              },
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "f5Uf6Y",
+                  "name": "exportIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "download",
+                  "iconFontFamily": "lucide",
+                  "fill": "#1A1A1A"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ECKAq",
+              "name": "Run Compiler Button",
+              "height": 40,
+              "fill": "#1A1A1A",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": [
+                10,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "W2hkY",
+                  "name": "runIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "wand-sparkles",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "G0F3En",
+                  "name": "runText",
+                  "fill": "#FFFFFF",
+                  "content": "Run compiler",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "rfA2R",
+          "x": 252,
+          "y": 72,
+          "name": "Main Workspace",
+          "width": 1188,
+          "height": 888,
+          "fill": "#F6F7F9",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Owo4k",
+              "name": "Knowledge Canvas Region",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F6F7F9",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "a2BOQy",
+                  "x": 0,
+                  "y": 0,
+                  "name": "Subtle Canvas Grid",
+                  "width": 828,
+                  "height": 888,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 180,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#F8FAFC",
+                        "position": 0
+                      },
+                      {
+                        "color": "#EEF2F7",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "layout": "none"
+                },
+                {
+                  "type": "line",
+                  "id": "zSPvt",
+                  "x": 260,
+                  "y": 178,
+                  "name": "Connector Card1 Central",
+                  "width": 92,
+                  "height": 90,
+                  "stroke": {
+                    "align": "center",
+                    "thickness": 2,
+                    "fill": "#A5B4FC"
+                  }
+                },
+                {
+                  "type": "line",
+                  "id": "F4FXIa",
+                  "x": 272,
+                  "y": 405,
+                  "name": "Connector Evidence Central",
+                  "width": 92,
+                  "height": -42,
+                  "stroke": {
+                    "align": "center",
+                    "thickness": 2,
+                    "fill": "#A5B4FC"
+                  }
+                },
+                {
+                  "type": "line",
+                  "id": "M06TNT",
+                  "x": 530,
+                  "y": 232,
+                  "name": "Connector System Central",
+                  "width": 72,
+                  "height": -32,
+                  "stroke": {
+                    "align": "center",
+                    "thickness": 2,
+                    "fill": "#86EFAC"
+                  }
+                },
+                {
+                  "type": "line",
+                  "id": "hiZB0",
+                  "x": 524,
+                  "y": 464,
+                  "name": "Connector Behavioral Central",
+                  "width": 46,
+                  "height": -92,
+                  "stroke": {
+                    "align": "center",
+                    "thickness": 2,
+                    "fill": "#F9A8D4"
+                  }
+                },
+                {
+                  "type": "line",
+                  "id": "kPP3I",
+                  "x": 410,
+                  "y": 386,
+                  "name": "Connector Mistake Central",
+                  "width": 0,
+                  "height": 226,
+                  "stroke": {
+                    "align": "center",
+                    "thickness": 2,
+                    "fill": "#FDBA74"
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "QoRc5",
+                  "x": 48,
+                  "y": 38,
+                  "name": "Cluster Label Coding",
+                  "height": 30,
+                  "fill": "#EEF2FF",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#C7D2FE"
+                  },
+                  "gap": 8,
+                  "padding": [
+                    7,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "mmWql",
+                      "name": "clusterDot1",
+                      "fill": "#635BFF",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "Jax6R",
+                      "name": "clusterText1",
+                      "fill": "#3730A3",
+                      "content": "Coding patterns",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LPPnt",
+                  "x": 468,
+                  "y": 80,
+                  "name": "Cluster Label System",
+                  "height": 30,
+                  "fill": "#ECFDF5",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#A7F3D0"
+                  },
+                  "gap": 8,
+                  "padding": [
+                    7,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "P0VAY",
+                      "name": "clusterDot2",
+                      "fill": "#10B981",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "nKMdh",
+                      "name": "clusterText2",
+                      "fill": "#047857",
+                      "content": "System design",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pp47x",
+                  "x": 288,
+                  "y": 236,
+                  "name": "Central Compiled Knowledge Node",
+                  "width": 264,
+                  "height": 150,
+                  "fill": "#1A1A1A",
+                  "cornerRadius": 10,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#00000055",
+                    "offset": {
+                      "x": 0,
+                      "y": 14
+                    },
+                    "blur": 28,
+                    "spread": -14
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 18,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ewj25",
+                      "name": "centralKicker",
+                      "fill": "#A5B4FC",
+                      "content": "GLOBAL READINESS MAP",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ibQlf",
+                      "name": "centralTitle",
+                      "fill": "#FFFFFF",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "What should I practice next?",
+                      "fontFamily": "Inter",
+                      "fontSize": 22,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Fc4ex",
+                      "name": "centralBody",
+                      "fill": "#D1D5DB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "AI compiles raw practice evidence into bounded notes, mistakes, and review actions.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "W7Cnxb",
+                  "x": 54,
+                  "y": 104,
+                  "name": "Card Shortest Path",
+                  "width": 232,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#D1D5DB"
+                  },
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#00000033",
+                    "offset": {
+                      "x": 0,
+                      "y": 8
+                    },
+                    "blur": 20,
+                    "spread": -16
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "W5z1AO",
+                      "name": "card1Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Shortest Path Decision Guide",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "J25UF",
+                      "name": "card1Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "All pairs -> Floyd-Warshall. Negative edges -> Bellman-Ford.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "e6Cs2",
+                      "name": "Needs Review Tag",
+                      "height": 24,
+                      "fill": "#FEF3C7",
+                      "cornerRadius": 12,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LafZm",
+                          "name": "card1TagText",
+                          "fill": "#92400E",
+                          "content": "Needs Review",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hf1IS",
+                  "x": 90,
+                  "y": 428,
+                  "name": "Card Raw Evidence",
+                  "width": 248,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#D1D5DB"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "YjHNS",
+                      "name": "card2Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1334: Find the City",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HnKMm",
+                      "name": "card2Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Did not recognize all-pairs shortest path. Need more APSP practice.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xVPXl",
+                      "name": "card2Meta",
+                      "fill": "#6B7280",
+                      "content": "Raw note evidence · High confidence",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "M5fan",
+                  "x": 542,
+                  "y": 134,
+                  "name": "Card System Design Weakness",
+                  "width": 226,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#D1D5DB"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "g0nuc",
+                      "name": "card3Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "URL Shortener Mock",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "T5fbUS",
+                      "name": "card3Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Forgot capacity estimation and collision handling explanation.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mKSdr",
+                      "name": "Impact Level 3",
+                      "height": 24,
+                      "fill": "#DCFCE7",
+                      "cornerRadius": 12,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VNB2L",
+                          "name": "card3TagText",
+                          "fill": "#166534",
+                          "content": "Impact L3",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "z72tc",
+                  "x": 514,
+                  "y": 464,
+                  "name": "Card Behavioral Story",
+                  "width": 244,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#D1D5DB"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Lstki",
+                      "name": "card4Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Team Project Delay",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "IgcUE",
+                      "name": "card4Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Story has ownership and communication, but result needs measurable impact.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C5J67h",
+                      "name": "Missing Evidence Tag",
+                      "height": 24,
+                      "fill": "#FCE7F3",
+                      "cornerRadius": 12,
+                      "padding": [
+                        5,
+                        9
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "M6geC",
+                          "name": "card4TagText",
+                          "fill": "#9D174D",
+                          "content": "Missing result",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vHtzT",
+                  "x": 316,
+                  "y": 612,
+                  "name": "Mistake Log Node",
+                  "width": 214,
+                  "fill": "#FFF7ED",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#FED7AA"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "AKMKA",
+                      "name": "mistakeTitle",
+                      "fill": "#9A3412",
+                      "content": "Recurring Mistakes",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "E1viPA",
+                      "name": "mistakeBody",
+                      "fill": "#9A3412",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Pattern recognition failure appears in 3 recent coding notes.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "R0OAJ",
+              "name": "AI Proposal Inspector",
+              "width": 360,
+              "height": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": {
+                "align": "inside",
+                "thickness": {
+                  "left": 1
+                },
+                "fill": "#D1D5DB"
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                20,
+                18
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "avELS",
+                  "name": "Inspector Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "RH7QE",
+                      "name": "insKicker",
+                      "fill": "#635BFF",
+                      "content": "AI UPDATE PROPOSAL",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pEKlc",
+                      "name": "insTitle",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Compile raw note into knowledge",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ootMQ",
+                      "name": "insMeta",
+                      "fill": "#6B7280",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Detected from 1334. Find the City · High confidence",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "p6P4C2",
+                  "name": "Classification Summary",
+                  "width": "fill_container",
+                  "fill": "#F8FAFC",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "JlqX8",
+                      "name": "Domain Row",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MQQgW",
+                          "name": "classLabel1",
+                          "fill": "#6B7280",
+                          "content": "Domain",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "AkQPo",
+                          "name": "classValue1",
+                          "fill": "#1A1A1A",
+                          "content": "Coding / Graph",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zvGFi",
+                      "name": "Impact Row",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HSqNH",
+                          "name": "classLabel2",
+                          "fill": "#6B7280",
+                          "content": "Impact",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aMYpK",
+                          "name": "Impact Pill",
+                          "height": 24,
+                          "fill": "#FEF3C7",
+                          "cornerRadius": 12,
+                          "padding": [
+                            5,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Mad65",
+                              "name": "impactText",
+                              "fill": "#92400E",
+                              "content": "Level 2 · approval recommended",
+                              "fontFamily": "Geist",
+                              "fontSize": 11,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wVxc4",
+                  "name": "Suggested Updates",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "H8MLO",
+                      "name": "updatesTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Suggested updates",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "KRqUM",
+                      "name": "upd1",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1. Save raw problem note as evidence",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "bSYNq",
+                      "name": "upd2",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "2. Link to Floyd-Warshall and All-Pairs Shortest Path",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dhmDN",
+                      "name": "upd3",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "3. Add mistake: did not recognize APSP",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Fn6Hr",
+                      "name": "upd4",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "4. Create review task: practice 2 APSP problems",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "gpP96",
+                  "name": "Why This Is Suggested",
+                  "width": "fill_container",
+                  "fill": "#EEF2FF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#C7D2FE"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JtXUq",
+                      "name": "whyTitle",
+                      "fill": "#3730A3",
+                      "content": "Why",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "cy11b",
+                      "name": "whyBody",
+                      "fill": "#3730A3",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The raw note contains reusable pattern-recognition evidence, but the existing review map already owns the decision rule, so no map rewrite is needed.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T3h4u",
+                  "name": "Readiness Change",
+                  "width": "fill_container",
+                  "fill": "#F8FAFC",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "e4c4kp",
+                      "name": "readinessTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Readiness change",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LL5R2",
+                      "name": "readinessBody",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Graph shortest path remains Weak until two review tasks are completed.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pDAah",
+                  "name": "Evidence Links",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ql9ka",
+                      "name": "evidencePanelTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Evidence links",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MliW8",
+                      "name": "Evidence Link 1",
+                      "width": "fill_container",
+                      "height": 38,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E5E7EB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "o2wI5M",
+                          "name": "evidenceIcon1",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "file-text",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EvItJ",
+                          "name": "evidenceText1",
+                          "fill": "#374151",
+                          "content": "Raw note · May 24",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cdmP6",
+                      "name": "Evidence Link 2",
+                      "width": "fill_container",
+                      "height": 38,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E5E7EB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "a0ewH",
+                          "name": "evidenceIcon2",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "map",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "r6sShv",
+                          "name": "evidenceText2",
+                          "fill": "#374151",
+                          "content": "Shortest Path review map",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hxZ9u",
+                  "name": "Approval Actions",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DgaCJ",
+                      "name": "Edit Button",
+                      "width": "fill_container",
+                      "height": 42,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wLDbO",
+                          "name": "editText",
+                          "fill": "#1A1A1A",
+                          "content": "Edit",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "F1A8We",
+                      "name": "Approve Button",
+                      "width": "fill_container",
+                      "height": 42,
+                      "fill": "#635BFF",
+                      "cornerRadius": 8,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "jMCEC",
+                          "name": "approveText",
+                          "fill": "#FFFFFF",
+                          "content": "Approve",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "C8YyP",
+                  "name": "reject",
+                  "fill": "#6B7280",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Reject proposal",
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "WPloE",
+          "x": 284,
+          "y": 808,
+          "name": "Evidence Timeline Tray",
+          "width": 764,
+          "height": 124,
+          "fill": "#FFFFFF",
+          "cornerRadius": 8,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1,
+            "fill": "#D1D5DB"
+          },
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#00000033",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 24,
+            "spread": -16
+          },
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "y4SXHL",
+              "name": "Evidence Tray Label",
+              "width": 118,
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "h8qSC",
+                  "name": "trayLabelText",
+                  "fill": "#1A1A1A",
+                  "content": "Evidence",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "800"
+                },
+                {
+                  "type": "text",
+                  "id": "h1MVt",
+                  "name": "trayLabelMeta",
+                  "fill": "#6B7280",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Source-backed changes",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "l44Wg",
+              "name": "Evidence Snippet 1",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F8FAFC",
+              "cornerRadius": 6,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#E5E7EB"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "tDIj7",
+                  "name": "evidence1Title",
+                  "fill": "#6B7280",
+                  "content": "LeetCode reflection",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "tl9Ww",
+                  "name": "evidence1Body",
+                  "fill": "#1A1A1A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "“I realized it should use Floyd-Warshall...”",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "f07C6",
+              "name": "Evidence Snippet 2",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F8FAFC",
+              "cornerRadius": 6,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#E5E7EB"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "jHQaK",
+                  "name": "evidence2Title",
+                  "fill": "#6B7280",
+                  "content": "Mock feedback",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "RElvE",
+                  "name": "evidence2Body",
+                  "fill": "#1A1A1A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Capacity estimate missing from URL shortener pass.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "co1vj",
+              "name": "Evidence Snippet 3",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F8FAFC",
+              "cornerRadius": 6,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#E5E7EB"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "tDfbX",
+                  "name": "evidence3Title",
+                  "fill": "#6B7280",
+                  "content": "Behavioral draft",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "aOtUN",
+                  "name": "evidence3Body",
+                  "fill": "#1A1A1A",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Strong action, but result is not quantified yet.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "YkuqB",
+      "x": 1560,
+      "y": 0,
+      "name": "Raw Notes Editing Page",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "#F6F7F9",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "uQklD",
+          "x": 0,
+          "y": 0,
+          "name": "Left Navigation",
+          "width": 252,
+          "height": 960,
+          "fill": "#1A1A1A",
+          "layout": "vertical",
+          "gap": 18,
+          "padding": [
+            24,
+            18
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "z06iA",
+              "name": "Brand Block",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GvM0J",
+                  "name": "brand1",
+                  "fill": "#FFFFFF",
+                  "content": "Interview Knowledge",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "ltmQy",
+                  "name": "brand2",
+                  "fill": "#FFFFFF",
+                  "content": "Compiler",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "p0GwE",
+              "name": "New Raw Note Button",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "#635BFF",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": [
+                12,
+                14
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "Z6uQ0",
+                  "name": "plus",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "plus",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "MFPMF",
+                  "name": "newNoteText",
+                  "fill": "#FFFFFF",
+                  "content": "New raw note",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XrSlc",
+              "name": "Workspace Navigation",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "KVubB",
+                  "name": "navLabel",
+                  "fill": "#9CA3AF",
+                  "content": "WORKSPACE",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "FF26l",
+                  "name": "Nav Knowledge Map",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "Yeo1C",
+                      "name": "navMapIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "network",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "C0i8Ga",
+                      "name": "navMapText",
+                      "fill": "#D4D4D8",
+                      "content": "Notes network",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "K23xDM",
+                  "name": "Nav Raw Active",
+                  "width": "fill_container",
+                  "height": 36,
+                  "fill": "#2A2A2A",
+                  "cornerRadius": 6,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "EbLl9",
+                      "name": "navRawIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dqz3q",
+                      "name": "navRawText",
+                      "fill": "#FFFFFF",
+                      "content": "Raw notes",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nHLrH",
+                  "name": "Nav Proposals",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "b5Fhg",
+                      "name": "navProposalIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "sparkles",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "p3T1eb",
+                      "name": "navProposalText",
+                      "fill": "#D4D4D8",
+                      "content": "Update proposals",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "tWxoV",
+              "name": "Capture Tips",
+              "width": "fill_container",
+              "fill": "#262626",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 14,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "dA0To",
+                  "name": "quickTitle",
+                  "fill": "#F4F4F5",
+                  "content": "Capture rule",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "M6Vyx",
+                  "name": "quickBody",
+                  "fill": "#D4D4D8",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Write the messy version here. The compiler turns it into proposal-backed knowledge after you compile.",
+                  "lineHeight": 1.35,
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "uZCWm",
+          "x": 252,
+          "y": 0,
+          "name": "Raw Notes Main Workspace",
+          "width": 1188,
+          "height": 960,
+          "fill": "#202020",
+          "children": [
+            {
+              "type": "frame",
+              "id": "cp7cb",
+              "name": "Recent Raw Notes",
+              "width": 304,
+              "height": "fill_container",
+              "fill": "#181818",
+              "stroke": {
+                "align": "inside",
+                "thickness": {
+                  "right": 1
+                },
+                "fill": "#2B2B2B"
+              },
+              "layout": "vertical",
+              "gap": 10,
+              "padding": [
+                24,
+                20
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aII49",
+                  "name": "List Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CEWIk",
+                      "name": "listTitle",
+                      "fill": "#F4F4F5",
+                      "content": "Raw notes",
+                      "fontFamily": "Inter",
+                      "fontSize": 26,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "AAfod",
+                      "name": "listSub",
+                      "fill": "#71717A",
+                      "content": "Recent notes",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "x8FRRt",
+                  "x": 16,
+                  "y": 71,
+                  "name": "Domain Filter Tabs",
+                  "enabled": false,
+                  "width": "fill_container(268)",
+                  "height": 34,
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "e2YZS",
+                      "name": "All Tab",
+                      "height": 30,
+                      "fill": "#1A1A1A",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "M6eYV",
+                          "name": "allTabText",
+                          "fill": "#FFFFFF",
+                          "content": "All",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qca9L",
+                      "name": "Coding Tab",
+                      "height": 30,
+                      "fill": "#F3F4F6",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "F2MuL",
+                          "name": "codingTabText",
+                          "fill": "#4B5563",
+                          "content": "Coding",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wQOTJ",
+                      "name": "System Tab",
+                      "height": 30,
+                      "fill": "#F3F4F6",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DUtuL",
+                          "name": "sysTabText",
+                          "fill": "#4B5563",
+                          "content": "Design",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "calbD",
+                  "name": "Selected Raw Note",
+                  "width": "fill_container",
+                  "fill": "#252039",
+                  "cornerRadius": 6,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#635BFF"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "p1VPZo",
+                      "name": "note1Meta",
+                      "fill": "#A5B4FC",
+                      "content": "CODING · TODAY",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Nwwk2",
+                      "name": "note1Title",
+                      "fill": "#F4F4F5",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1334. Find the City",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dqHid",
+                      "name": "note1Body",
+                      "fill": "#A1A1AA",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Did not recognize all-pairs shortest path...",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "g3mt8k",
+                      "x": 14,
+                      "y": 85,
+                      "name": "note1Status",
+                      "enabled": false,
+                      "fill": "#047857",
+                      "content": "Extraction ready",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mkXSi",
+                  "name": "Raw Note URL Shortener",
+                  "width": "fill_container",
+                  "fill": "#202020",
+                  "cornerRadius": 6,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#2B2B2B"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xaLQ9",
+                      "name": "note2Meta",
+                      "fill": "#71717A",
+                      "content": "SYSTEM DESIGN · YESTERDAY",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "G1wiC",
+                      "name": "note2Title",
+                      "fill": "#F4F4F5",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "URL Shortener mock",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vhuXD",
+                      "name": "note2Body",
+                      "fill": "#A1A1AA",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Forgot capacity estimation and collision handling.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xP9z1",
+                  "name": "Raw Note Behavioral",
+                  "width": "fill_container",
+                  "fill": "#202020",
+                  "cornerRadius": 6,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#2B2B2B"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KNM7n",
+                      "name": "note3Meta",
+                      "fill": "#71717A",
+                      "content": "BEHAVIORAL · MAY 21",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "uHJNv",
+                      "name": "note3Title",
+                      "fill": "#F4F4F5",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Team delay story",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "v48BV",
+                      "name": "note3Body",
+                      "fill": "#A1A1AA",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Answer sounded vague and did not quantify result.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "u6lFW",
+              "name": "Raw Markdown Editor",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#202020",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oUmcm",
+                  "name": "Editor Header",
+                  "width": "fill_container",
+                  "height": 78,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": {
+                      "bottom": 1
+                    },
+                    "fill": "#303030"
+                  },
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "xwVnf",
+                      "name": "Editor Title Block",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bKcWt",
+                          "name": "editorKicker",
+                          "fill": "#71717A",
+                          "content": "SAVED RAW NOTE",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "f8ZPc",
+                          "name": "editorTitle",
+                          "fill": "#F4F4F5",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "1334. Find the City",
+                          "fontFamily": "Inter",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oBnIO",
+                      "name": "New Note Button",
+                      "height": 40,
+                      "fill": "#202020",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#3A3A3A"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "vvBEq",
+                          "name": "moreIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "plus",
+                          "iconFontFamily": "lucide",
+                          "fill": "#E5E7EB"
+                        },
+                        {
+                          "type": "text",
+                          "id": "hTCam",
+                          "fill": "#E5E7EB",
+                          "content": "New note",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "V9fSY",
+                      "name": "Save Button",
+                      "height": 40,
+                      "fill": "#202020",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#3A3A3A"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "GhLgw",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "save",
+                          "iconFontFamily": "lucide",
+                          "fill": "#E5E7EB"
+                        },
+                        {
+                          "type": "text",
+                          "id": "X2vw6z",
+                          "fill": "#E5E7EB",
+                          "content": "Save",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LMa5n",
+                      "name": "Delete Raw Note",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "#202020",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#7F1D1D"
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "kX0lH",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "trash-2",
+                          "iconFontFamily": "lucide",
+                          "fill": "#FECACA"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "M4SHZD",
+                      "name": "Compile Saved Button",
+                      "height": 40,
+                      "fill": "#635BFF",
+                      "cornerRadius": 8,
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M6hA2S",
+                          "x": 4,
+                          "y": 4,
+                          "name": "Edit Mode Active",
+                          "enabled": false,
+                          "height": 28,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "zayn7",
+                              "name": "editModeText",
+                              "fill": "#1A1A1A",
+                              "content": "Edit",
+                              "fontFamily": "Geist",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "S4xgvO",
+                          "x": 52,
+                          "y": 4,
+                          "name": "Preview Mode",
+                          "enabled": false,
+                          "height": 28,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "yYp7V",
+                              "name": "previewModeText",
+                              "fill": "#6B7280",
+                              "content": "Preview",
+                              "fontFamily": "Geist",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "D12JmB",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "sparkles",
+                          "iconFontFamily": "lucide",
+                          "fill": "#FFFFFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rW7jf",
+                          "fill": "#FFFFFF",
+                          "content": "Compile saved",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hINU4",
+                  "name": "Transparent Editor Body",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#202020",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 0,
+                    "fill": "#202020"
+                  },
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "enabled": false,
+                    "color": "#000000"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": [
+                    28,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xpuu8",
+                      "name": "editorLabel",
+                      "fill": "#FFFFFF",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1334. Find the City With the Smallest Number of Neighbors",
+                      "fontFamily": "Inter",
+                      "fontSize": 32,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "DM1Vi",
+                      "name": "editorText",
+                      "fill": "#E5E7EB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "# 1334. Find the City With the Smallest Number of Neighbors\n\n## Reflection\nThis problem requires **all-pairs shortest path**. I realized it should use `Floyd-Warshall`. I was not familiar with this pattern and need more practice.\n\n## Mistake\nI focused on running Dijkstra from each city and did not step back to recognize the all-pairs shape.\n\n## Review Action\n- Practice 2 more shortest path problems\n- Keep the decision guide concise\n- Only update the review map if the rule is missing\n\n## Links\n[[Shortest Path Decision Guide]]\n[[Floyd-Warshall]]",
+                      "lineHeight": 1.55,
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XfWKu",
+                  "x": 0,
+                  "y": 594,
+                  "name": "Editor Footer Actions",
+                  "enabled": false,
+                  "width": "fill_container(524)",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "AjptD",
+                      "name": "Private Badge",
+                      "height": 32,
+                      "fill": "#F3F4F6",
+                      "cornerRadius": 16,
+                      "gap": 8,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "KWRQd",
+                          "name": "lockIcon",
+                          "width": 14,
+                          "height": 14,
+                          "iconFontName": "lock",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "j76dh8",
+                          "name": "privacyText",
+                          "fill": "#4B5563",
+                          "content": "Private by default",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fjYTJ",
+                      "name": "Footer Spacer",
+                      "width": "fill_container",
+                      "height": 1,
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZbRAc",
+                      "name": "Extract Knowledge Button",
+                      "height": 42,
+                      "fill": "#635BFF",
+                      "cornerRadius": 8,
+                      "gap": 8,
+                      "padding": [
+                        11,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "QdfuS",
+                          "name": "extractIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "wand-sparkles",
+                          "iconFontFamily": "lucide",
+                          "fill": "#FFFFFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "FZkz2",
+                          "name": "extractText",
+                          "fill": "#FFFFFF",
+                          "content": "Extract knowledge",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n0f2Ud",
+              "name": "Live Markdown Preview",
+              "width": 360,
+              "height": "fill_container",
+              "fill": "#1B1B1B",
+              "stroke": {
+                "align": "inside",
+                "thickness": {
+                  "left": 1
+                },
+                "fill": "#303030"
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "MxNfb",
+                  "name": "Preview Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "lDnjT",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "eye",
+                      "iconFontFamily": "lucide",
+                      "fill": "#71717A"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mtbYu",
+                      "x": 0,
+                      "y": 0,
+                      "name": "previewKicker",
+                      "enabled": false,
+                      "fill": "#635BFF",
+                      "content": "EXTRACTION PREVIEW",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "l3V8q",
+                      "name": "previewTitle",
+                      "fill": "#D4D4D8",
+                      "content": "Preview",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FeHJ8",
+                  "name": "Markdown Preview Body",
+                  "width": "fill_container",
+                  "fill": "#1B1B1B",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 0,
+                    "fill": "#1B1B1B"
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "NUNmI",
+                      "name": "detectBody",
+                      "fill": "#FFFFFF",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "# 1334. Find the City With the Smallest Number of Neighbors",
+                      "lineHeight": 1.1,
+                      "fontFamily": "Inter",
+                      "fontSize": 24,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "DFPZT",
+                      "fill": "#FFFFFF",
+                      "content": "Reflection",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gbE4a",
+                      "fill": "#D4D4D8",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "This problem requires all-pairs shortest path. I realized it should use Floyd-Warshall. I was not familiar with this pattern and need more practice.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S8EXOk",
+                      "fill": "#FFFFFF",
+                      "content": "Mistake",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "x4utNR",
+                      "fill": "#D4D4D8",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "I focused on running Dijkstra from each city and did not step back to recognize the all-pairs shape.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "nGCIp",
+                      "fill": "#FFFFFF",
+                      "content": "Review Action",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "BLpPA",
+                      "fill": "#D4D4D8",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "• Practice 2 more shortest path problems\n• Keep the decision guide concise\n• Only update the review map if the rule is missing",
+                      "lineHeight": 1.65,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "a06E6",
+      "x": 3120,
+      "y": 0,
+      "name": "Update Proposal Review Page",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "#F6F7F9",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "UFmjl",
+          "x": 0,
+          "y": 0,
+          "name": "Left Navigation",
+          "width": 252,
+          "height": 960,
+          "fill": "#1A1A1A",
+          "layout": "vertical",
+          "gap": 18,
+          "padding": [
+            24,
+            18
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "bRFiM",
+              "name": "Brand Block",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "OFToQ",
+                  "name": "brand1",
+                  "fill": "#FFFFFF",
+                  "content": "Interview Knowledge",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "X4ZtA",
+                  "name": "brand2",
+                  "fill": "#FFFFFF",
+                  "content": "Compiler",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Gru1z",
+              "name": "New Raw Note Button",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "#635BFF",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": [
+                12,
+                14
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "Vgn3l",
+                  "name": "plus",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "plus",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "i4meZ",
+                  "name": "newNoteText",
+                  "fill": "#FFFFFF",
+                  "content": "New raw note",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "O4bn8",
+              "name": "Workspace Navigation",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "AnLDb",
+                  "name": "navLabel",
+                  "fill": "#9CA3AF",
+                  "content": "WORKSPACE",
+                  "fontFamily": "Geist",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "JVt3Y",
+                  "name": "Nav Knowledge Map",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "olOxe",
+                      "name": "navMapIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "network",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vG36G",
+                      "name": "navMapText",
+                      "fill": "#D1D5DB",
+                      "content": "Knowledge map",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z6sEpM",
+                  "name": "Nav Raw Notes",
+                  "width": "fill_container",
+                  "height": 36,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "K1JO8",
+                      "name": "navRawIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#9CA3AF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "BLRsy",
+                      "name": "navRawText",
+                      "fill": "#D1D5DB",
+                      "content": "Raw notes",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XYHad",
+                  "name": "Nav Proposals Active",
+                  "width": "fill_container",
+                  "height": 36,
+                  "fill": "#2A2A2A",
+                  "cornerRadius": 6,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "HEarE",
+                      "name": "navProposalIcon",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "sparkles",
+                      "iconFontFamily": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "L2Rvbv",
+                      "name": "navProposalText",
+                      "fill": "#FFFFFF",
+                      "content": "Update proposals",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Gil0a",
+              "name": "Proposal Explainer",
+              "width": "fill_container",
+              "fill": "#262626",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 14,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "g6VN4",
+                  "name": "explainerTitle",
+                  "fill": "#FFFFFF",
+                  "content": "What proposals do",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "BfkBP",
+                  "name": "explainerBody",
+                  "fill": "#D1D5DB",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "They preview AI-suggested knowledge changes before anything is written.",
+                  "lineHeight": 1.35,
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "aJjJl",
+          "x": 252,
+          "y": 0,
+          "name": "Proposal Top Toolbar",
+          "width": 1188,
+          "height": 72,
+          "fill": "#FFFFFF",
+          "stroke": {
+            "align": "inside",
+            "thickness": {
+              "bottom": 1
+            },
+            "fill": "#D1D5DB"
+          },
+          "gap": 16,
+          "padding": [
+            16,
+            24
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "clTDB",
+              "name": "Search Proposals",
+              "width": 360,
+              "height": 40,
+              "fill": "#F6F7F9",
+              "cornerRadius": 8,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#D1D5DB"
+              },
+              "gap": 10,
+              "padding": [
+                10,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "iaXTb",
+                  "name": "searchIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "search",
+                  "iconFontFamily": "lucide",
+                  "fill": "#6B7280"
+                },
+                {
+                  "type": "text",
+                  "id": "k4W18",
+                  "name": "searchText",
+                  "fill": "#6B7280",
+                  "content": "Search proposals...",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "vVnkT",
+              "name": "Proposal Breadcrumb",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "iWc1i",
+                  "name": "topTitleText",
+                  "fill": "#1A1A1A",
+                  "content": "Update proposals",
+                  "fontFamily": "Inter",
+                  "fontSize": 15,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "qI0c8",
+                  "name": "topSub",
+                  "fill": "#6B7280",
+                  "content": "Review AI-drafted changes before writing to compiled knowledge",
+                  "fontFamily": "Geist",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "BcVkQ",
+              "name": "Pending Count Badge",
+              "height": 32,
+              "fill": "#FEF3C7",
+              "cornerRadius": 16,
+              "gap": 8,
+              "padding": [
+                7,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "YtOjD",
+                  "name": "statusDot",
+                  "fill": "#F59E0B",
+                  "width": 7,
+                  "height": 7
+                },
+                {
+                  "type": "text",
+                  "id": "NrPF8",
+                  "name": "statusText",
+                  "fill": "#92400E",
+                  "content": "5 pending",
+                  "fontFamily": "Geist",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wqHOP",
+              "name": "Generate Proposal Button",
+              "height": 40,
+              "fill": "#1A1A1A",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": [
+                10,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "JyGcQ",
+                  "name": "runIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "sparkles",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "D9mpM",
+                  "name": "runText",
+                  "fill": "#FFFFFF",
+                  "content": "Generate proposal",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "D7ZzJ",
+          "x": 252,
+          "y": 72,
+          "name": "Proposal Main Workspace",
+          "width": 1188,
+          "height": 888,
+          "fill": "#F6F7F9",
+          "children": [
+            {
+              "type": "frame",
+              "id": "PekWH",
+              "name": "Proposal Queue",
+              "width": 316,
+              "height": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": {
+                "align": "inside",
+                "thickness": {
+                  "right": 1
+                },
+                "fill": "#D1D5DB"
+              },
+              "layout": "vertical",
+              "gap": 10,
+              "padding": [
+                20,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VdIqL",
+                  "name": "Queue Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qpY1y",
+                      "name": "queueTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Proposal queue",
+                      "fontFamily": "Inter",
+                      "fontSize": 18,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "jfXmY",
+                      "name": "queueSub",
+                      "fill": "#6B7280",
+                      "content": "AI suggestions awaiting review",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y7fKTe",
+                  "name": "Proposal Filter Tabs",
+                  "width": "fill_container",
+                  "height": 34,
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R0BOcV",
+                      "name": "Pending Tab",
+                      "height": 30,
+                      "fill": "#1A1A1A",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Y5nyr",
+                          "name": "pendingTabText",
+                          "fill": "#FFFFFF",
+                          "content": "Pending",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W8jaw",
+                      "name": "Approved Tab",
+                      "height": 30,
+                      "fill": "#F3F4F6",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZXThu",
+                          "name": "approvedTabText",
+                          "fill": "#4B5563",
+                          "content": "Approved",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gdLf5",
+                      "name": "Rejected Tab",
+                      "height": 30,
+                      "fill": "#F3F4F6",
+                      "cornerRadius": 15,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xVT5A",
+                          "name": "rejectedTabText",
+                          "fill": "#4B5563",
+                          "content": "Rejected",
+                          "fontFamily": "Geist",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oSL7w",
+                  "name": "Selected Proposal APSP",
+                  "width": "fill_container",
+                  "fill": "#EEF2FF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#C7D2FE"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ftfOP",
+                      "name": "proposal1Meta",
+                      "fill": "#4F46E5",
+                      "content": "LEVEL 2 · CODING",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "q21bWB",
+                      "name": "proposal1Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Add APSP mistake + review task",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eRG1x",
+                      "name": "proposal1Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "From 1334 raw Markdown note. Requires approval before write.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mhlsR",
+                      "name": "proposal1Status",
+                      "fill": "#047857",
+                      "content": "High confidence",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KKIYQ",
+                  "name": "Proposal Capacity",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PS4t6",
+                      "name": "proposal2Meta",
+                      "fill": "#6B7280",
+                      "content": "LEVEL 3 · SYSTEM DESIGN",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pTmtS",
+                      "name": "proposal2Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Update URL Shortener case study",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S6Hdx",
+                      "name": "proposal2Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Add capacity estimation weakness and review action.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "q6dob",
+                  "name": "Proposal Behavioral",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "B7aSdg",
+                      "name": "proposal3Meta",
+                      "fill": "#6B7280",
+                      "content": "LEVEL 2 · BEHAVIORAL",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GIM6D",
+                      "name": "proposal3Title",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Flag missing measurable result",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ikS9B",
+                      "name": "proposal3Body",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Link story gap to competency map and review task.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "hnN8b",
+              "name": "Proposal Decision Detail",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F8FAFC",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                24,
+                28
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "HHLW9",
+                  "name": "Proposal Detail Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dXmK5",
+                      "name": "detailKicker",
+                      "fill": "#635BFF",
+                      "content": "UPDATE PROPOSAL",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "E4vQfe",
+                      "name": "detailTitle",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Add APSP mistake and review task",
+                      "fontFamily": "Inter",
+                      "fontSize": 26,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mrn9L",
+                      "name": "detailSub",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Proposals are reviewable change sets. They do not modify compiled knowledge until approved.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HIlpf",
+                  "name": "Proposal Summary Grid",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "f4wsw",
+                      "name": "Detected Domain",
+                      "width": "fill_container",
+                      "height": 92,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zrmge",
+                          "name": "summary1Label",
+                          "fill": "#6B7280",
+                          "content": "Detected domain",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qUhtK",
+                          "name": "summary1Value",
+                          "fill": "#1A1A1A",
+                          "content": "Coding / Graph",
+                          "fontFamily": "Inter",
+                          "fontSize": 16,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g0xg3o",
+                      "name": "Impact Level",
+                      "width": "fill_container",
+                      "height": 92,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xW7LM",
+                          "name": "summary2Label",
+                          "fill": "#6B7280",
+                          "content": "Impact level",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "RkB8H",
+                          "name": "summary2Value",
+                          "fill": "#92400E",
+                          "content": "Level 2",
+                          "fontFamily": "Inter",
+                          "fontSize": 16,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TLN86",
+                      "name": "Approval Rule",
+                      "width": "fill_container",
+                      "height": 92,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "tHJ81",
+                          "name": "summary3Label",
+                          "fill": "#6B7280",
+                          "content": "Approval rule",
+                          "fontFamily": "Geist",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "OKhwR",
+                          "name": "summary3Value",
+                          "fill": "#1A1A1A",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "User approval recommended",
+                          "fontFamily": "Inter",
+                          "fontSize": 15,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TtNJk",
+                  "name": "What This Proposal Will Do",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#D1D5DB"
+                  },
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#00000033",
+                    "offset": {
+                      "x": 0,
+                      "y": 8
+                    },
+                    "blur": 24,
+                    "spread": -18
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 18,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qPK9k",
+                      "name": "changesTitle",
+                      "fill": "#1A1A1A",
+                      "content": "What it will do",
+                      "fontFamily": "Inter",
+                      "fontSize": 18,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "d3izyA",
+                      "name": "change1",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1. Save the raw Markdown note as evidence",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PeJKU",
+                      "name": "change2",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "2. Link the note to Shortest Path Decision Guide and Floyd-Warshall",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "WrV3T",
+                      "name": "change3",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "3. Add mistake: did not recognize all-pairs shortest path",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Z0OMm",
+                      "name": "change4",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "4. Create review task: practice 2 APSP problems",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "nTZkN",
+                      "name": "change5",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "5. Leave the review map unchanged because the rule already exists",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VnGfC",
+                  "name": "Guardrails",
+                  "width": "fill_container",
+                  "fill": "#EEF2FF",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#C7D2FE"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "O0McGg",
+                      "name": "guardTitle",
+                      "fill": "#3730A3",
+                      "content": "Why this exists",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wrLvW",
+                      "name": "guardBody",
+                      "fill": "#3730A3",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The proposal turns messy practice notes into clean compiled knowledge while keeping AI from silently overwriting your notes. You can edit, approve, reject, or send it back for revision.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "V4RIJ",
+                  "name": "Decision Actions",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "EqEiq",
+                      "name": "Reject Button",
+                      "height": 44,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "BnFQY",
+                          "name": "rejectIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "x",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "OdRnt",
+                          "name": "rejectText",
+                          "fill": "#374151",
+                          "content": "Reject",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UKkij",
+                      "name": "Edit Proposal Button",
+                      "height": 44,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#D1D5DB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "rXZ8f",
+                          "name": "editIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "pencil",
+                          "iconFontFamily": "lucide",
+                          "fill": "#1A1A1A"
+                        },
+                        {
+                          "type": "text",
+                          "id": "s1ouUB",
+                          "name": "editText",
+                          "fill": "#1A1A1A",
+                          "content": "Edit proposal",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ewEVd",
+                      "name": "Action Spacer",
+                      "width": "fill_container",
+                      "height": 1,
+                      "layout": "none"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KVcbe",
+                      "name": "Approve And Apply Button",
+                      "height": 44,
+                      "fill": "#635BFF",
+                      "cornerRadius": 8,
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        18
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "y0WoG",
+                          "name": "approveIcon",
+                          "width": 16,
+                          "height": 16,
+                          "iconFontName": "check",
+                          "iconFontFamily": "lucide",
+                          "fill": "#FFFFFF"
+                        },
+                        {
+                          "type": "text",
+                          "id": "kAn3g",
+                          "name": "approveText",
+                          "fill": "#FFFFFF",
+                          "content": "Approve and apply",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "C8iE0",
+              "name": "Evidence And Diff Panel",
+              "width": 380,
+              "height": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": {
+                "align": "inside",
+                "thickness": {
+                  "left": 1
+                },
+                "fill": "#D1D5DB"
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                20,
+                18
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "N21DL",
+                  "name": "Diff Panel Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jLzYr",
+                      "name": "diffKicker",
+                      "fill": "#635BFF",
+                      "content": "EVIDENCE AND DIFF",
+                      "fontFamily": "Geist",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "L0kJvH",
+                      "name": "diffTitle",
+                      "fill": "#1A1A1A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Review before writing",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pv0Eo",
+                      "name": "diffSub",
+                      "fill": "#6B7280",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Each item is traceable back to source Markdown.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nXQYM",
+                  "name": "Source Evidence Card",
+                  "width": "fill_container",
+                  "fill": "#F8FAFC",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WoiZI",
+                      "name": "evidenceTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Source evidence",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "jQVB4",
+                      "name": "evidenceBody",
+                      "fill": "#374151",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1334. Find the City.md\nSection: ## Mistake\nConfidence: High",
+                      "lineHeight": 1.35,
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MagL0",
+                  "name": "Target Notes",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "A5r8m",
+                      "name": "targetsTitle",
+                      "fill": "#1A1A1A",
+                      "content": "Targets",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BNZbB",
+                      "name": "Target Mistake Log",
+                      "width": "fill_container",
+                      "height": 36,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E5E7EB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "P8sVz7",
+                          "name": "target1Icon",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "list-checks",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YzBuj",
+                          "name": "target1Text",
+                          "fill": "#374151",
+                          "content": "Graph Pattern Mistake Log",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tmyKi",
+                      "name": "Target Review Task",
+                      "width": "fill_container",
+                      "height": 36,
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#E5E7EB"
+                      },
+                      "gap": 8,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "ufy5M",
+                          "name": "target2Icon",
+                          "width": 15,
+                          "height": 15,
+                          "iconFontName": "square-check",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6B7280"
+                        },
+                        {
+                          "type": "text",
+                          "id": "xIxB3",
+                          "name": "target2Text",
+                          "fill": "#374151",
+                          "content": "Review Tasks",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T5r2O",
+                  "name": "Before After Diff",
+                  "width": "fill_container",
+                  "fill": "#FFF7ED",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#FED7AA"
+                  },
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vfpNw",
+                      "name": "diffCardTitle",
+                      "fill": "#9A3412",
+                      "content": "Diff preview",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Dkv4Y",
+                      "name": "before",
+                      "fill": "#9A3412",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Before: no APSP mistake in log",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "q9q5LW",
+                      "name": "after",
+                      "fill": "#166534",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "After: + did not recognize all-pairs shortest path",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uMfkE",
+                  "name": "Decision History",
+                  "width": "fill_container",
+                  "fill": "#F8FAFC",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#E5E7EB"
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "XwGPI",
+                      "name": "historyTitle",
+                      "fill": "#1A1A1A",
+                      "content": "History",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "800"
+                    },
+                    {
+                      "type": "text",
+                      "id": "iyOb0",
+                      "name": "historyBody",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Drafted by compiler agent\nNo edits yet\nAwaiting user decision",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZsiZX",
+                  "name": "Confidence Footer",
+                  "width": "fill_container",
+                  "fill": "#ECFDF5",
+                  "cornerRadius": 16,
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    10
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "jdGQc",
+                      "name": "confDot",
+                      "fill": "#10B981",
+                      "width": 7,
+                      "height": 7
+                    },
+                    {
+                      "type": "text",
+                      "id": "zdnZm",
+                      "name": "confText",
+                      "fill": "#047857",
+                      "content": "High confidence · reversible",
+                      "fontFamily": "Geist",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

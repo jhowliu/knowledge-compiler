@@ -1,4 +1,3 @@
-import { env } from "../config/env.js";
 import { query, transaction } from "../db/postgres.js";
 import type {
   CompiledNote,
@@ -13,6 +12,13 @@ import type {
   KnowledgeVersion,
   SearchResult,
 } from "../domain/knowledge.js";
+import { HybridRetrievalService } from "../services/retrieval/hybridRetrieval.service.js";
+import type { MergedRetrievalCandidate } from "../services/retrieval/retrieval.types.js";
+import {
+  PostgresConceptRetriever,
+  PostgresFtsRetriever,
+  PostgresPgVectorRetriever,
+} from "./knowledgeRetrievers.js";
 
 type ConceptRow = {
   id: string;
@@ -498,6 +504,11 @@ function vectorLiteral(values: number[]) {
 
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
   private embeddingSupport: boolean | null = null;
+  private readonly hybridRetrievalService = new HybridRetrievalService([
+    new PostgresFtsRetriever(),
+    new PostgresConceptRetriever(),
+    new PostgresPgVectorRetriever(() => this.hasEmbeddingSupport()),
+  ]);
 
   private async hasEmbeddingSupport() {
     if (this.embeddingSupport !== null) {
@@ -653,63 +664,30 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     topicIds?: string[];
     queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
-    const useVectorSearch = Boolean(input.queryEmbedding?.length && (await this.hasEmbeddingSupport()));
-    if (useVectorSearch) {
-      return this.searchKnowledgeBlocksWithEmbeddings({
-        ...input,
-        queryEmbedding: input.queryEmbedding ?? [],
-      });
+    const retrievalResult = await this.hybridRetrievalService.search(input);
+    return this.hydrateRankedKnowledgeBlocks({
+      candidates: retrievalResult.candidates,
+      includeArchived: input.includeArchived ?? false,
+      topicIds: input.topicIds ?? [],
+      limit: input.limit,
+    });
+  }
+
+  private async hydrateRankedKnowledgeBlocks(input: {
+    candidates: MergedRetrievalCandidate[];
+    includeArchived: boolean;
+    topicIds: string[];
+    limit: number;
+  }): Promise<KnowledgeBlockSearchResult[]> {
+    if (input.candidates.length === 0) {
+      return [];
     }
 
     const blockResult = await query<KnowledgeBlockSearchRow>(
       `
-        with query as (
-          select plainto_tsquery('english', $1) as ts_query
-        ),
-        fts_ranked as (
-          select
-            knowledge_blocks.id as block_id,
-            row_number() over (
-              order by ts_rank(knowledge_blocks.search_vector, query.ts_query) desc,
-                       knowledge_blocks.updated_at desc
-            ) as rank_position
-          from knowledge_blocks
-          cross join query
-          where knowledge_blocks.search_vector @@ query.ts_query
-        ),
-        concept_ranked as (
-          select distinct
-            knowledge_blocks.id as block_id,
-            row_number() over (
-              order by case concept_index.confidence
-                         when 'high' then 3
-                         when 'medium' then 2
-                         else 1
-                       end desc,
-                       knowledge_blocks.updated_at desc
-            ) as rank_position
-          from knowledge_blocks
-          join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-          join concept_index
-            on concept_index.target_type = 'compiled_note'
-           and concept_index.target_id = knowledge_versions.compiled_note_id
-          join concepts on concepts.id = concept_index.concept_id
-          where knowledge_versions.compiled_note_id is not null
-            and (
-              lower($1) like '%' || concepts.normalized_name || '%'
-              or concepts.normalized_name like '%' || lower($1) || '%'
-            )
-        ),
-        merged as (
-          select
-            block_id,
-            sum(1.0 / (60 + rank_position))::real as rank
-          from (
-            select * from fts_ranked
-            union all
-            select * from concept_ranked
-          ) ranked
-          group by block_id
+        with candidate_ranks as (
+          select *
+          from unnest($1::uuid[], $2::real[]) as candidates(block_id, rank)
         )
         select
           knowledge_blocks.id as block_id,
@@ -723,145 +701,33 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           knowledge_blocks.block_index,
           knowledge_blocks.heading,
           knowledge_blocks.body_markdown,
-          merged.rank,
+          candidate_ranks.rank,
           knowledge_blocks.status,
           knowledge_blocks.updated_at
-        from merged
-        join knowledge_blocks on knowledge_blocks.id = merged.block_id
+        from candidate_ranks
+        join knowledge_blocks on knowledge_blocks.id = candidate_ranks.block_id
         join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
         join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
         where knowledge_sources.status = 'active'
-          and ($2::boolean or knowledge_blocks.status = 'active')
+          and ($3::boolean or knowledge_blocks.status = 'active')
           and (
-            cardinality($4::uuid[]) = 0
+            cardinality($5::uuid[]) = 0
             or exists (
               select 1
               from block_topics
               where block_topics.block_id = knowledge_blocks.id
-                and block_topics.topic_id = any($4::uuid[])
+                and block_topics.topic_id = any($5::uuid[])
             )
           )
-        order by rank desc, knowledge_blocks.updated_at desc
-        limit $3
-      `,
-      [input.query, input.includeArchived ?? false, input.limit, input.topicIds ?? []],
-    );
-
-    return hydrateKnowledgeBlockSearchRows(blockResult.rows);
-  }
-
-  private async searchKnowledgeBlocksWithEmbeddings(input: {
-    query: string;
-    limit: number;
-    includeArchived?: boolean;
-    topicIds?: string[];
-    queryEmbedding: number[];
-  }): Promise<KnowledgeBlockSearchResult[]> {
-    const blockResult = await query<KnowledgeBlockSearchRow>(
-      `
-        with query as (
-          select plainto_tsquery('english', $1) as ts_query,
-                 $5::vector as query_embedding
-        ),
-        fts_ranked as (
-          select
-            knowledge_blocks.id as block_id,
-            row_number() over (
-              order by ts_rank(knowledge_blocks.search_vector, query.ts_query) desc,
-                       knowledge_blocks.updated_at desc
-            ) as rank_position
-          from knowledge_blocks
-          cross join query
-          where knowledge_blocks.search_vector @@ query.ts_query
-        ),
-        concept_ranked as (
-          select distinct
-            knowledge_blocks.id as block_id,
-            row_number() over (
-              order by case concept_index.confidence
-                         when 'high' then 3
-                         when 'medium' then 2
-                         else 1
-                       end desc,
-                       knowledge_blocks.updated_at desc
-            ) as rank_position
-          from knowledge_blocks
-          join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-          join concept_index
-            on concept_index.target_type = 'compiled_note'
-           and concept_index.target_id = knowledge_versions.compiled_note_id
-          join concepts on concepts.id = concept_index.concept_id
-          where knowledge_versions.compiled_note_id is not null
-            and (
-              lower($1) like '%' || concepts.normalized_name || '%'
-              or concepts.normalized_name like '%' || lower($1) || '%'
-            )
-        ),
-        vector_ranked as (
-          select
-            knowledge_blocks.id as block_id,
-            row_number() over (
-              order by knowledge_blocks.embedding <=> query.query_embedding,
-                       knowledge_blocks.updated_at desc
-            ) as rank_position
-          from knowledge_blocks
-          cross join query
-          where knowledge_blocks.embedding is not null
-            and (knowledge_blocks.embedding <=> query.query_embedding) < $6::float8
-        ),
-        merged as (
-          select
-            block_id,
-            sum(1.0 / (60 + rank_position))::real as rank
-          from (
-            select * from fts_ranked
-            union all
-            select * from concept_ranked
-            union all
-            select * from vector_ranked
-          ) ranked
-          group by block_id
-        )
-        select
-          knowledge_blocks.id as block_id,
-          knowledge_blocks.knowledge_source_id,
-          knowledge_blocks.knowledge_version_id,
-          knowledge_versions.compiled_note_id,
-          knowledge_sources.title,
-          knowledge_sources.domain,
-          knowledge_sources.knowledge_type,
-          knowledge_versions.version_number,
-          knowledge_blocks.block_index,
-          knowledge_blocks.heading,
-          knowledge_blocks.body_markdown,
-          merged.rank,
-          knowledge_blocks.status,
-          knowledge_blocks.updated_at
-        from merged
-        join knowledge_blocks on knowledge_blocks.id = merged.block_id
-        join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
-        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-        where knowledge_sources.status = 'active'
-          and ($2::boolean or knowledge_blocks.status = 'active')
-          and (
-            cardinality($4::uuid[]) = 0
-            or exists (
-              select 1
-              from block_topics
-              where block_topics.block_id = knowledge_blocks.id
-                and block_topics.topic_id = any($4::uuid[])
-            )
-          )
-        order by rank desc, knowledge_blocks.updated_at desc
-        limit $3
+        order by candidate_ranks.rank desc, knowledge_blocks.updated_at desc
+        limit $4
       `,
       [
-        input.query,
-        input.includeArchived ?? false,
+        input.candidates.map((candidate) => candidate.blockId),
+        input.candidates.map((candidate) => candidate.rank),
+        input.includeArchived,
         input.limit,
-        input.topicIds ?? [],
-        vectorLiteral(input.queryEmbedding),
-        env.VECTOR_MAX_DISTANCE,
+        input.topicIds,
       ],
     );
 

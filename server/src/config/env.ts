@@ -37,6 +37,7 @@ const envSchema = z.object({
   EVAL_JUDGE_MODEL: z.string().default("gpt-5-mini"),
   ASK_MODEL: z.string().default("gpt-5-mini"),
   CONTEXT_MODEL: z.string().default("gpt-5-mini"),
+  QUERY_CONCEPT_MODEL: z.string().default("gpt-5-mini"),
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   // Max cosine distance (pgvector <=>) for a block to count as a vector match.
   // Above this, the block is treated as off-topic and excluded, so off-topic

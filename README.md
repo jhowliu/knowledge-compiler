@@ -159,7 +159,8 @@ the answerer composes a scoped, cited answer.
 flowchart TD
   Q["Query"] --> FTS["Postgres FTS<br/>(block-level fallback)"]
   Q --> BM25["BM25 pg_search<br/>(block-level, needs ParadeDB)"]
-  Q --> CON["Concept index match<br/>(note-level → blocks)"]
+  Q --> QCON["Extract query concepts<br/>(LLM, optional)"]
+  QCON --> CON["Canonical concept ids<br/>(note-level → blocks)"]
   Q --> E["Embed query"]
   E --> VEC["Vector cosine<br/>(block-level, needs pgvector)"]
   FTS --> RRF["RRF fusion (k=60)"]
@@ -185,10 +186,11 @@ flowchart TD
 - **Mechanical boundaries, LLM for context.** Following Anthropic's Contextual
   Retrieval, chunk *boundaries* are mechanical (fixed-size); the LLM is spent on a
   per-chunk *situating context*, not on segmentation.
-- **Hybrid retrieval, complementary granularities.** The concept graph gives global
-  recall and term disambiguation at *note* level; vector + contextual headers give
-  local precision at *chunk* level; BM25 covers exact lexical matches; Postgres FTS
-  remains the built-in lexical fallback. RRF fuses them.
+- **Hybrid retrieval, complementary granularities.** Query-side concept extraction
+  resolves aliases/acronyms into canonical concept ids for global recall at *note*
+  level; vector + contextual headers give local precision at *chunk* level; BM25
+  covers exact lexical matches; Postgres FTS remains the built-in lexical fallback.
+  RRF fuses them.
 
 ### Known gaps (tracked)
 
@@ -196,7 +198,8 @@ flowchart TD
 - Vector search requires pgvector, and BM25 requires pg_search plus
   `knowledge_blocks_bm25_idx`; missing capabilities are skipped with diagnostics.
   CJK full-text needs a segmenting parser (#144).
-- Concept matching is substring-based; query-side concept extraction is pending (#142).
+- Query-side concept extraction needs `OPENAI_API_KEY`; without it the concept
+  signal is disabled and retrieval uses FTS + BM25 + optional vector.
 
 ## Server Architecture
 

@@ -34,6 +34,7 @@ import {
   normalizeKnowledgeStructuredData,
   renderKnowledgeFacetsMarkdown,
 } from "./knowledgeFacets.service.js";
+import { NoopQueryConceptResolver, type QueryConceptResolver } from "./queryConcept.service.js";
 
 export type DraftProposalContext = {
   agentRunId: string;
@@ -62,6 +63,7 @@ export class AgentToolService {
     private readonly extractionEvalRepository: ExtractionEvalRepository,
     private readonly readRepository: AgentToolReadRepository,
     private readonly evalJudgeService = new EvalJudgeService(),
+    private readonly queryConceptResolver: QueryConceptResolver = new NoopQueryConceptResolver(),
   ) {}
 
   async getSource(input: GetSourceInput) {
@@ -94,10 +96,12 @@ export class AgentToolService {
 
   async searchBlocks(input: SearchBlocksInput) {
     const parsedInput = validateToolInput(searchBlocksInputSchema, input);
+    const resolvedConcepts = await this.queryConceptResolver.resolve({ query: parsedInput.query });
     const results = await this.knowledgeRepository.searchKnowledgeBlocks({
       query: parsedInput.query,
       includeArchived: parsedInput.include_archived,
       limit: parsedInput.limit ?? 8,
+      resolvedConceptIds: resolvedConcepts.map((concept) => concept.conceptId),
     });
 
     return validateToolOutput(searchBlocksOutputSchema, {

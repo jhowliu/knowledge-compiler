@@ -1,12 +1,14 @@
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
+import { NoopQueryConceptResolver, type QueryConceptResolver } from "./queryConcept.service.js";
 
 export class DashboardService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
     private readonly rawSourceRepository: RawSourceRepository | null = null,
+    private readonly queryConceptResolver: QueryConceptResolver = new NoopQueryConceptResolver(),
   ) {}
 
   async listCompiledNotes() {
@@ -26,7 +28,10 @@ export class DashboardService {
       return [];
     }
 
-    const queryEmbedding = await this.embeddingService.embedText(queryText);
+    const [queryEmbedding, resolvedConcepts] = await Promise.all([
+      this.embeddingService.embedText(queryText),
+      this.queryConceptResolver.resolve({ query: queryText }),
+    ]);
 
     const knowledge = await this.knowledgeRepository.searchKnowledgeBlocks({
       query: queryText,
@@ -34,6 +39,7 @@ export class DashboardService {
       includeArchived: options.includeArchived ?? false,
       topicIds: options.topicIds ?? [],
       queryEmbedding,
+      resolvedConceptIds: resolvedConcepts.map((concept) => concept.conceptId),
     });
     const knowledgeHits = knowledge.map((hit) => ({ ...hit, tier: "knowledge" as const }));
 

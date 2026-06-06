@@ -1,6 +1,11 @@
 # Recap
 
 ## Summary
+- Implemented issue #142 on `codex/query-side-concepts-142`: added query-side concept extraction/resolution with `QueryConceptResolutionService`, OpenAI structured query concept extraction, `concept_aliases`, and canonical concept-id matching before retrieval.
+- Replaced `PostgresConceptRetriever` raw-query substring `LIKE` matching with resolved `concept_index.concept_id = any(...)`; when no concepts resolve, the concept signal is disabled while FTS/BM25/vector continue.
+- Wired resolved query concepts through `/search`, `/ask`, and agent `search_blocks`; `lookup_concepts` now also checks `concept_aliases`.
+- Added tests for query concept normalization/resolution, alias-based `RRF -> Reciprocal Rank Fusion` retrieval, and no substring concept fallback.
+- Issue #142 validation passed: `npm run typecheck --workspace=server`, focused `npm run test --workspace=server -- queryConcept.service.test.ts dashboard.routes.test.ts ask.routes.test.ts agentTool.service.test.ts hybridRetrieval.service.test.ts`, `npm run migrate --workspace=server`, full `npm run test --workspace=server`, `npm run build --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check`.
 - Implemented issue #133 on `codex/paradedb-bm25-133`: switched local Postgres from `pgvector/pgvector:pg16` to pinned `paradedb/paradedb:0.23.4-pg16`, renamed the init SQL to `01-enable-retrieval-extensions.sql`, and enabled available `vector` / `pg_search` extensions on fresh volumes.
 - Added migration `020_bm25_search.sql` to create `pg_search` when available and add `knowledge_blocks_bm25_idx` using ParadeDB BM25 over `id`, `heading`, `body_markdown`, `status`, and `updated_at`.
 - Added `PostgresBm25Retriever` as a first-class `bm25` signal in the hybrid retrieval pipeline with capability detection for missing `pg_search` or missing BM25 index; `/search`, `/ask`, and agent `search_blocks` inherit BM25 via the existing RRF merge.
@@ -131,6 +136,8 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- Query concept matching is now canonical-id based. The system no longer falls back to substring matching between raw query text and `concepts.normalized_name`; missing/failed query extraction disables only the concept signal.
+- `concept_aliases` is the first-class alias table for concept resolution, but query extraction can also emit expanded aliases that match canonical concept names directly.
 - BM25 is a separate retrieval source, not a replacement for Postgres FTS or pgvector. The active signal order is FTS + concept + vector + BM25 into the same RRF merge.
 - ParadeDB is the practical local/dev image for combined `pg_search` + `pgvector`; it is pinned to PG16 to avoid a Postgres major-version jump.
 - BM25 remains capability-gated: missing `pg_search` or `knowledge_blocks_bm25_idx` disables only the BM25 signal while preserving fallback retrieval.
@@ -210,6 +217,7 @@
 - `update_existing_knowledge` must be a target-aware command, not just a label. When a target compiled note or knowledge source is resolved, approval updates that exact card/source and appends a new version; title-based upsert is only a fallback when no target is known.
 
 ## Open Issues
+- Issue #142 real-model QA remains: local tests use fake extractors/resolvers. Run semantic spot checks with `OPENAI_API_KEY` against queries such as `RRF`, `source_spans`, `evidence chunks`, and acronym/alias-heavy prompts after seeding enough approved concepts.
 - Issue #133 local migration note: `npm run migrate --workspace=server` applied `020_bm25_search.sql` on the current local database, but the running DB image did not have `pg_search`, so it emitted `pg_search extension is not installed; skipping knowledge_blocks BM25 setup`. To smoke-test enabled BM25 locally, recreate/restore the dev database on the new ParadeDB image and rerun migrations before probing `/search`.
 - Issue #126 browser UI smoke could not be completed in this session because the in-app Browser blocked local `127.0.0.1` navigation by policy after the last patch; API smoke plus type/build/test coverage passed. The only remaining `raw_note` client strings are legacy agent-run event keys/labels, not `/raw-notes` API usage.
 - Issue #118 remaining scope: raw-note routes/services/UI are still compatibility surfaces; next target is making compile/run/review/trace APIs source-first end to end, then removing `rawNoteId`, `raw_note_id`, and `raw_notes` from active runtime paths after migration safety is proven.
@@ -303,7 +311,7 @@
 - App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
-- After #133 merges, run an enabled BM25 smoke test on a fresh ParadeDB volume and then continue with #134 reranking or #142 query-side concept extraction.
+- After #142 merges, run real-model retrieval QA on a fresh ParadeDB volume, then continue with #134 reranking or #139/#140 multi-turn Ask.
 - Open the #126 PR after staging the source migration files; leave unrelated local untracked files (`AGENT.md`, `deisgn.pen`, `issue.sh`, `seed-notes/`) out of the PR unless they become intentional.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.

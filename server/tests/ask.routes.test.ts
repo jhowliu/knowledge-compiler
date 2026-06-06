@@ -4,6 +4,7 @@ import { askSystemPrompt, type AskAnswerer } from "../src/services/ask.service.j
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
+import type { QueryConceptResolver } from "../src/services/queryConcept.service.js";
 
 const topicA = "00000000-0000-4000-8000-000000000201";
 const topicB = "00000000-0000-4000-8000-000000000202";
@@ -221,7 +222,7 @@ describe("ask routes", () => {
     ]);
   });
 
-  test("POST /ask can retrieve through concept index matches", async () => {
+  test("POST /ask retrieves through resolved query concept ids instead of substring matching", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     const compiledNote = await knowledgeRepository.upsertCompiledNote({
       domain: "research",
@@ -231,8 +232,13 @@ describe("ask routes", () => {
       structuredData: {},
     });
     const concept = await knowledgeRepository.upsertConcept({
-      name: "RRF",
+      name: "Reciprocal Rank Fusion",
       conceptType: "retrieval_strategy",
+    });
+    await knowledgeRepository.upsertConceptAlias({
+      conceptId: concept.id,
+      alias: "RRF",
+      confidence: "high",
     });
     await knowledgeRepository.indexConcept({
       conceptId: concept.id,
@@ -259,9 +265,22 @@ describe("ask routes", () => {
         },
       ],
     });
+    const queryConceptResolver = {
+      async resolve() {
+        return [{
+          conceptId: concept.id,
+          canonicalLabel: "Reciprocal Rank Fusion",
+          matchedText: "RRF",
+          matchedAlias: "RRF",
+          matchType: "alias",
+          confidence: "high",
+        }];
+      },
+    } satisfies QueryConceptResolver;
     const app = createApp({
       knowledgeRepository,
       noteLinkRepository: new InMemoryNoteLinkRepository(),
+      queryConceptResolver,
       askAnswerer: {
         async answer(input) {
           return `Concept-index retrieval found ${input.blocks[0].title}. [1]`;

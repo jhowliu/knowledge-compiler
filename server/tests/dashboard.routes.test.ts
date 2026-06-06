@@ -133,6 +133,51 @@ describe("dashboard routes", () => {
     });
   });
 
+  test("GET /search does not use substring concept matches without resolved concept ids", async () => {
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const compiledNote = await knowledgeRepository.upsertCompiledNote({
+      domain: "general",
+      noteType: "knowledge_note",
+      title: "Category Theory",
+      bodyMarkdown: "Morphisms compose between objects.",
+      structuredData: {},
+    });
+    const concept = await knowledgeRepository.upsertConcept({
+      name: "cat",
+      conceptType: "term",
+    });
+    await knowledgeRepository.indexConcept({
+      conceptId: concept.id,
+      targetType: "compiled_note",
+      targetId: compiledNote.id,
+      relationType: "canonicalizes",
+      confidence: "high",
+      source: "test",
+    });
+    await knowledgeRepository.upsertKnowledgeSourceVersion({
+      domain: "general",
+      knowledgeType: "knowledge_note",
+      title: "Category Theory",
+      bodyMarkdown: "Morphisms compose between objects.",
+      structuredData: {},
+      compiledNoteId: compiledNote.id,
+      blocks: [
+        {
+          blockIndex: 0,
+          heading: "Morphisms",
+          bodyMarkdown: "Morphisms compose between objects.",
+          tokenEstimate: 6,
+        },
+      ],
+    });
+
+    const app = createApp({ knowledgeRepository });
+    const response = await request(app).get("/search?q=concatenate");
+
+    expect(response.status).toBe(200);
+    expect(response.body.results).toEqual([]);
+  });
+
   test("GET /search surfaces raw sources as a labeled source tier, knowledge first (#143)", async () => {
     const knowledgeRepository = new InMemoryKnowledgeRepository();
     await knowledgeRepository.upsertKnowledgeSourceVersion({

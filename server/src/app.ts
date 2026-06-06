@@ -58,6 +58,12 @@ import { RawSourceService } from "./services/rawSource.service.js";
 import { TopicService } from "./services/topic.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { AskService, type AskAnswerer } from "./services/ask.service.js";
+import { KnowledgeRetrievalService } from "./services/knowledgeRetrieval.service.js";
+import {
+  NoopQueryConceptResolver,
+  QueryConceptResolutionService,
+  type QueryConceptResolver,
+} from "./services/queryConcept.service.js";
 import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 
 export type AppDependencies = {
@@ -79,6 +85,7 @@ export type AppDependencies = {
   askAnswerer?: AskAnswerer;
   embeddingService?: EmbeddingService;
   knowledgeContextualizer?: KnowledgeContextualizer;
+  queryConceptResolver?: QueryConceptResolver;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -124,6 +131,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     (usingDefaultRepositories
       ? new OpenAIKnowledgeContextualizer()
       : new NoopKnowledgeContextualizer());
+  const queryConceptResolver =
+    dependencies.queryConceptResolver ??
+    (usingDefaultRepositories
+      ? new QueryConceptResolutionService(knowledgeRepository)
+      : new NoopQueryConceptResolver());
+  const knowledgeRetrievalService = new KnowledgeRetrievalService(
+    knowledgeRepository,
+    embeddingService,
+    queryConceptResolver,
+  );
   const proposalService = new ProposalService(
     proposalRepository,
     knowledgeRepository,
@@ -135,6 +152,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     knowledgeRepository,
     embeddingService,
     rawSourceRepository,
+    queryConceptResolver,
   );
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
@@ -142,7 +160,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     knowledgeRepository,
     noteLinkRepository,
     embeddingService,
-    undefined,
+    knowledgeRetrievalService,
     dependencies.askAnswerer,
     rawSourceRepository,
   );
@@ -155,6 +173,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     extractionEvalRepository,
     agentToolReadRepository,
     dependencies.compileAgentRunnerFactory,
+    queryConceptResolver,
   );
   const reindexLinksHandler = new ReindexLinksHandler(
     agentRunRepository,

@@ -23,6 +23,7 @@ import type { AgentToolReadRepository } from "../../repositories/agentTool.repos
 import { NoopAgentToolReadRepository } from "../../repositories/agentTool.repository.js";
 import { AgentToolService } from "../agentTool.service.js";
 import { normalizeKnowledgeStructuredData } from "../knowledgeFacets.service.js";
+import { NoopQueryConceptResolver, type QueryConceptResolver } from "../queryConcept.service.js";
 import {
   runAgentLoop,
   type AgentRunner,
@@ -65,6 +66,7 @@ export class CompileRawNoteHandler implements AgentRunHandler {
     private readonly extractionEvalRepository: ExtractionEvalRepository = new NoopExtractionEvalRepository(),
     private readonly agentToolReadRepository: AgentToolReadRepository = new NoopAgentToolReadRepository(),
     private readonly compileAgentRunnerFactory: CompileAgentRunnerFactory = createScriptedCompileAgentRunner,
+    private readonly queryConceptResolver: QueryConceptResolver = new NoopQueryConceptResolver(),
   ) {}
 
   validateInput(input: Record<string, unknown>) {
@@ -464,6 +466,8 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       this.proposalRepository,
       this.extractionEvalRepository,
       this.agentToolReadRepository,
+      undefined,
+      this.queryConceptResolver,
     );
   }
 

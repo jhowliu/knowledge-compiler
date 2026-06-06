@@ -8,6 +8,7 @@ export type RetrievalQuery = {
   includeArchived?: boolean;
   topicIds?: string[];
   queryEmbedding?: number[] | null;
+  resolvedConceptIds?: string[];
 };
 
 export type RetrievalCandidate = {

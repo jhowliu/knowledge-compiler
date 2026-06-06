@@ -82,6 +82,14 @@ export class PostgresConceptRetriever implements Retriever {
   readonly source = "concept" as const;
 
   async search(input: RetrievalQuery): Promise<RetrievalCandidateSet> {
+    if (!input.resolvedConceptIds?.length) {
+      return candidateSet({
+        source: this.source,
+        status: "disabled",
+        reason: "no_resolved_concepts",
+      });
+    }
+
     const result = await query<RetrievalCandidateRow>(
       `
         with concept_matches as (
@@ -100,12 +108,8 @@ export class PostgresConceptRetriever implements Retriever {
           join concept_index
             on concept_index.target_type = 'compiled_note'
            and concept_index.target_id = knowledge_versions.compiled_note_id
-          join concepts on concepts.id = concept_index.concept_id
           where knowledge_versions.compiled_note_id is not null
-            and (
-              lower($1) like '%' || concepts.normalized_name || '%'
-              or concepts.normalized_name like '%' || lower($1) || '%'
-            )
+            and concept_index.concept_id = any($1::uuid[])
           group by knowledge_blocks.id
         )
         select
@@ -117,7 +121,7 @@ export class PostgresConceptRetriever implements Retriever {
           score
         from concept_matches
       `,
-      [input.query],
+      [input.resolvedConceptIds],
     );
 
     return candidateSet({

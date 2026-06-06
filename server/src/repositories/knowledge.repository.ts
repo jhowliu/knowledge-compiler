@@ -12,6 +12,7 @@ import type {
   KnowledgeVersion,
   SearchResult,
 } from "../domain/knowledge.js";
+import type { QueryConceptCandidate, ResolvedQueryConcept } from "../domain/queryConcept.js";
 import { HybridRetrievalService } from "../services/retrieval/hybridRetrieval.service.js";
 import type { MergedRetrievalCandidate } from "../services/retrieval/retrieval.types.js";
 import {
@@ -129,6 +130,15 @@ type EvidenceReferenceRow = {
   created_at: Date;
   target_type: string;
   target_id: string;
+};
+
+type ResolvedQueryConceptRow = {
+  concept_id: string;
+  canonical_label: string;
+  matched_text: string;
+  matched_alias: string | null;
+  match_type: "canonical" | "alias";
+  confidence: "low" | "medium" | "high";
 };
 
 function normalizeConcept(name: string) {
@@ -434,6 +444,16 @@ export interface KnowledgeRepository {
     confidence: string;
     source: string;
   }): Promise<void>;
+  upsertConceptAlias(input: {
+    conceptId: string;
+    alias: string;
+    source?: string;
+    confidence?: string;
+  }): Promise<void>;
+  resolveQueryConcepts(input: {
+    candidates: QueryConceptCandidate[];
+    limit?: number;
+  }): Promise<ResolvedQueryConcept[]>;
   searchRelated(input: {
     query: string;
     conceptNames: string[];
@@ -445,6 +465,7 @@ export interface KnowledgeRepository {
     includeArchived?: boolean;
     topicIds?: string[];
     queryEmbedding?: number[] | null;
+    resolvedConceptIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]>;
   listKnowledgeBlocksByCompiledNoteIds(input: {
     compiledNoteIds: string[];
@@ -610,6 +631,122 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
   }
 
+  async upsertConceptAlias(input: {
+    conceptId: string;
+    alias: string;
+    source?: string;
+    confidence?: string;
+  }) {
+    const alias = input.alias.trim();
+    if (!alias) {
+      return;
+    }
+
+    await query(
+      `
+        insert into concept_aliases (concept_id, alias, normalized_alias, source, confidence)
+        values ($1, $2, $3, $4, $5)
+        on conflict (concept_id, normalized_alias)
+        do update set alias = excluded.alias,
+                      source = excluded.source,
+                      confidence = excluded.confidence
+      `,
+      [
+        input.conceptId,
+        alias,
+        normalizeConcept(alias),
+        input.source ?? "manual",
+        input.confidence ?? "medium",
+      ],
+    );
+  }
+
+  async resolveQueryConcepts(input: {
+    candidates: QueryConceptCandidate[];
+    limit?: number;
+  }): Promise<ResolvedQueryConcept[]> {
+    const termRows = input.candidates.flatMap((candidate) =>
+      [candidate.text, ...candidate.aliases].map((term) => ({
+        text: candidate.text,
+        term,
+        normalizedTerm: normalizeConcept(term),
+        confidence: candidate.confidence,
+      })),
+    ).filter((term) => term.normalizedTerm);
+    if (termRows.length === 0) {
+      return [];
+    }
+
+    const result = await query<ResolvedQueryConceptRow>(
+      `
+        with query_terms as (
+          select *
+          from unnest($1::text[], $2::text[], $3::text[], $4::text[]) as terms(
+            matched_text,
+            matched_term,
+            normalized_term,
+            confidence
+          )
+        ),
+        canonical_matches as (
+          select
+            concepts.id as concept_id,
+            concepts.name as canonical_label,
+            query_terms.matched_text,
+            null::text as matched_alias,
+            'canonical'::text as match_type,
+            query_terms.confidence
+          from query_terms
+          join concepts on concepts.normalized_name = query_terms.normalized_term
+        ),
+        alias_matches as (
+          select
+            concepts.id as concept_id,
+            concepts.name as canonical_label,
+            query_terms.matched_text,
+            concept_aliases.alias as matched_alias,
+            'alias'::text as match_type,
+            query_terms.confidence
+          from query_terms
+          join concept_aliases on concept_aliases.normalized_alias = query_terms.normalized_term
+          join concepts on concepts.id = concept_aliases.concept_id
+        )
+        select distinct on (concept_id)
+          concept_id::text,
+          canonical_label,
+          matched_text,
+          matched_alias,
+          match_type::text as match_type,
+          confidence
+        from (
+          select * from canonical_matches
+          union all
+          select * from alias_matches
+        ) matches
+        order by concept_id,
+          case confidence when 'high' then 0 when 'medium' then 1 else 2 end,
+          case match_type when 'canonical' then 0 else 1 end
+        limit $5
+      `,
+      [
+        termRows.map((term) => term.text),
+        termRows.map((term) => term.term),
+        termRows.map((term) => term.normalizedTerm),
+        termRows.map((term) => term.confidence),
+        input.limit ?? 16,
+      ],
+    );
+
+    return result.rows.map((row) => ({
+      conceptId: row.concept_id,
+      canonicalLabel: row.canonical_label,
+      matchedText: row.matched_text,
+      matchedAlias: row.matched_alias,
+      matchType: row.match_type,
+      confidence: row.confidence,
+    }));
+  }
+
   async searchRelated(input: { query: string; conceptNames: string[]; limit: number }) {
     const normalizedConcepts = input.conceptNames.map(normalizeConcept);
     const result = await query<SearchResultRow>(
@@ -691,6 +828,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     includeArchived?: boolean;
     topicIds?: string[];
     queryEmbedding?: number[] | null;
+    resolvedConceptIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]> {
     const retrievalResult = await this.hybridRetrievalService.search(input);
     return this.hydrateRankedKnowledgeBlocks({

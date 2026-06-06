@@ -11,6 +11,7 @@ import type {
   KnowledgeVersion,
   SearchResult,
 } from "../../src/domain/knowledge.js";
+import type { QueryConceptCandidate, ResolvedQueryConcept } from "../../src/domain/queryConcept.js";
 import type { KnowledgeRepository } from "../../src/repositories/knowledge.repository.js";
 
 type EvidenceLinkRecord = {
@@ -33,6 +34,13 @@ type ConceptIndexRecord = {
   confidence: string;
 };
 
+type ConceptAliasRecord = {
+  conceptId: string;
+  alias: string;
+  normalizedAlias: string;
+  confidence: string;
+};
+
 export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly concepts: Concept[] = [];
   readonly compiledNotes: CompiledNote[] = [];
@@ -41,6 +49,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly conceptIndex: ConceptIndexRecord[] = [];
+  readonly conceptAliases: ConceptAliasRecord[] = [];
   readonly embeddings = new Map<string, number[]>();
   readonly rawSourceChunkIdsByRawSourceId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
@@ -54,7 +63,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       id: `concept-${this.concepts.length + 1}`,
       userId: input.userId ?? null,
       name: input.name,
-      normalizedName: input.name.toLowerCase(),
+      normalizedName: normalizeConcept(input.name),
       conceptType: input.conceptType,
       createdAt: new Date("2026-05-24T00:00:00.000Z"),
     };
@@ -78,6 +87,64 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     });
   }
 
+  async upsertConceptAlias(input: {
+    conceptId: string;
+    alias: string;
+    confidence?: string;
+  }): Promise<void> {
+    const alias = input.alias.trim();
+    if (!alias) {
+      return;
+    }
+    const normalizedAlias = normalizeConcept(alias);
+    const existing = this.conceptAliases.find(
+      (item) => item.conceptId === input.conceptId && item.normalizedAlias === normalizedAlias,
+    );
+    if (existing) {
+      existing.alias = alias;
+      existing.confidence = input.confidence ?? "medium";
+      return;
+    }
+    this.conceptAliases.push({
+      conceptId: input.conceptId,
+      alias,
+      normalizedAlias,
+      confidence: input.confidence ?? "medium",
+    });
+  }
+
+  async resolveQueryConcepts(input: {
+    candidates: QueryConceptCandidate[];
+    limit?: number;
+  }): Promise<ResolvedQueryConcept[]> {
+    const resolved: ResolvedQueryConcept[] = [];
+    const seen = new Set<string>();
+    for (const candidate of input.candidates) {
+      for (const term of [candidate.text, ...candidate.aliases]) {
+        const normalizedTerm = normalizeConcept(term);
+        const canonical = this.concepts.find((concept) => concept.normalizedName === normalizedTerm);
+        const alias = this.conceptAliases.find((conceptAlias) => conceptAlias.normalizedAlias === normalizedTerm);
+        const concept = canonical ?? this.concepts.find((item) => item.id === alias?.conceptId);
+        if (!concept || seen.has(concept.id)) {
+          continue;
+        }
+        seen.add(concept.id);
+        resolved.push({
+          conceptId: concept.id,
+          canonicalLabel: concept.name,
+          matchedText: candidate.text,
+          matchedAlias: alias?.alias ?? null,
+          matchType: alias ? "alias" : "canonical",
+          confidence: candidate.confidence,
+        });
+        if (resolved.length >= (input.limit ?? 16)) {
+          return resolved;
+        }
+      }
+    }
+    return resolved;
+  }
+
   async searchRelated(): Promise<SearchResult[]> {
     return this.relatedResults;
   }
@@ -88,6 +155,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     includeArchived?: boolean;
     topicIds?: string[];
     queryEmbedding?: number[] | null;
+    resolvedConceptIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]> {
     const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = this.knowledgeBlocks
@@ -98,7 +166,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
         const haystack = `${source?.title ?? ""} ${block.heading ?? ""} ${block.bodyMarkdown}`.toLowerCase();
         const conceptRank = version?.compiledNoteId
-          ? this.conceptRankForQuery(input.query, version.compiledNoteId)
+          ? this.conceptRankForResolvedIds(input.resolvedConceptIds ?? [], version.compiledNoteId)
           : 0;
         const vectorRank = input.queryEmbedding?.length
           ? cosineSimilarity(input.queryEmbedding, this.embeddings.get(block.id) ?? [])
@@ -482,14 +550,13 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     ];
   }
 
-  private conceptRankForQuery(query: string, compiledNoteId: string) {
-    const normalizedQuery = query.toLowerCase();
+  private conceptRankForResolvedIds(resolvedConceptIds: string[], compiledNoteId: string) {
+    const resolvedConceptIdSet = new Set(resolvedConceptIds);
     return this.conceptIndex.reduce((score, indexedConcept) => {
       if (indexedConcept.targetType !== "compiled_note" || indexedConcept.targetId !== compiledNoteId) {
         return score;
       }
-      const concept = this.concepts.find((item) => item.id === indexedConcept.conceptId);
-      if (!concept || !normalizedQuery.includes(concept.normalizedName)) {
+      if (!resolvedConceptIdSet.has(indexedConcept.conceptId)) {
         return score;
       }
       if (indexedConcept.confidence === "high") return score + 3;
@@ -518,6 +585,10 @@ function cosineSimilarity(left: number[], right: number[]) {
   }
 
   return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
+}
+
+function normalizeConcept(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function blockMatchesTopics(block: KnowledgeBlock, topicIds: string[]) {

@@ -181,18 +181,27 @@ export class PostgresAgentToolReadRepository implements AgentToolReadRepository 
         matched as (
           select distinct on (input_concepts.input)
             input_concepts.input,
-            concepts.id::text as concept_id,
-            concepts.name as canonical_label,
+            coalesce(canonical_concepts.id, alias_concepts.id)::text as concept_id,
+            coalesce(canonical_concepts.name, alias_concepts.name) as canonical_label,
             case
-              when concepts.normalized_name = lower(input_concepts.input) then 'exact'
+              when canonical_concepts.normalized_name = lower(input_concepts.input) then 'exact'
+              when concept_aliases.normalized_alias = lower(input_concepts.input) then 'exact'
               else 'fuzzy'
             end as match_type
           from input_concepts
-          left join concepts
-            on concepts.normalized_name = lower(input_concepts.input)
-            or ($2::boolean and concepts.normalized_name ilike '%' || lower(input_concepts.input) || '%')
+          left join concepts canonical_concepts
+            on canonical_concepts.normalized_name = lower(input_concepts.input)
+            or ($2::boolean and canonical_concepts.normalized_name ilike '%' || lower(input_concepts.input) || '%')
+          left join concept_aliases
+            on concept_aliases.normalized_alias = lower(input_concepts.input)
+            or ($2::boolean and concept_aliases.normalized_alias ilike '%' || lower(input_concepts.input) || '%')
+          left join concepts alias_concepts on alias_concepts.id = concept_aliases.concept_id
           order by input_concepts.input,
-            case when concepts.normalized_name = lower(input_concepts.input) then 0 else 1 end
+            case
+              when canonical_concepts.normalized_name = lower(input_concepts.input) then 0
+              when concept_aliases.normalized_alias = lower(input_concepts.input) then 1
+              else 2
+            end
         )
         select
           input,

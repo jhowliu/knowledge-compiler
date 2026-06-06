@@ -1,6 +1,8 @@
 # Recap
 
 ## Summary
+- Started issue #132 on `codex/retrieval-abstraction-132`: split approved-knowledge retrieval into explicit FTS, concept, and pgvector retrievers that produce `RetrievalCandidate` rows, added a `HybridRetrievalService` for TypeScript RRF merge/trace metadata, and changed `PostgresKnowledgeRepository.searchKnowledgeBlocks` to hydrate/filter merged candidates through a single final query while keeping `/search`, `/ask`, and agent `search_blocks` result shapes unchanged.
+- Issue #132 validation passed: `npm run typecheck --workspace=server`, focused `npm run test --workspace=server -- hybridRetrieval.service.test.ts dashboard.routes.test.ts ask.routes.test.ts`, full `npm run test --workspace=server`, `npm run build --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check`.
 - Implemented issue #130 Layer 1 RAG Ask Panel UI on `codex/layer-1-ask-panel-130`: added a toolbar Ask entry beside Knowledge Search, a dedicated `AskPanel` overlay, `/ask` client API helper, and client Ask response/citation types.
 - Ask Panel supports multiline question input, submit/loading/error/empty/answer/not-enough-info states, citation marker buttons, citation list/detail snippets, and optional topic filter chips wired to backend `topic_ids`.
 - Issue #130 validation passed: `npm run typecheck --workspace=client`, `npm run build --workspace=client`, `npm run test --workspace=server -- ask.routes.test.ts`, `npm run typecheck`, and `git diff --check`. Browser smoke at `http://127.0.0.1:5179/` verified Ask opens, a Binary Search question returns a grounded answer with citation `[1]`, a no-match query shows the not-enough-info state, desktop width has no horizontal overflow, and console errors were 0.
@@ -124,6 +126,7 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- Retrieval is now modeled as independent candidate-producing signals before hydration: FTS, concept, and vector are separate retrievers, with RRF merge in TypeScript. BM25 should be added later as another retriever instead of being folded into the old monolithic `knowledge.repository.ts` SQL.
 - For #118, `raw_source_id` is now the canonical proposal/source ancestry field. `raw_note_id` remains as compatibility lineage until the remaining raw-note API/UI/runtime layer is deliberately removed.
 - Notes Graph link management should be edge-first: approved/manual links render as solid high-contrast edges; pending links render dashed/tinted; rejected links remain hidden because the graph API does not return them. Clicking an edge opens the edge-anchored popover, while clicking a note card opens a centered note-detail modal.
 - Graph edge paths stay in SVG, but relation labels render as clickable HTML overlay pills to avoid non-uniform SVG text scaling; the edge toolbar should anchor to the pill instead of covering the graph center.
@@ -291,6 +294,7 @@
 - App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
+- Continue with issue #133: switch local Postgres to a pinned ParadeDB PG16 image or custom image that supports both `pg_search` and `pgvector`, add capability-aware BM25 migration/diagnostics, and implement `PostgresBm25Retriever` as the next retrieval signal.
 - Open the #126 PR after staging the source migration files; leave unrelated local untracked files (`AGENT.md`, `deisgn.pen`, `issue.sh`, `seed-notes/`) out of the PR unless they become intentional.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.

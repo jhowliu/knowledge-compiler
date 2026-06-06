@@ -3,6 +3,7 @@ import { createApp } from "../src/app.js";
 import { askSystemPrompt, type AskAnswerer } from "../src/services/ask.service.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
 import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
+import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 
 const topicA = "00000000-0000-4000-8000-000000000201";
 const topicB = "00000000-0000-4000-8000-000000000202";
@@ -84,6 +85,7 @@ describe("ask routes", () => {
           chunk_text: "RAG answers should cite approved knowledge blocks.",
           source_note_title: "Agent Memory",
           source_note_id: "raw-source-chunk-1",
+          tier: "knowledge",
         },
       ],
     });
@@ -109,6 +111,55 @@ describe("ask routes", () => {
       answer: "I don't have enough information in the approved knowledge base to answer that.",
       citations: [],
     });
+  });
+
+  test("POST /ask falls back to raw sources when no knowledge matches (#143)", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    await rawSourceRepository.create(
+      {
+        bodyMarkdown: "Sync notes: we decided to ship the vector index next sprint.",
+        title: "Sync notes",
+        sourceRole: "personal_note",
+      },
+      [
+        {
+          chunkIndex: 0,
+          heading: "Decisions",
+          bodyMarkdown: "Sync notes: we decided to ship the vector index next sprint.",
+          tokenEstimate: 11,
+        },
+      ],
+    );
+
+    const app = createApp({
+      knowledgeRepository: new InMemoryKnowledgeRepository(),
+      noteLinkRepository: new InMemoryNoteLinkRepository(),
+      rawSourceRepository,
+      askAnswerer: {
+        async answer(input) {
+          expect(input.blocks).toHaveLength(1);
+          expect(input.blocks[0].tier).toBe("source");
+          return "You decided to ship the vector index next sprint. [1]";
+        },
+      },
+    });
+
+    const response = await request(app).post("/ask").send({
+      query: "vector index",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.answer).toBe("You decided to ship the vector index next sprint. [1]");
+    expect(response.body.citations).toEqual([
+      {
+        block_id: expect.any(String),
+        title: "Sync notes",
+        chunk_text: "Sync notes: we decided to ship the vector index next sprint.",
+        source_note_title: "Sync notes",
+        source_note_id: expect.any(String),
+        tier: "source",
+      },
+    ]);
   });
 
   test("POST /ask topic_ids filter narrows the retrieval corpus", async () => {

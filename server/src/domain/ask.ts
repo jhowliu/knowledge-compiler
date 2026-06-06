@@ -4,6 +4,9 @@ export type AskCitation = {
   chunkText: string;
   sourceNoteTitle: string;
   sourceNoteId: string;
+  // Provenance: "knowledge" = approved canonical knowledge; "source" = the
+  // user's raw source notes, used as a fallback when no knowledge matched.
+  tier: "knowledge" | "source";
 };
 
 export type AskResponse = {

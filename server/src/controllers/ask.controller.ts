@@ -18,6 +18,7 @@ export class AskController {
           chunk_text: citation.chunkText,
           source_note_title: citation.sourceNoteTitle,
           source_note_id: citation.sourceNoteId,
+          tier: citation.tier,
         })),
       });
     } catch (error) {

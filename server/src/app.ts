@@ -144,6 +144,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     embeddingService,
     undefined,
     dependencies.askAnswerer,
+    rawSourceRepository,
   );
   const compileRawNoteHandler = new CompileRawNoteHandler(
     agentRunRepository,

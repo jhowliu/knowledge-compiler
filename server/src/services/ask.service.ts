@@ -3,6 +3,7 @@ import type { AskCitation, AskResponse } from "../domain/ask.js";
 import type { KnowledgeBlockSearchResult } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
+import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 
@@ -24,9 +25,18 @@ export const askSystemPrompt = [
   "Attribute claims with citation markers like [1], [2] that match the provided block numbers.",
 ].join("\n");
 
-export type AskContextBlock = KnowledgeBlockSearchResult & {
+export type AskContextBlock = {
   citationIndex: number;
+  blockId: string;
+  title: string;
+  heading: string | null;
+  bodyMarkdown: string;
+  sourceNoteId: string;
+  tier: "knowledge" | "source";
 };
+
+const sourceContextNote =
+  "Some retrieved context comes from the user's raw source notes rather than curated knowledge. You may answer from them, but attribute them accurately.";
 
 export type AskAnswerer = {
   answer(input: {
@@ -59,6 +69,9 @@ export class OpenAIAskAnswerer implements AskAnswerer {
             role: "system",
             content: askSystemPrompt,
           },
+          ...(input.blocks.some((block) => block.tier === "source")
+            ? [{ role: "system", content: sourceContextNote }]
+            : []),
           {
             role: "user",
             content: [
@@ -66,9 +79,9 @@ export class OpenAIAskAnswerer implements AskAnswerer {
               "Retrieved blocks:",
               ...input.blocks.map((block) =>
                 [
-                  `[${block.citationIndex}] ${block.title}`,
+                  `[${block.citationIndex}] ${block.title}${block.tier === "source" ? " (raw source)" : ""}`,
                   block.heading ? `Heading: ${block.heading}` : null,
-                  `Source note id: ${citationForBlock(block, input.citations)?.sourceNoteId ?? block.knowledgeSourceId}`,
+                  `Source note id: ${block.sourceNoteId}`,
                   `Block id: ${block.blockId}`,
                   block.bodyMarkdown,
                 ].filter(Boolean).join("\n"),
@@ -96,12 +109,13 @@ export class AskService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
     private readonly noteLinkRepository: NoteLinkRepository,
-    embeddingService: EmbeddingService = new NoopEmbeddingService(),
+    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
     private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(
       knowledgeRepository,
       embeddingService,
     ),
     private readonly answerer: AskAnswerer = new OpenAIAskAnswerer(),
+    private readonly rawSourceRepository: RawSourceRepository | null = null,
   ) {}
 
   async ask(input: { query: string; topicIds?: string[] }): Promise<AskResponse> {
@@ -116,15 +130,61 @@ export class AskService {
       topicIds: input.topicIds ?? [],
     });
     if (seedBlocks.length === 0) {
-      return { answer: notEnoughInformationAnswer, citations: [] };
+      // No approved knowledge — fall back to the user's raw source notes (#143),
+      // tagged as source provenance so the caller can show where it came from.
+      return this.answerFromSources(query);
     }
 
     const graphBlocks = await this.loadOneHopBlocks(seedBlocks, input.topicIds ?? []);
     const rankedBlocks = mergeAndRankBlocks([...seedBlocks, ...graphBlocks]).slice(0, 8);
     const citations = rankedBlocks.map((block) => citationFromBlock(block));
-    const contextBlocks = rankedBlocks.map((block, index) => ({
-      ...block,
+    const contextBlocks: AskContextBlock[] = rankedBlocks.map((block, index) => ({
       citationIndex: index + 1,
+      blockId: block.blockId,
+      title: block.title,
+      heading: block.heading,
+      bodyMarkdown: block.bodyMarkdown,
+      sourceNoteId: citations[index].sourceNoteId,
+      tier: "knowledge",
+    }));
+
+    return {
+      answer: await this.answerer.answer({ query, blocks: contextBlocks, citations }),
+      citations,
+    };
+  }
+
+  private async answerFromSources(query: string): Promise<AskResponse> {
+    if (!this.rawSourceRepository) {
+      return { answer: notEnoughInformationAnswer, citations: [] };
+    }
+
+    const queryEmbedding = await this.embeddingService.embedText(query);
+    const chunks = await this.rawSourceRepository.searchRawSourceChunks({
+      query,
+      limit: 8,
+      queryEmbedding,
+    });
+    if (chunks.length === 0) {
+      return { answer: notEnoughInformationAnswer, citations: [] };
+    }
+
+    const citations: AskCitation[] = chunks.map((chunk) => ({
+      blockId: chunk.chunkId,
+      title: chunk.title ?? "Untitled source",
+      chunkText: chunk.bodyMarkdown,
+      sourceNoteTitle: chunk.title ?? "Untitled source",
+      sourceNoteId: chunk.rawSourceId,
+      tier: "source",
+    }));
+    const contextBlocks: AskContextBlock[] = chunks.map((chunk, index) => ({
+      citationIndex: index + 1,
+      blockId: chunk.chunkId,
+      title: chunk.title ?? "Untitled source",
+      heading: chunk.heading,
+      bodyMarkdown: chunk.bodyMarkdown,
+      sourceNoteId: chunk.rawSourceId,
+      tier: "source",
     }));
 
     return {
@@ -193,11 +253,8 @@ function citationFromBlock(block: KnowledgeBlockSearchResult): AskCitation {
     chunkText: evidence?.chunkBodyMarkdown || block.bodyMarkdown,
     sourceNoteTitle: evidence?.rawSourceTitle || evidence?.sourceTitle || block.title,
     sourceNoteId: evidence?.rawSourceId || evidence?.sourceId || block.knowledgeSourceId,
+    tier: "knowledge",
   };
-}
-
-function citationForBlock(block: KnowledgeBlockSearchResult, citations: AskCitation[]) {
-  return citations.find((citation) => citation.blockId === block.blockId) ?? null;
 }
 
 function outputText(response: unknown) {

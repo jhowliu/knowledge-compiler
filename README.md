@@ -54,20 +54,27 @@ The client runs on `http://localhost:5173`.
 
 The API runs on `http://localhost:4000`.
 
-## Embeddings And Eval
+## Hybrid Retrieval And Eval
 
-`pgvector` powers semantic search over approved `knowledge_blocks`. The
-`docker compose` Postgres service uses the `pgvector/pgvector:pg16` image, which
-bundles the extension; `db/init/01-enable-pgvector.sql` enables it on first init
-and migration `015` then adds the `knowledge_blocks.embedding` column.
+ParadeDB `pg_search` powers BM25 keyword search and `pgvector` powers semantic
+search over approved `knowledge_blocks`. The `docker compose` Postgres service
+uses the pinned `paradedb/paradedb:0.23.4-pg16` image, which bundles both
+extensions; `db/init/01-enable-retrieval-extensions.sql` enables available retrieval
+extensions on first init, migration `015` adds `knowledge_blocks.embedding`, and
+migration `020` adds the `knowledge_blocks_bm25_idx` index when `pg_search` is
+available.
 
 > Without the `vector` extension, `knowledge_blocks.embedding` is never created,
 > `hasEmbeddingSupport()` returns false, and **vector search is silently disabled**
-> — retrieval falls back to full-text + concept ranking only.
+> — retrieval falls back to BM25/full-text + concept ranking only.
+>
+> Without the `pg_search` extension or `knowledge_blocks_bm25_idx`, BM25 is
+> disabled and retrieval falls back to Postgres FTS + concept + optional vector.
 
-If you previously ran the plain `postgres:16` image, the existing data volume has
-no `vector` extension and migration 015 already ran (and skipped the column). Recreate
-the volume so it initializes with pgvector (dev data is reconstructable from `seed-notes/`):
+If you previously ran the plain `postgres:16` or `pgvector/pgvector:pg16` image,
+the existing data volume may not have `pg_search` and migration 020 may skip the
+BM25 index. Recreate the volume so it initializes with ParadeDB retrieval
+extensions (dev data is reconstructable from `seed-notes/`):
 
 ```bash
 docker compose down -v
@@ -88,7 +95,8 @@ Verify the extension and column are present:
 ```bash
 docker exec -it knowledge-compiler-postgres \
   psql -U knowledge -d knowledge_compiler \
-  -c "select extname from pg_extension where extname='vector';" \
+  -c "select extname from pg_extension where extname in ('vector', 'pg_search');" \
+  -c "select to_regclass('public.knowledge_blocks_bm25_idx') as bm25_index;" \
   -c "select count(embedding) as with_emb, count(*) as total from knowledge_blocks;"
 ```
 
@@ -149,11 +157,13 @@ the answerer composes a scoped, cited answer.
 
 ```mermaid
 flowchart TD
-  Q["Query"] --> FTS["Full-text / BM25<br/>(block-level)"]
+  Q["Query"] --> FTS["Postgres FTS<br/>(block-level fallback)"]
+  Q --> BM25["BM25 pg_search<br/>(block-level, needs ParadeDB)"]
   Q --> CON["Concept index match<br/>(note-level → blocks)"]
   Q --> E["Embed query"]
   E --> VEC["Vector cosine<br/>(block-level, needs pgvector)"]
   FTS --> RRF["RRF fusion (k=60)"]
+  BM25 --> RRF
   CON --> RRF
   VEC --> RRF
   RRF --> HOP["One-hop graph expand<br/>approved note_links"]
@@ -177,13 +187,15 @@ flowchart TD
   per-chunk *situating context*, not on segmentation.
 - **Hybrid retrieval, complementary granularities.** The concept graph gives global
   recall and term disambiguation at *note* level; vector + contextual headers give
-  local precision at *chunk* level; BM25 covers exact lexical matches. RRF fuses them.
+  local precision at *chunk* level; BM25 covers exact lexical matches; Postgres FTS
+  remains the built-in lexical fallback. RRF fuses them.
 
 ### Known gaps (tracked)
 
 - `/search` now covers both tiers (knowledge-first, with `tier`-tagged raw sources, #143); `/ask` still grounds on `knowledge_blocks` only (labeled source fallback is a follow-up).
-- Vector search requires pgvector; without it retrieval silently degrades to
-  full-text + concept only. CJK full-text needs a segmenting parser (#144).
+- Vector search requires pgvector, and BM25 requires pg_search plus
+  `knowledge_blocks_bm25_idx`; missing capabilities are skipped with diagnostics.
+  CJK full-text needs a segmenting parser (#144).
 - Concept matching is substring-based; query-side concept extraction is pending (#142).
 
 ## Server Architecture

@@ -1,8 +1,8 @@
 /**
- * Verifies retrieval health after enabling pgvector + reseeding.
+ * Verifies retrieval health after enabling hybrid retrieval + reseeding.
  *
- * Part A (DB): pgvector installed, embedding column present, how many blocks
- *   have embeddings / contextual context, and how CJK text tokenizes.
+ * Part A (DB): pgvector/pg_search installed, embedding/BM25 indexes present,
+ *   how many blocks have embeddings / contextual context, and how CJK text tokenizes.
  * Part B (HTTP): runs probe queries against /search (and one /ask) on the
  *   running server and prints the top hits so you can eyeball hit quality.
  *
@@ -36,6 +36,19 @@ async function partA() {
 
   const ext = await one<{ v: boolean }>(`select exists(select 1 from pg_extension where extname='vector') as v`);
   console.log("pgvector installed:", ext?.v);
+
+  const bm25 = await one<{ extension_installed: boolean; index_exists: boolean }>(
+    `select
+       exists(select 1 from pg_extension where extname='pg_search') as extension_installed,
+       to_regclass('public.knowledge_blocks_bm25_idx') is not null as index_exists`,
+  );
+  console.log("pg_search installed:", bm25?.extension_installed);
+  console.log("knowledge_blocks BM25 index exists:", bm25?.index_exists);
+  if (!bm25?.extension_installed) {
+    console.log("⚠️  BM25 search is OFF (no pg_search) — use the pinned ParadeDB image and rerun migrations.");
+  } else if (!bm25.index_exists) {
+    console.log("⚠️  BM25 search is OFF (missing knowledge_blocks_bm25_idx) — run `npm run migrate --workspace=server`.");
+  }
 
   const col = await one<{ v: boolean }>(
     `select exists(select 1 from information_schema.columns

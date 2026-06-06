@@ -1,8 +1,8 @@
 services:
   postgres:
-    # pgvector/pgvector bundles the `vector` extension (PostgreSQL 16). Plain
-    # postgres:16 does not ship pgvector, which silently disables vector search.
-    image: pgvector/pgvector:pg16
+    # ParadeDB bundles pg_search (BM25) and pgvector on PostgreSQL 16, so local
+    # retrieval can exercise exact lexical and vector signals in one database.
+    image: paradedb/paradedb:0.23.4-pg16
     container_name: knowledge-compiler-postgres
     restart: unless-stopped
     environment:
@@ -13,7 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Enables the vector extension on first init (runs only on a fresh volume).
+      # Enables available retrieval extensions on first init (fresh volumes only).
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowledge} -d ${POSTGRES_DB:-knowledge_compiler}"]

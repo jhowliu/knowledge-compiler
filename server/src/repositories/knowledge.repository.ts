@@ -15,6 +15,8 @@ import type {
 import { HybridRetrievalService } from "../services/retrieval/hybridRetrieval.service.js";
 import type { MergedRetrievalCandidate } from "../services/retrieval/retrieval.types.js";
 import {
+  type Bm25SupportStatus,
+  PostgresBm25Retriever,
   PostgresConceptRetriever,
   PostgresFtsRetriever,
   PostgresPgVectorRetriever,
@@ -504,10 +506,12 @@ function vectorLiteral(values: number[]) {
 
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
   private embeddingSupport: boolean | null = null;
+  private bm25Support: Bm25SupportStatus | null = null;
   private readonly hybridRetrievalService = new HybridRetrievalService([
     new PostgresFtsRetriever(),
     new PostgresConceptRetriever(),
     new PostgresPgVectorRetriever(() => this.hasEmbeddingSupport()),
+    new PostgresBm25Retriever(() => this.getBm25Support()),
   ]);
 
   private async hasEmbeddingSupport() {
@@ -527,6 +531,30 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
     this.embeddingSupport = result.rows[0]?.supported ?? false;
     return this.embeddingSupport;
+  }
+
+  private async getBm25Support(): Promise<Bm25SupportStatus> {
+    if (this.bm25Support !== null) {
+      return this.bm25Support;
+    }
+
+    const result = await query<{
+      extension_installed: boolean;
+      index_exists: boolean;
+    }>(
+      `
+        select
+          exists(select 1 from pg_extension where extname = 'pg_search') as extension_installed,
+          to_regclass('public.knowledge_blocks_bm25_idx') is not null as index_exists
+      `,
+    );
+    const row = result.rows[0];
+    this.bm25Support = row?.extension_installed
+      ? row.index_exists
+        ? { enabled: true }
+        : { enabled: false, reason: "missing_bm25_index" }
+      : { enabled: false, reason: "missing_pg_search_extension" };
+    return this.bm25Support;
   }
 
   async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }) {

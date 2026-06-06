@@ -1,6 +1,11 @@
 # Recap
 
 ## Summary
+- Implemented issue #133 on `codex/paradedb-bm25-133`: switched local Postgres from `pgvector/pgvector:pg16` to pinned `paradedb/paradedb:0.23.4-pg16`, renamed the init SQL to `01-enable-retrieval-extensions.sql`, and enabled available `vector` / `pg_search` extensions on fresh volumes.
+- Added migration `020_bm25_search.sql` to create `pg_search` when available and add `knowledge_blocks_bm25_idx` using ParadeDB BM25 over `id`, `heading`, `body_markdown`, `status`, and `updated_at`.
+- Added `PostgresBm25Retriever` as a first-class `bm25` signal in the hybrid retrieval pipeline with capability detection for missing `pg_search` or missing BM25 index; `/search`, `/ask`, and agent `search_blocks` inherit BM25 via the existing RRF merge.
+- Updated retrieval diagnostics/docs: `verifyRetrieval` now reports `pg_search` and BM25 index status, and README separates Postgres FTS fallback from ParadeDB BM25.
+- Issue #133 validation passed: `npm run typecheck --workspace=server`, focused `npm run test --workspace=server -- hybridRetrieval.service.test.ts knowledgeRetrievers.test.ts dashboard.routes.test.ts ask.routes.test.ts`, `npm run migrate --workspace=server`, full `npm run test --workspace=server`, `npm run build --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check`.
 - Started issue #132 on `codex/retrieval-abstraction-132`: split approved-knowledge retrieval into explicit FTS, concept, and pgvector retrievers that produce `RetrievalCandidate` rows, added a `HybridRetrievalService` for TypeScript RRF merge/trace metadata, and changed `PostgresKnowledgeRepository.searchKnowledgeBlocks` to hydrate/filter merged candidates through a single final query while keeping `/search`, `/ask`, and agent `search_blocks` result shapes unchanged.
 - Issue #132 validation passed: `npm run typecheck --workspace=server`, focused `npm run test --workspace=server -- hybridRetrieval.service.test.ts dashboard.routes.test.ts ask.routes.test.ts`, full `npm run test --workspace=server`, `npm run build --workspace=server`, `npm run typecheck`, `npm run build`, and `git diff --check`.
 - Implemented issue #130 Layer 1 RAG Ask Panel UI on `codex/layer-1-ask-panel-130`: added a toolbar Ask entry beside Knowledge Search, a dedicated `AskPanel` overlay, `/ask` client API helper, and client Ask response/citation types.
@@ -126,6 +131,9 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- BM25 is a separate retrieval source, not a replacement for Postgres FTS or pgvector. The active signal order is FTS + concept + vector + BM25 into the same RRF merge.
+- ParadeDB is the practical local/dev image for combined `pg_search` + `pgvector`; it is pinned to PG16 to avoid a Postgres major-version jump.
+- BM25 remains capability-gated: missing `pg_search` or `knowledge_blocks_bm25_idx` disables only the BM25 signal while preserving fallback retrieval.
 - Retrieval is now modeled as independent candidate-producing signals before hydration: FTS, concept, and vector are separate retrievers, with RRF merge in TypeScript. BM25 should be added later as another retriever instead of being folded into the old monolithic `knowledge.repository.ts` SQL.
 - For #118, `raw_source_id` is now the canonical proposal/source ancestry field. `raw_note_id` remains as compatibility lineage until the remaining raw-note API/UI/runtime layer is deliberately removed.
 - Notes Graph link management should be edge-first: approved/manual links render as solid high-contrast edges; pending links render dashed/tinted; rejected links remain hidden because the graph API does not return them. Clicking an edge opens the edge-anchored popover, while clicking a note card opens a centered note-detail modal.
@@ -202,6 +210,7 @@
 - `update_existing_knowledge` must be a target-aware command, not just a label. When a target compiled note or knowledge source is resolved, approval updates that exact card/source and appends a new version; title-based upsert is only a fallback when no target is known.
 
 ## Open Issues
+- Issue #133 local migration note: `npm run migrate --workspace=server` applied `020_bm25_search.sql` on the current local database, but the running DB image did not have `pg_search`, so it emitted `pg_search extension is not installed; skipping knowledge_blocks BM25 setup`. To smoke-test enabled BM25 locally, recreate/restore the dev database on the new ParadeDB image and rerun migrations before probing `/search`.
 - Issue #126 browser UI smoke could not be completed in this session because the in-app Browser blocked local `127.0.0.1` navigation by policy after the last patch; API smoke plus type/build/test coverage passed. The only remaining `raw_note` client strings are legacy agent-run event keys/labels, not `/raw-notes` API usage.
 - Issue #118 remaining scope: raw-note routes/services/UI are still compatibility surfaces; next target is making compile/run/review/trace APIs source-first end to end, then removing `rawNoteId`, `raw_note_id`, and `raw_notes` from active runtime paths after migration safety is proven.
 - Issue #107 validation: `npm run typecheck --workspace=server`, `npm run test --workspace=server -- compileAgentRunner.test.ts agentRunQueue.service.test.ts`, `npm run build --workspace=server`, and `git diff --check` pass after P2. Remaining risk is manual real-model quality spot-checking because the deferred LLM eval harness is not in place yet.
@@ -294,7 +303,7 @@
 - App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
-- Continue with issue #133: switch local Postgres to a pinned ParadeDB PG16 image or custom image that supports both `pg_search` and `pgvector`, add capability-aware BM25 migration/diagnostics, and implement `PostgresBm25Retriever` as the next retrieval signal.
+- After #133 merges, run an enabled BM25 smoke test on a fresh ParadeDB volume and then continue with #134 reranking or #142 query-side concept extraction.
 - Open the #126 PR after staging the source migration files; leave unrelated local untracked files (`AGENT.md`, `deisgn.pen`, `issue.sh`, `seed-notes/`) out of the PR unless they become intentional.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.
 - After #86 merges, continue with topic-only domain cleanup or the next UI slice for the ask/search panel.

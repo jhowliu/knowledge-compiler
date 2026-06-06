@@ -14,6 +14,10 @@ type RetrievalCandidateRow = {
   score: number | string | null;
 };
 
+export type Bm25SupportStatus =
+  | { enabled: true }
+  | { enabled: false; reason: "missing_pg_search_extension" | "missing_bm25_index" };
+
 function vectorLiteral(values: number[]) {
   return `[${values.map((value) => Number(value).toString()).join(",")}]`;
 }
@@ -162,6 +166,54 @@ export class PostgresPgVectorRetriever implements Retriever {
           and (knowledge_blocks.embedding <=> query.query_embedding) < $2::float8
       `,
       [vectorLiteral(input.queryEmbedding), env.VECTOR_MAX_DISTANCE],
+    );
+
+    return candidateSet({
+      source: this.source,
+      candidates: result.rows.map((row) => mapRetrievalCandidate(this.source, row)),
+    });
+  }
+}
+
+export class PostgresBm25Retriever implements Retriever {
+  readonly source = "bm25" as const;
+
+  constructor(private readonly getBm25Support: () => Promise<Bm25SupportStatus>) {}
+
+  async search(input: RetrievalQuery): Promise<RetrievalCandidateSet> {
+    const support = await this.getBm25Support();
+    if (!support.enabled) {
+      return candidateSet({
+        source: this.source,
+        status: "disabled",
+        reason: support.reason,
+      });
+    }
+
+    const candidateLimit = Math.max(input.limit * 8, 50);
+    const result = await query<RetrievalCandidateRow>(
+      `
+        with bm25_matches as (
+          select
+            knowledge_blocks.id as block_id,
+            pdb.score(knowledge_blocks.id) as score,
+            knowledge_blocks.updated_at
+          from knowledge_blocks
+          where knowledge_blocks.heading ||| $1
+             or knowledge_blocks.body_markdown ||| $1
+          order by score desc, knowledge_blocks.updated_at desc
+          limit $2
+        )
+        select
+          block_id,
+          row_number() over (
+            order by score desc,
+                     updated_at desc
+          ) as rank_position,
+          score
+        from bm25_matches
+      `,
+      [input.query, candidateLimit],
     );
 
     return candidateSet({

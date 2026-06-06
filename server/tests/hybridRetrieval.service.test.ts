@@ -19,21 +19,27 @@ describe("hybrid retrieval merge", () => {
         { blockId: "block-c", source: "concept", rankPosition: 2, score: 2 },
       ],
     } satisfies RetrievalCandidateSet;
+    const bm25 = {
+      source: "bm25",
+      status: "enabled",
+      candidates: [{ blockId: "block-a", source: "bm25", rankPosition: 1, score: 4.2 }],
+    } satisfies RetrievalCandidateSet;
 
-    const result = mergeRetrievalCandidateSets([fts, concept], 60);
+    const result = mergeRetrievalCandidateSets([fts, concept, bm25], 60);
 
     expect(result.candidates.map((candidate) => candidate.blockId)).toEqual([
-      "block-b",
       "block-a",
+      "block-b",
       "block-c",
     ]);
     expect(result.candidates[0]?.contributions.map((contribution) => contribution.source)).toEqual([
       "fts",
-      "concept",
+      "bm25",
     ]);
     expect(result.trace.sources).toEqual([
       { source: "fts", status: "enabled", reason: undefined, candidateCount: 2 },
       { source: "concept", status: "enabled", reason: undefined, candidateCount: 2 },
+      { source: "bm25", status: "enabled", reason: undefined, candidateCount: 1 },
     ]);
   });
 

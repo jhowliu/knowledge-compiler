@@ -13,6 +13,11 @@ import type { ProposalRepository } from "../repositories/proposal.repository.js"
 import type { AgentRunRepository } from "../repositories/agentRun.repository.js";
 import type { AgentRunQueueService } from "./agentRunQueue.service.js";
 import { chunkSourceMarkdown } from "./sourceChunker.service.js";
+import {
+  embedRawSourceChunk,
+  NoopEmbeddingService,
+  type EmbeddingService,
+} from "./embedding.service.js";
 
 export class RawSourceService {
   constructor(
@@ -20,6 +25,7 @@ export class RawSourceService {
     private readonly agentRunQueueService?: AgentRunQueueService | null,
     private readonly proposalRepository?: ProposalRepository | null,
     private readonly agentRunRepository?: AgentRunRepository | null,
+    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
   ) {}
 
   async getIndexingTrace(id: string) {
@@ -58,7 +64,25 @@ export class RawSourceService {
   }
 
   async createRawSource(input: CreateRawSourceInput) {
-    return this.rawSourceRepository.create(input, chunkSourceMarkdown(input.bodyMarkdown));
+    const source = await this.rawSourceRepository.create(
+      input,
+      chunkSourceMarkdown(input.bodyMarkdown),
+    );
+    await this.embedSourceChunks(source.chunks);
+    return source;
+  }
+
+  // Index the source tier for retrieval (#143): embed each chunk so it can be
+  // found via vector search. No-op when no embedding service is configured.
+  private async embedSourceChunks(
+    chunks: { id: string; heading?: string | null; bodyMarkdown: string }[],
+  ) {
+    for (const chunk of chunks) {
+      const embedding = await embedRawSourceChunk(this.embeddingService, chunk);
+      if (embedding) {
+        await this.rawSourceRepository.updateRawSourceChunkEmbedding(chunk.id, embedding);
+      }
+    }
   }
 
   async createSourceProject(input: CreateSourceProjectInput) {

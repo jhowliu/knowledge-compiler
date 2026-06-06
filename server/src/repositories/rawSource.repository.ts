@@ -10,6 +10,7 @@ import type {
   RawSourceRole,
   RenameSourceFolderInput,
   RenameSourceProjectInput,
+  SourceChunkSearchResult,
   SourceFolder,
   SourceOrganization,
   SourceProject,
@@ -91,6 +92,15 @@ export interface RawSourceRepository {
   updateTopics(id: string, topicIds: string[]): Promise<RawSourceWithChunks | null>;
   updateExtraction(id: string, extractedData: unknown): Promise<RawSourceWithChunks>;
   delete(id: string): Promise<boolean>;
+  searchRawSourceChunks(input: {
+    query: string;
+    limit: number;
+    queryEmbedding?: number[] | null;
+  }): Promise<SourceChunkSearchResult[]>;
+  updateRawSourceChunkEmbedding(chunkId: string, embedding: number[]): Promise<void>;
+  listRawSourceChunksNeedingEmbeddings(
+    limit: number,
+  ): Promise<{ id: string; heading: string | null; bodyMarkdown: string }[]>;
 }
 
 function mapRawSource(row: RawSourceRow): RawSource {
@@ -566,6 +576,139 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
     const result = await query("delete from raw_sources where id = $1", [id]);
     return (result.rowCount ?? 0) > 0;
   }
+
+  private chunkEmbeddingSupport: boolean | null = null;
+
+  private async hasChunkEmbeddingSupport() {
+    if (this.chunkEmbeddingSupport !== null) {
+      return this.chunkEmbeddingSupport;
+    }
+    const result = await query<{ supported: boolean }>(
+      `select exists (
+         select 1 from information_schema.columns
+         where table_name = 'raw_source_chunks' and column_name = 'embedding'
+       ) as supported`,
+    );
+    this.chunkEmbeddingSupport = result.rows[0]?.supported ?? false;
+    return this.chunkEmbeddingSupport;
+  }
+
+  async searchRawSourceChunks(input: {
+    query: string;
+    limit: number;
+    queryEmbedding?: number[] | null;
+  }): Promise<SourceChunkSearchResult[]> {
+    const useVector =
+      Boolean(input.queryEmbedding?.length) && (await this.hasChunkEmbeddingSupport());
+
+    const vectorCte = useVector
+      ? `, vector_ranked as (
+            select rsc.id,
+              row_number() over (
+                order by rsc.embedding <=> query.query_embedding, rsc.created_at desc
+              ) as rank_position
+            from raw_source_chunks rsc
+            cross join query
+            where rsc.embedding is not null
+          )`
+      : "";
+    const vectorUnion = useVector ? "union all select * from vector_ranked" : "";
+    const queryHead = useVector
+      ? `select plainto_tsquery('english', $1) as ts_query, $3::vector as query_embedding`
+      : `select plainto_tsquery('english', $1) as ts_query`;
+
+    const result = await query<SourceChunkSearchRow>(
+      `
+        with query as (${queryHead}),
+        fts_ranked as (
+          select rsc.id,
+            row_number() over (
+              order by ts_rank(rsc.search_vector, query.ts_query) desc, rsc.created_at desc
+            ) as rank_position
+          from raw_source_chunks rsc
+          cross join query
+          where rsc.search_vector @@ query.ts_query
+        )${vectorCte},
+        merged as (
+          select id, sum(1.0 / (60 + rank_position))::real as rank
+          from (select * from fts_ranked ${vectorUnion}) ranked
+          group by id
+        )
+        select
+          rsc.id as chunk_id,
+          rsc.raw_source_id,
+          rs.title,
+          rsc.heading,
+          rsc.body_markdown,
+          rs.source_role,
+          rsc.created_at,
+          merged.rank
+        from merged
+        join raw_source_chunks rsc on rsc.id = merged.id
+        join raw_sources rs on rs.id = rsc.raw_source_id
+        order by merged.rank desc, rsc.created_at desc
+        limit $2
+      `,
+      useVector
+        ? [input.query, input.limit, vectorLiteral(input.queryEmbedding ?? [])]
+        : [input.query, input.limit],
+    );
+
+    return result.rows.map((row) => ({
+      chunkId: row.chunk_id,
+      rawSourceId: row.raw_source_id,
+      title: row.title,
+      heading: row.heading,
+      bodyMarkdown: row.body_markdown,
+      sourceRole: row.source_role,
+      rank: row.rank,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async updateRawSourceChunkEmbedding(chunkId: string, embedding: number[]) {
+    if (!(await this.hasChunkEmbeddingSupport())) {
+      return;
+    }
+    await query(
+      `update raw_source_chunks set embedding = $2::vector where id = $1`,
+      [chunkId, vectorLiteral(embedding)],
+    );
+  }
+
+  async listRawSourceChunksNeedingEmbeddings(limit: number) {
+    if (!(await this.hasChunkEmbeddingSupport())) {
+      return [];
+    }
+    const result = await query<{ id: string; heading: string | null; body_markdown: string }>(
+      `select id, heading, body_markdown
+       from raw_source_chunks
+       where embedding is null
+       order by created_at desc
+       limit $1`,
+      [limit],
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      heading: row.heading,
+      bodyMarkdown: row.body_markdown,
+    }));
+  }
+}
+
+type SourceChunkSearchRow = {
+  chunk_id: string;
+  raw_source_id: string;
+  title: string | null;
+  heading: string | null;
+  body_markdown: string;
+  source_role: string;
+  created_at: Date;
+  rank: number;
+};
+
+function vectorLiteral(values: number[]) {
+  return `[${values.map((value) => Number(value).toString()).join(",")}]`;
 }
 
 async function fetchTopicIds(sourceId: string): Promise<string[]> {

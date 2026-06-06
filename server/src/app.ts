@@ -131,7 +131,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     embeddingService,
     knowledgeContextualizer,
   );
-  const dashboardService = new DashboardService(knowledgeRepository, embeddingService);
+  const dashboardService = new DashboardService(
+    knowledgeRepository,
+    embeddingService,
+    rawSourceRepository,
+  );
   const noteLinkService = new NoteLinkService(noteLinkRepository);
   const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
   const askService = new AskService(
@@ -167,6 +171,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         agentRunQueueService,
         proposalRepository,
         agentRunRepository,
+        embeddingService,
       )
     : null;
 

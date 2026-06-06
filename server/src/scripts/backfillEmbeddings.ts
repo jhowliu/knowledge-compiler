@@ -1,11 +1,17 @@
 import { closeDatabase } from "../db/postgres.js";
 import { PostgresKnowledgeRepository } from "../repositories/knowledge.repository.js";
-import { embedKnowledgeBlock, OpenAIEmbeddingService } from "../services/embedding.service.js";
+import { PostgresRawSourceRepository } from "../repositories/rawSource.repository.js";
+import {
+  embedKnowledgeBlock,
+  embedRawSourceChunk,
+  OpenAIEmbeddingService,
+} from "../services/embedding.service.js";
 
 const batchSize = Number(process.env.EMBEDDING_BACKFILL_BATCH_SIZE ?? 50);
 
 async function run() {
   const repository = new PostgresKnowledgeRepository();
+  const rawSources = new PostgresRawSourceRepository();
   const embeddingService = new OpenAIEmbeddingService();
   let updated = 0;
   let skipped = 0;
@@ -25,10 +31,33 @@ async function run() {
 
       await repository.updateKnowledgeBlockEmbedding(block.id, embedding);
       updated += 1;
-      console.log(`embedded ${block.id}`);
+      console.log(`embedded knowledge block ${block.id}`);
     }
 
     if (blocks.length < batchSize) {
+      break;
+    }
+  }
+
+  while (true) {
+    const chunks = await rawSources.listRawSourceChunksNeedingEmbeddings(batchSize);
+    if (chunks.length === 0) {
+      break;
+    }
+
+    for (const chunk of chunks) {
+      const embedding = await embedRawSourceChunk(embeddingService, chunk);
+      if (!embedding) {
+        skipped += 1;
+        continue;
+      }
+
+      await rawSources.updateRawSourceChunkEmbedding(chunk.id, embedding);
+      updated += 1;
+      console.log(`embedded source chunk ${chunk.id}`);
+    }
+
+    if (chunks.length < batchSize) {
       break;
     }
   }

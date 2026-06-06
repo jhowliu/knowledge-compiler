@@ -7,6 +7,7 @@ import type {
   RawSourceWithChunks,
   RenameSourceFolderInput,
   RenameSourceProjectInput,
+  SourceChunkSearchResult,
   SourceFolder,
   SourceProject,
   UpdateRawSourceInput,
@@ -248,5 +249,56 @@ export class InMemoryRawSourceRepository implements RawSourceRepository {
     }
     this.sources.splice(index, 1);
     return true;
+  }
+
+  readonly chunkEmbeddings = new Map<string, number[]>();
+
+  async searchRawSourceChunks(input: {
+    query: string;
+    limit: number;
+    queryEmbedding?: number[] | null;
+  }): Promise<SourceChunkSearchResult[]> {
+    const needle = input.query.trim().toLowerCase();
+    const hits: SourceChunkSearchResult[] = [];
+    for (const source of this.sources) {
+      for (const chunk of source.chunks) {
+        const haystack = `${chunk.heading ?? ""} ${chunk.bodyMarkdown}`.toLowerCase();
+        const lexical = needle.length > 0 && haystack.includes(needle);
+        const embedding = this.chunkEmbeddings.get(chunk.id);
+        const vectorMatch =
+          Boolean(input.queryEmbedding?.length) &&
+          Boolean(embedding) &&
+          JSON.stringify(embedding) === JSON.stringify(input.queryEmbedding);
+        if (lexical || vectorMatch) {
+          hits.push({
+            chunkId: chunk.id,
+            rawSourceId: source.id,
+            title: source.title,
+            heading: chunk.heading,
+            bodyMarkdown: chunk.bodyMarkdown,
+            sourceRole: source.sourceRole,
+            rank: vectorMatch ? 1 : 0.5,
+            createdAt: chunk.createdAt,
+          });
+        }
+      }
+    }
+    return hits.sort((a, b) => b.rank - a.rank).slice(0, input.limit);
+  }
+
+  async updateRawSourceChunkEmbedding(chunkId: string, embedding: number[]) {
+    this.chunkEmbeddings.set(chunkId, embedding);
+  }
+
+  async listRawSourceChunksNeedingEmbeddings(limit: number) {
+    const out: { id: string; heading: string | null; bodyMarkdown: string }[] = [];
+    for (const source of this.sources) {
+      for (const chunk of source.chunks) {
+        if (!this.chunkEmbeddings.has(chunk.id)) {
+          out.push({ id: chunk.id, heading: chunk.heading, bodyMarkdown: chunk.bodyMarkdown });
+        }
+      }
+    }
+    return out.slice(0, limit);
   }
 }

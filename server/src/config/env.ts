@@ -38,6 +38,10 @@ const envSchema = z.object({
   ASK_MODEL: z.string().default("gpt-5-mini"),
   CONTEXT_MODEL: z.string().default("gpt-5-mini"),
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
+  // Max cosine distance (pgvector <=>) for a block to count as a vector match.
+  // Above this, the block is treated as off-topic and excluded, so off-topic
+  // queries return nothing instead of the nearest top-k noise. Tune with eval.
+  VECTOR_MAX_DISTANCE: z.coerce.number().positive().default(0.75),
 });
 
 export const env = envSchema.parse(process.env);

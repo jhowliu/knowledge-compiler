@@ -1,3 +1,4 @@
+import { env } from "../config/env.js";
 import { query, transaction } from "../db/postgres.js";
 import type {
   CompiledNote,
@@ -806,6 +807,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           from knowledge_blocks
           cross join query
           where knowledge_blocks.embedding is not null
+            and (knowledge_blocks.embedding <=> query.query_embedding) < $6::float8
         ),
         merged as (
           select
@@ -859,6 +861,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         input.limit,
         input.topicIds ?? [],
         vectorLiteral(input.queryEmbedding),
+        env.VECTOR_MAX_DISTANCE,
       ],
     );
 

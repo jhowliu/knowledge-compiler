@@ -20,6 +20,9 @@ const probes = [
   "dijkstra with a k stop limit",
   "RAG 評估流程",
   "reciprocal rank fusion",
+  // Off-topic: should return few/no hits once the vector distance floor is on,
+  // instead of the nearest top-k noise.
+  "今天天氣如何",
 ];
 
 async function one<T = Record<string, unknown>>(sql: string) {

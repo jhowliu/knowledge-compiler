@@ -1,3 +1,4 @@
+import { env } from "../config/env.js";
 import { query, transaction } from "../db/postgres.js";
 import type {
   CreateRawSourceChunkInput,
@@ -610,6 +611,7 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
             from raw_source_chunks rsc
             cross join query
             where rsc.embedding is not null
+              and (rsc.embedding <=> query.query_embedding) < $4::float8
           )`
       : "";
     const vectorUnion = useVector ? "union all select * from vector_ranked" : "";
@@ -650,7 +652,12 @@ export class PostgresRawSourceRepository implements RawSourceRepository {
         limit $2
       `,
       useVector
-        ? [input.query, input.limit, vectorLiteral(input.queryEmbedding ?? [])]
+        ? [
+            input.query,
+            input.limit,
+            vectorLiteral(input.queryEmbedding ?? []),
+            env.VECTOR_MAX_DISTANCE,
+          ]
         : [input.query, input.limit],
     );
 

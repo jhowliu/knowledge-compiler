@@ -414,8 +414,12 @@ export function verifySourceSpans(
   const invalidSpans: SourceSpan[] = [];
   for (const span of spans) {
     const chunk = chunks.find((item) => item.chunk_index === span.chunk_index);
-    const slice = chunk?.body_markdown.slice(span.char_start, span.char_end);
-    if (!chunk || slice !== span.text || !chunk.body_markdown.includes(span.text)) {
+    // A span is grounded when its text is a verbatim substring of the cited
+    // chunk. char_start/char_end are advisory only (the model frequently emits
+    // off-by-one or 1-based offsets, and nothing downstream reads them), so we
+    // do NOT require the offsets to slice exactly — only that the quote really
+    // appears in the source. This still catches fabricated/paraphrased quotes.
+    if (!chunk || !chunk.body_markdown.includes(span.text)) {
       invalidSpans.push(span);
     }
   }
@@ -466,19 +470,21 @@ export function runGroundingChecks(
   const resultItems: GroundingItemResult[] = items.map((item, index) => {
     const failures: GroundingFailure[] = [];
 
-    // 1. verbatim_span — the cited quote must be a verbatim slice at the offsets.
+    // 1. verbatim_span — the cited quote must be a verbatim substring of the
+    // cited chunk. char_start/char_end are advisory only (the model often emits
+    // off-by-one / 1-based offsets and nothing downstream reads them), so we
+    // check substring presence, not an exact offset slice.
     for (const span of item.source_spans) {
       const chunk = chunks.find((candidate) => candidate.chunk_index === span.chunk_index);
-      const slice = chunk ? chunk.body_markdown.slice(span.char_start, span.char_end) : null;
-      const valid = Boolean(chunk) && slice === span.text;
+      const valid = Boolean(chunk) && chunk!.body_markdown.includes(span.text);
       if (!valid) {
         failures.push(
           groundingFailure(
             "verbatim_span",
             chunk
-              ? "Span text does not match the source at the given offsets."
+              ? "Span text is not a verbatim substring of the cited chunk."
               : `No chunk has chunk_index ${span.chunk_index}.`,
-            { span, actual_text: slice, valid_chunk_indexes: validChunkIndexes },
+            { span, valid_chunk_indexes: validChunkIndexes },
           ),
         );
       }

@@ -1,3 +1,4 @@
+import { AppError } from "../domain/errors.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
 import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
@@ -53,7 +54,7 @@ export class DashboardService {
   async getKnowledgeSourceTimeline(id: string) {
     const timeline = await this.knowledgeRepository.getKnowledgeSourceTimeline(id);
     if (!timeline) {
-      throw new Error("Knowledge source timeline not found");
+      throw new AppError("Knowledge source timeline not found", 404);
     }
     return timeline;
   }
@@ -61,7 +62,7 @@ export class DashboardService {
   async getCompiledNoteTimeline(id: string) {
     const timeline = await this.knowledgeRepository.getKnowledgeSourceTimelineByCompiledNoteId(id);
     if (!timeline) {
-      throw new Error("Knowledge source timeline not found");
+      throw new AppError("Knowledge source timeline not found", 404);
     }
     return timeline;
   }

@@ -175,90 +175,49 @@ export class ProposalService {
       const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
       const sourceType = proposal.rawSourceId ? "raw_source" : "raw_note";
       const sourceId = proposal.rawSourceId ?? proposal.id;
-      const compiledNote = await this.knowledgeRepository.upsertCompiledNote({
+      // Build blocks (LLM contextualization) BEFORE the transaction — it is an
+      // external call and must not run while a DB transaction is held open.
+      const blocks = await this.buildKnowledgeBlocks(bodyMarkdown);
+
+      const structuredDataRecord = asRecord(structuredData);
+      const concepts = (Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [])
+        .map((concept) => {
+          const conceptRecord = asRecord(concept);
+          return {
+            name: stringValue(conceptRecord, "name"),
+            conceptType: stringValue(conceptRecord, "conceptType", stringValue(conceptRecord, "type", "topic")),
+          };
+        })
+        .filter((concept) => Boolean(concept.name));
+
+      // Compiled note + evidence + version/blocks + concept index land atomically
+      // (one transaction in the repo), so a mid-apply failure never leaves an
+      // orphan compiled_note without a knowledge_version.
+      const { compiledNote, snapshot } = await this.knowledgeRepository.applyApprovedKnowledge({
         userId: proposal.userId,
         targetCompiledNoteId,
+        targetKnowledgeSourceId,
         domain: stringValue(payload, "domain", "coding"),
         noteType,
         title,
         bodyMarkdown,
         structuredData,
+        proposalId: proposal.id,
+        changeSummary: item.rationale ?? proposal.rationale,
+        blocks,
+        evidenceSourceType: sourceType,
+        evidenceSourceId: sourceId,
+        rawSourceId: proposal.rawSourceId ?? null,
+        confidence: proposal.confidence,
+        impactLevel: proposal.impactLevel,
+        concepts,
       });
       context.compiledNoteByTitle.set(normalizedTitle(compiledNote.title), compiledNote);
 
-      await this.knowledgeRepository.createEvidenceLink({
-        userId: proposal.userId,
-        sourceType,
-        sourceId,
-        targetType: "compiled_note",
-        targetId: compiledNote.id,
-        confidence: proposal.confidence,
-        impactLevel: proposal.impactLevel,
-        approvalStatus: "approved",
-      });
-
-      const knowledgeSnapshot = await this.knowledgeRepository.upsertKnowledgeSourceVersion({
-        userId: proposal.userId,
-        targetKnowledgeSourceId,
-        domain: compiledNote.domain,
-        knowledgeType: compiledNote.noteType,
-        title: compiledNote.title,
-        bodyMarkdown: compiledNote.bodyMarkdown,
-        structuredData: compiledNote.structuredData,
-        compiledNoteId: compiledNote.id,
-        proposalId: proposal.id,
-        changeSummary: item.rationale ?? proposal.rationale,
-        blocks: await this.buildKnowledgeBlocks(compiledNote.bodyMarkdown),
-      });
-      await this.embedSnapshotBlocks(knowledgeSnapshot.blocks);
-
-      await this.knowledgeRepository.createEvidenceLink({
-        userId: proposal.userId,
-        sourceType,
-        sourceId,
-        targetType: "knowledge_version",
-        targetId: knowledgeSnapshot.version.id,
-        confidence: proposal.confidence,
-        impactLevel: proposal.impactLevel,
-        approvalStatus: "approved",
-      });
-
-      if (proposal.rawSourceId) {
-        await this.knowledgeRepository.createEvidenceLinksFromSourceChunks({
-          userId: proposal.userId,
-          rawSourceId: proposal.rawSourceId,
-          targetType: "knowledge_version",
-          targetId: knowledgeSnapshot.version.id,
-          confidence: proposal.confidence,
-          impactLevel: proposal.impactLevel,
-          approvalStatus: "approved",
-        });
-      }
-
-      const structuredDataRecord = asRecord(structuredData);
-      const concepts = Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [];
-      for (const concept of concepts) {
-        const conceptRecord = asRecord(concept);
-        const name = stringValue(conceptRecord, "name");
-        const conceptType = stringValue(conceptRecord, "conceptType", stringValue(conceptRecord, "type", "topic"));
-        if (!name) {
-          continue;
-        }
-        const savedConcept = await this.knowledgeRepository.upsertConcept({
-          userId: proposal.userId,
-          name,
-          conceptType,
-        });
-        await this.knowledgeRepository.indexConcept({
-          userId: proposal.userId,
-          conceptId: savedConcept.id,
-          targetType: "compiled_note",
-          targetId: compiledNote.id,
-          relationType: "canonicalizes",
-          confidence: proposal.confidence,
-          source: "approved_proposal",
-        });
-      }
+      // Embedding is an external call; run it AFTER commit so an embedding
+      // failure only leaves embedding=null (backfillable) instead of rolling
+      // back or orphaning the approved knowledge.
+      await this.embedSnapshotBlocks(snapshot.blocks);
 
       // Related links are no longer created blindly here (#98): the agent judges
       // candidates in the compile loop and emits explicit create_link items.
@@ -327,9 +286,16 @@ export class ProposalService {
     }[],
   ) {
     for (const block of blocks) {
-      const embedding = await embedKnowledgeBlock(this.embeddingService, block);
-      if (embedding) {
-        await this.knowledgeRepository.updateKnowledgeBlockEmbedding(block.id, embedding);
+      // Embedding runs after the approve transaction has committed, so a failure
+      // here must not abort the approve: leave embedding null (backfillable via
+      // `backfill:embeddings`) instead of throwing.
+      try {
+        const embedding = await embedKnowledgeBlock(this.embeddingService, block);
+        if (embedding) {
+          await this.knowledgeRepository.updateKnowledgeBlockEmbedding(block.id, embedding);
+        }
+      } catch (error) {
+        console.warn(`Embedding failed for block ${block.id}; leaving it unembedded.`, error);
       }
     }
   }

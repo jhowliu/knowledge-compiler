@@ -244,6 +244,96 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.compiledNotes;
   }
 
+  async applyApprovedKnowledge(input: {
+    userId?: string | null;
+    targetCompiledNoteId: string | null;
+    targetKnowledgeSourceId: string | null;
+    domain: string;
+    noteType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    proposalId: string;
+    changeSummary: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+    evidenceSourceType: string;
+    evidenceSourceId: string;
+    rawSourceId: string | null;
+    confidence: string;
+    impactLevel: number;
+    concepts: Array<{ name: string; conceptType: string }>;
+  }): Promise<{ compiledNote: CompiledNote; snapshot: KnowledgeSourceSnapshot }> {
+    const compiledNote = await this.upsertCompiledNote({
+      userId: input.userId,
+      targetCompiledNoteId: input.targetCompiledNoteId,
+      domain: input.domain,
+      noteType: input.noteType,
+      title: input.title,
+      bodyMarkdown: input.bodyMarkdown,
+      structuredData: input.structuredData,
+    });
+    await this.createEvidenceLink({
+      userId: input.userId,
+      sourceType: input.evidenceSourceType,
+      sourceId: input.evidenceSourceId,
+      targetType: "compiled_note",
+      targetId: compiledNote.id,
+      confidence: input.confidence,
+      impactLevel: input.impactLevel,
+      approvalStatus: "approved",
+    });
+    const snapshot = await this.upsertKnowledgeSourceVersion({
+      userId: input.userId,
+      targetKnowledgeSourceId: input.targetKnowledgeSourceId,
+      domain: compiledNote.domain,
+      knowledgeType: compiledNote.noteType,
+      title: compiledNote.title,
+      bodyMarkdown: compiledNote.bodyMarkdown,
+      structuredData: compiledNote.structuredData,
+      compiledNoteId: compiledNote.id,
+      proposalId: input.proposalId,
+      changeSummary: input.changeSummary,
+      blocks: input.blocks,
+    });
+    await this.createEvidenceLink({
+      userId: input.userId,
+      sourceType: input.evidenceSourceType,
+      sourceId: input.evidenceSourceId,
+      targetType: "knowledge_version",
+      targetId: snapshot.version.id,
+      confidence: input.confidence,
+      impactLevel: input.impactLevel,
+      approvalStatus: "approved",
+    });
+    if (input.rawSourceId) {
+      await this.createEvidenceLinksFromSourceChunks({
+        userId: input.userId,
+        rawSourceId: input.rawSourceId,
+        targetType: "knowledge_version",
+        targetId: snapshot.version.id,
+        confidence: input.confidence,
+        impactLevel: input.impactLevel,
+        approvalStatus: "approved",
+      });
+    }
+    for (const concept of input.concepts) {
+      const savedConcept = await this.upsertConcept({
+        userId: input.userId,
+        name: concept.name,
+        conceptType: concept.conceptType,
+      });
+      await this.indexConcept({
+        conceptId: savedConcept.id,
+        targetType: "compiled_note",
+        targetId: compiledNote.id,
+        relationType: "canonicalizes",
+        confidence: input.confidence,
+        source: "approved_proposal",
+      });
+    }
+    return { compiledNote, snapshot };
+  }
+
   async upsertKnowledgeSourceVersion(input: {
     userId?: string | null;
     targetKnowledgeSourceId?: string | null;

@@ -318,6 +318,55 @@ describe("ProposalService", () => {
     expect(knowledge.embeddings.get("knowledge-block-1")).toEqual([1, 0, 0]);
   });
 
+  test("embedding failure does not break approve or leave knowledge unapplied", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks, {
+      async embedText() {
+        throw new Error("embedding API down");
+      },
+    });
+    const originalWarn = console.warn;
+    console.warn = () => {};
+
+    const proposal = await proposals.create({
+      draft: {
+        detectedDomain: "research",
+        detectedKnowledgeType: "paper_note",
+        impactLevel: 2,
+        confidence: "high",
+        rationale: "Embedding failure proposal.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "research",
+              knowledgeType: "paper_note",
+              title: "Resilient embedding",
+              bodyMarkdown: "Embedding runs after the approve transaction commits.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Create approved knowledge.",
+          },
+        ],
+      },
+    });
+
+    const approved = await service.approveProposal(proposal.id);
+
+    // Embedding runs after commit, so its failure must not roll back or orphan
+    // the applied knowledge — the block is simply left unembedded (backfillable).
+    expect(approved.status).toBe("approved");
+    expect(knowledge.compiledNotes).toHaveLength(1);
+    expect(knowledge.knowledgeVersions).toHaveLength(1);
+    expect(knowledge.knowledgeBlocks).toHaveLength(1);
+    expect(knowledge.embeddings.size).toBe(0);
+
+    console.warn = originalWarn;
+  });
+
   test("stores generated contextual retrieval context and prepends it before embedding", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();

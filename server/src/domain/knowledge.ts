@@ -149,6 +149,7 @@ export type ProposalItem = {
   conflictSummary: string | null;
   conflictResolution: string | null;
   evalVerdict: "pass" | "warn" | "fail" | null;
+  evalWarnings: unknown;
   incompleteReasoning: boolean;
   createdAt: Date;
 };

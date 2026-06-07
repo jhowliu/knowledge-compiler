@@ -35,6 +35,7 @@ type ProposalItemRow = {
   conflict_summary: string | null;
   conflict_resolution: string | null;
   eval_verdict: "pass" | "warn" | "fail" | null;
+  eval_warnings: unknown;
   incomplete_reasoning: boolean;
   created_at: Date;
 };
@@ -70,6 +71,7 @@ function mapProposalItem(row: ProposalItemRow): ProposalItem {
     conflictSummary: row.conflict_summary,
     conflictResolution: row.conflict_resolution,
     evalVerdict: row.eval_verdict,
+    evalWarnings: row.eval_warnings,
     incompleteReasoning: row.incomplete_reasoning,
     createdAt: row.created_at,
   };
@@ -146,9 +148,10 @@ export class PostgresProposalRepository implements ProposalRepository {
             conflict_summary,
             conflict_resolution,
             eval_verdict,
+            eval_warnings,
             incomplete_reasoning
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           returning *
         `,
         [
@@ -162,6 +165,7 @@ export class PostgresProposalRepository implements ProposalRepository {
           item.conflictSummary ?? null,
           item.conflictResolution ?? null,
           item.evalVerdict ?? null,
+          item.evalWarnings ?? null,
           item.incompleteReasoning ?? false,
         ],
       );

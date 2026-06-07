@@ -112,6 +112,7 @@ export type DraftProposalItem = {
   conflictSummary?: string | null;
   conflictResolution?: string | null;
   evalVerdict?: "pass" | "warn" | "fail" | null;
+  evalWarnings?: unknown;
   incompleteReasoning?: boolean;
 };
 

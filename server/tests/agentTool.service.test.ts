@@ -224,4 +224,69 @@ describe("agent tool service", () => {
       }),
     });
   });
+
+  test("persists per-item eval warnings so the Review Queue can show the reason", async () => {
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+    const service = new AgentToolService(
+      rawSourceRepository,
+      knowledgeRepository,
+      proposalRepository,
+      extractionEvalRepository,
+      new TestAgentToolReadRepository(),
+    );
+
+    const rawSource = await rawSourceRepository.create(
+      { title: "Note", bodyMarkdown: "Alpha beta gamma.", sourceRole: "personal_note", sourceType: "manual" },
+      [{ chunkIndex: 0, heading: null, bodyMarkdown: "Alpha beta gamma.", tokenEstimate: 5 }],
+    );
+    const sourceOutput = await service.getSource({ source_id: rawSource.id });
+
+    await service.draftProposal(
+      {
+        agentRunId: "run-x",
+        rawNoteId: null,
+        sourceId: rawSource.id,
+        userId: null,
+        sourceText: rawSource.bodyMarkdown,
+        chunks: sourceOutput.chunks,
+        existingBlocksContext: [],
+      },
+      {
+        indexing_outcome: "create_knowledge",
+        outcome_reason: "Reusable knowledge.",
+        reasoning_summary: "Draft.",
+        incomplete_reasoning: false,
+        items: [
+          {
+            action: "create_knowledge",
+            target_block_id: null,
+            title: "Note",
+            body_markdown: "Alpha beta gamma.",
+            source_concept_ids: [],
+            // Quote that is NOT in the chunk → verbatim_span failure.
+            source_spans: [{ chunk_index: 0, char_start: 0, char_end: 18, text: "Delta epsilon zeta" }],
+            confidence: "high",
+            conflict_detected: false,
+            conflict_summary: null,
+            conflict_resolution: null,
+          },
+        ],
+        suggested_links: [],
+      },
+    );
+
+    const item = proposalRepository.proposals[0].items[0];
+    expect(item.evalVerdict).toBe("fail");
+    const warnings = item.evalWarnings as Array<{
+      type: string;
+      message: string;
+      affected_item_index: number | null;
+    }>;
+    expect(Array.isArray(warnings)).toBe(true);
+    expect(warnings[0]).toMatchObject({ type: "ungrounded", affected_item_index: 0 });
+    expect(warnings[0].message.length).toBeGreaterThan(0);
+  });
 });

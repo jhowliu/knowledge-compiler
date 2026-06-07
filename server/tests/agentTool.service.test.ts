@@ -183,6 +183,7 @@ describe("agent tool service", () => {
     expect(searchOutput.results[0]).toMatchObject({
       block_id: "knowledge-block-1",
       title: "Merge Sorted Array",
+      body_markdown: "Scan arrays from the end.",
     });
     expect(blockOutput.block.id).toBe("knowledge-block-1");
     expect(historyOutput.versions).toHaveLength(1);

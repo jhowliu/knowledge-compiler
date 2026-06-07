@@ -733,4 +733,121 @@ describe("ProposalService", () => {
       versionNumber: 2,
     });
   });
+
+  test("stores the agent-authored merged body for targeted existing knowledge", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+    const existingBody =
+      "People are less likely to help someone in trouble when other people are around. The bystander effect is driven by diffusion of responsibility and pluralistic ignorance.";
+    const exampleBody =
+      "Example: At a train station, a passenger suddenly looks pale while nearby people wait for someone else to help. This illustrates the bystander effect.";
+    const mergedBody = `${existingBody}\n\n## Examples\n${exampleBody}`;
+
+    const existing = await knowledge.upsertCompiledNote({
+      domain: "general",
+      noteType: "knowledge_note",
+      title: "Bystander Effect",
+      bodyMarkdown: existingBody,
+      structuredData: {
+        summary: "The bystander effect reduces helping when others are present.",
+        concepts: [
+          { name: "bystander effect", type: "topic", specificity: "specific", confidence: "high" },
+          { name: "diffusion of responsibility", type: "term", specificity: "specific", confidence: "high" },
+        ],
+        claims: [
+          {
+            text: "The bystander effect is driven by diffusion of responsibility and pluralistic ignorance.",
+            confidence: "high",
+            evidenceChunkIds: ["block-bystander"],
+          },
+        ],
+        methods: [],
+        examples: [],
+        constraints: [],
+        inferredSuggestions: [],
+      },
+    });
+    const existingSnapshot = await knowledge.upsertKnowledgeSourceVersion({
+      domain: existing.domain,
+      knowledgeType: existing.noteType,
+      title: existing.title,
+      bodyMarkdown: existing.bodyMarkdown,
+      structuredData: existing.structuredData,
+      compiledNoteId: existing.id,
+      proposalId: "proposal-original",
+      changeSummary: "Initial bystander-effect explanation.",
+      blocks: [{ blockIndex: 0, heading: null, bodyMarkdown: existing.bodyMarkdown, tokenEstimate: 18 }],
+    });
+    const proposal = await proposals.create({
+      draft: {
+        detectedDomain: "general",
+        detectedKnowledgeType: "knowledge_note",
+        impactLevel: 2,
+        confidence: "high",
+        rationale: "Recommended: Update existing knowledge.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "general",
+              knowledgeType: "knowledge_note",
+              title: "Bystander Effect",
+              bodyMarkdown: mergedBody,
+              targetCompiledNoteId: existing.id,
+              targetKnowledgeSourceId: existingSnapshot.source.id,
+              structuredData: {
+                summary: "The bystander effect reduces helping when others are present, with a train-station example.",
+                concepts: [
+                  { name: "bystander effect", type: "topic", specificity: "specific", confidence: "high" },
+                  { name: "diffusion of responsibility", type: "term", specificity: "specific", confidence: "high" },
+                  { name: "pluralistic ignorance", type: "term", specificity: "specific", confidence: "high" },
+                ],
+                claims: [
+                  {
+                    text: "The bystander effect is driven by diffusion of responsibility and pluralistic ignorance.",
+                    confidence: "high",
+                    evidenceChunkIds: [existingSnapshot.blocks[0].id],
+                  },
+                  {
+                    text: "A train-station scenario can illustrate the bystander effect.",
+                    confidence: "high",
+                    evidenceChunkIds: ["raw-source-1-chunk-0"],
+                  },
+                ],
+                methods: [],
+                examples: [
+                  {
+                    title: "Train-station bystander scenario",
+                    text: exampleBody,
+                    illustrates: ["bystander effect", "diffusion of responsibility", "pluralistic ignorance"],
+                  },
+                ],
+                constraints: [],
+                inferredSuggestions: [],
+              },
+            },
+            rationale: "The agent merged the existing definition with the train-station example.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    expect(knowledge.compiledNotes).toHaveLength(1);
+    expect(knowledge.compiledNotes[0].bodyMarkdown).toBe(mergedBody);
+    expect(knowledge.knowledgeVersions).toHaveLength(2);
+    expect(knowledge.knowledgeVersions[1].bodyMarkdown).toBe(mergedBody);
+    expect(knowledge.compiledNotes[0].structuredData).toMatchObject({
+      examples: [expect.objectContaining({ title: "Train-station bystander scenario" })],
+      concepts: expect.arrayContaining([
+        expect.objectContaining({ name: "bystander effect" }),
+        expect.objectContaining({ name: "diffusion of responsibility" }),
+        expect.objectContaining({ name: "pluralistic ignorance" }),
+      ]),
+    });
+  });
 });

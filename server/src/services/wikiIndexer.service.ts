@@ -34,7 +34,7 @@ export type OutcomeCandidateBlock = {
   block_id: string;
   title: string;
   heading: string | null;
-  body_markdown_preview: string;
+  body_markdown: string;
 };
 
 export type OutcomeClassificationInput = {
@@ -237,6 +237,11 @@ function outputText(response: unknown) {
   return null;
 }
 
+function previewMarkdown(markdown: string, maxChars = 800) {
+  const trimmed = markdown.trim();
+  return trimmed.length <= maxChars ? trimmed : `${trimmed.slice(0, maxChars)}...`;
+}
+
 export class WikiIndexerService {
   async extract(source: WikiIndexingSource): Promise<WikiIndexingResult> {
     if (!process.env.OPENAI_API_KEY) {
@@ -258,7 +263,7 @@ export class WikiIndexerService {
             (block) =>
               `Block ID: ${block.block_id}\nTitle: ${block.title}${
                 block.heading ? ` (${block.heading})` : ""
-              }\nPreview: ${block.body_markdown_preview}`,
+              }\nBody: ${previewMarkdown(block.body_markdown)}`,
           )
           .join("\n\n---\n\n")
       : "No existing knowledge blocks matched this source.";

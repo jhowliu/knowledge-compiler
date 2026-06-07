@@ -1,6 +1,17 @@
 # Recap
 
 ## Summary
+- Started `codex/targeted-update-integration` from `main` to fix targeted `update_existing_knowledge` behavior.
+- Targeted updates now require the agent to read the full `target_block_id` with `get_block` before `draft_proposal`; early targeted drafts are rejected so the loop can fetch the existing block and retry.
+- `draft_proposal` / eval context can carry full approved target block body, so preserved approved claims may cite the target block id while newly added claims still cite new raw-source chunks.
+- Eval now fails non-conflicting targeted updates that only submit the new source delta/example instead of a complete merged knowledge body.
+- Proposal approval no longer performs regex/heuristic targeted-body merging; the agent-authored `draft_proposal` must contain the complete merged body and structured facets, while eval rejects delta-only targeted drafts.
+- Removed `body_markdown_preview` from agent block summaries; `search_blocks` / existing block context now carry required `body_markdown`, and consumers locally truncate only for prompt display.
+- Validation passed on the branch before latest-main rebase: focused `npm run test --workspace=server -- evalJudge.service.test.ts agentRunQueue.service.test.ts compileAgentRunner.test.ts proposal.service.test.ts`, full `npm run test --workspace=server`, `npm run typecheck --workspace=server`, `npm run build --workspace=server`, and `git diff --check`.
+- Resolved PR #161 rebase conflicts against latest `origin/main` in `recap.md`, `server/src/services/evalJudge.service.ts`, and `server/src/services/proposal.service.ts`, preserving main's hard grounding checks and atomic approval path while keeping targeted-update preservation/evidence behavior.
+- Post-rebase validation passed: focused `npm run test --workspace=server -- evalJudge.service.test.ts agentRunQueue.service.test.ts compileAgentRunner.test.ts proposal.service.test.ts`, full `npm run test --workspace=server`, `npm run typecheck --workspace=server`, `npm run build --workspace=server`, `git diff --check`, and conflict-marker scan.
+- Removed the approval/scripted fallback targeted-update merge workaround after review; validation passed again with focused tests, full server tests, server typecheck/build, and `git diff --check`.
+- Simplified block summary payloads to body-only after review; validation passed with focused agent/eval tests, full server tests, server typecheck/build, and `git diff --check`.
 - Implemented issue #133 on `codex/paradedb-bm25-133`: switched local Postgres from `pgvector/pgvector:pg16` to pinned `paradedb/paradedb:0.23.4-pg16`, renamed the init SQL to `01-enable-retrieval-extensions.sql`, and enabled available `vector` / `pg_search` extensions on fresh volumes.
 - Added migration `020_bm25_search.sql` to create `pg_search` when available and add `knowledge_blocks_bm25_idx` using ParadeDB BM25 over `id`, `heading`, `body_markdown`, `status`, and `updated_at`.
 - Added `PostgresBm25Retriever` as a first-class `bm25` signal in the hybrid retrieval pipeline with capability detection for missing `pg_search` or missing BM25 index; `/search`, `/ask`, and agent `search_blocks` inherit BM25 via the existing RRF merge.
@@ -131,6 +142,9 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- `target_block_id` now means "produce a complete merged replacement version", not "store this new source note over that block"; the agent must read the full target block before drafting.
+- Grounding for targeted updates is provenance-aware: preserved content can be grounded in the approved target block, while new content remains grounded in current raw-source chunks.
+- Approval is a write/validation boundary, not a content-integration boundary: it must not synthesize targeted merges from deltas. The LLM agent authors the merged note; eval/guardrails catch incomplete targeted proposals.
 - BM25 is a separate retrieval source, not a replacement for Postgres FTS or pgvector. The active signal order is FTS + concept + vector + BM25 into the same RRF merge.
 - ParadeDB is the practical local/dev image for combined `pg_search` + `pgvector`; it is pinned to PG16 to avoid a Postgres major-version jump.
 - BM25 remains capability-gated: missing `pg_search` or `knowledge_blocks_bm25_idx` disables only the BM25 signal while preserving fallback retrieval.

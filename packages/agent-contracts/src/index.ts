@@ -180,7 +180,7 @@ export const blockSummarySchema = z.object({
   compiled_note_id: z.string().nullable(),
   title: z.string(),
   heading: z.string().nullable(),
-  body_markdown_preview: z.string(),
+  body_markdown: z.string(),
   rank: z.number(),
   linked_block_ids: z.array(z.string()),
 });

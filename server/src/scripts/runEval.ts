@@ -126,7 +126,7 @@ async function runCase(id: string): Promise<EvalCaseResult> {
             compiled_note_id: "compiled-existing",
             title: "Existing block",
             heading: null,
-            body_markdown_preview: existingBlock.slice(0, 240),
+            body_markdown: existingBlock,
             rank: 1,
             linked_block_ids: [],
           },

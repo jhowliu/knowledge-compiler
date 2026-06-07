@@ -17,11 +17,13 @@ import {
   getSourceOutputSchema,
   lookupConceptsInputSchema,
   lookupConceptsOutputSchema,
+  runGroundingChecks,
   searchBlocksInputSchema,
   searchBlocksOutputSchema,
   validateToolInput,
   validateToolOutput,
-  verifySourceSpans,
+  verifyGroundingInputSchema,
+  verifyGroundingOutputSchema,
 } from "@knowledge-compiler/agent-contracts";
 import type { DraftUpdateProposal } from "../domain/compiler.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
@@ -139,15 +141,29 @@ export class AgentToolService {
     );
   }
 
+  /**
+   * Non-terminal grounding pre-flight (#152). Lets the agent verify its
+   * intended items against the deterministic hard checks and self-correct
+   * before the one-shot draft_proposal. Pure: writes nothing.
+   */
+  verifyGrounding(
+    context: { chunks: Array<{ id: string; chunk_index: number; body_markdown: string }> },
+    input: unknown,
+  ) {
+    const parsedInput = validateToolInput(verifyGroundingInputSchema, input);
+    const result = runGroundingChecks(
+      context.chunks.map((chunk) => ({
+        id: chunk.id,
+        chunk_index: chunk.chunk_index,
+        body_markdown: chunk.body_markdown,
+      })),
+      parsedInput.items,
+    );
+    return validateToolOutput(verifyGroundingOutputSchema, result);
+  }
+
   async draftProposal(context: DraftProposalContext, input: DraftProposalInput) {
     const parsedInput = validateToolInput(draftProposalInputSchema, input);
-    const invalidItemIndexes = new Set<number>();
-    parsedInput.items.forEach((item, index) => {
-      const verification = verifySourceSpans(context.chunks, item.source_spans);
-      if (!verification.ok) {
-        invalidItemIndexes.add(index);
-      }
-    });
 
     const judgeInput = {
       source_text: context.sourceText,
@@ -161,7 +177,14 @@ export class AgentToolService {
       proposal: parsedInput,
       existing_blocks_context: context.existingBlocksContext ?? [],
     };
-    const judgeOutput = await this.evalJudgeService.judge(judgeInput, invalidItemIndexes);
+    const judgeOutput = await this.evalJudgeService.judge(judgeInput);
+    // The verbatim-span check now lives inside the judge (runGroundingChecks);
+    // an item that failed any hard check is reported ungrounded.
+    const invalidItemIndexes = new Set<number>(
+      judgeOutput.grounding
+        .filter((item) => item.verdict === "ungrounded")
+        .map((item) => item.item_index),
+    );
     await this.extractionEvalRepository.create({
       agentRunId: context.agentRunId,
       sourceId: context.sourceId,

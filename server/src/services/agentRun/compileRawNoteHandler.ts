@@ -542,6 +542,15 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         },
       },
       {
+        name: "verify_grounding",
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        run: async (toolInput) =>
+          agentToolService.verifyGrounding(
+            { chunks: loopState.sourceToolOutput?.chunks ?? contractChunks(source) },
+            toolInput,
+          ),
+      },
+      {
         name: "draft_proposal",
         terminal: true,
         canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),

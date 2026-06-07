@@ -76,36 +76,37 @@ describe("eval judge service", () => {
     );
   });
 
-  test("fails hallucinated claims with weak support in cited chunks", () => {
-    const sourceText = "Sparse note: this is not about shortest path. I only wrote that I felt confused.";
+  test("passes a paraphrase with low lexical overlap (semantic support is judged by the LLM judge, not the lint)", () => {
+    const sourceText = "Scan the merged array from the end to avoid overwriting unprocessed values.";
     const judge = judgeProposalHeuristically({
       source_text: sourceText,
       chunks: [
         {
           id: "chunk-1",
           chunk_index: 0,
-          heading: "Sparse note",
+          heading: "Merge",
           body_markdown: sourceText,
-          token_estimate: 18,
+          token_estimate: 14,
         },
       ],
       proposal: {
         indexing_outcome: "create_knowledge",
-        outcome_reason: "This fixture tests reusable knowledge grounding.",
-        reasoning_summary: "Draft sparse note.",
+        outcome_reason: "Reusable technique.",
+        reasoning_summary: "Draft note.",
         incomplete_reasoning: false,
         items: [
           {
             action: "upsert_knowledge",
             target_block_id: null,
-            title: "Priority queue Dijkstra",
-            body_markdown: "## Claims\n- Use a priority queue to relax weighted graph edges in cost order.",
+            title: "Merge direction",
+            // Concise paraphrase: low token overlap, but spans + evidence are valid.
+            body_markdown: "Fill the result backwards so earlier entries stay intact.",
             structured_facets: {
-              summary: "Use Dijkstra for weighted graphs.",
+              summary: "Backward fill keeps unprocessed entries safe.",
               concepts: [],
               claims: [
                 {
-                  text: "Use a priority queue to relax weighted graph edges in cost order.",
+                  text: "Filling from the back protects values not yet processed.",
                   confidence: "high",
                   evidenceChunkIds: ["chunk-1"],
                 },
@@ -117,12 +118,7 @@ describe("eval judge service", () => {
             },
             source_concept_ids: [],
             source_spans: [
-              {
-                chunk_index: 0,
-                char_start: 0,
-                char_end: sourceText.length,
-                text: sourceText,
-              },
+              { chunk_index: 0, char_start: 0, char_end: sourceText.length, text: sourceText },
             ],
             confidence: "high",
             conflict_detected: false,
@@ -135,15 +131,7 @@ describe("eval judge service", () => {
       existing_blocks_context: [],
     });
 
-    expect(judge.overall_verdict).toBe("fail");
-    expect(judge.warnings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "ungrounded",
-          severity: "high",
-          message: expect.stringContaining("weak lexical support"),
-        }),
-      ]),
-    );
+    expect(judge.overall_verdict).toBe("pass");
+    expect(judge.grounding[0]).toMatchObject({ item_index: 0, verdict: "grounded" });
   });
 });

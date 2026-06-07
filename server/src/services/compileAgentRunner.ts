@@ -28,6 +28,7 @@ import {
   getSourceInputSchema,
   lookupConceptsInputSchema,
   searchBlocksInputSchema,
+  verifyGroundingInputSchema,
 } from "@knowledge-compiler/agent-contracts";
 import { env } from "../config/env.js";
 import type { AgentRunner, LoopTranscriptEntry, LoopView } from "./agentLoop.js";
@@ -83,6 +84,7 @@ const toolParameterSchemas: Record<string, z.ZodTypeAny> = {
   get_block: getBlockInputSchema,
   lookup_concepts: lookupConceptsInputSchema,
   get_block_history: getBlockHistoryInputSchema,
+  verify_grounding: verifyGroundingInputSchema,
   draft_proposal: draftProposalInputSchema,
 };
 
@@ -97,8 +99,10 @@ const toolDescriptions: Record<string, string> = {
     "Read the full body, evidence and links of one knowledge block surfaced by a prior search/lookup. Use it before deciding to update or merge into an existing block.",
   get_block_history:
     "Read the version history of a block to understand how it has changed before proposing a conflicting revision.",
+  verify_grounding:
+    "Non-terminal. Pre-flight the citation grounding of the items you intend to submit (verbatim source_spans, evidence chunk ids, no inferred suggestions leaking into body_markdown). If ok=false, fix the reported failures (e.g. correct char offsets using actual_text, drop unknown chunk ids) and call it again. Only call draft_proposal once this returns ok=true.",
   draft_proposal:
-    "Terminal. Submit the final proposal you authored from your observations. Allowed only after get_source (when a source id exists) and search_blocks have run. Call it exactly once.",
+    "Terminal. Submit the final proposal you authored from your observations. Allowed only after get_source (when a source id exists) and search_blocks have run. Prefer to verify_grounding first. Call it exactly once.",
   finish_without_proposal:
     "Terminal. Bail out cleanly when you cannot responsibly draft a proposal; the source is kept searchable and the run is marked incomplete_reasoning.",
 };

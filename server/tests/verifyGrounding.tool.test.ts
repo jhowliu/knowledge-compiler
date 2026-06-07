@@ -45,14 +45,31 @@ function facets(overrides: {
 }
 
 describe("verify_grounding tool", () => {
-  test("reports a verbatim_span offset mismatch with actual_text the agent can fix", () => {
+  test("accepts a verbatim quote even when char offsets are off (offsets are advisory)", () => {
     const { service } = makeService();
     const input: VerifyGroundingInput = {
       items: [
         {
           body_markdown: "Backward fill.",
-          // char_end one short → slice differs from text.
-          source_spans: [{ chunk_index: 0, char_start: 0, char_end: 4, text: "Scan the" }],
+          // Off-by-one / 1-based offsets that do NOT slice exactly, but the text
+          // IS a verbatim substring of the chunk → should pass.
+          source_spans: [{ chunk_index: 0, char_start: 1, char_end: 9, text: "Scan the" }],
+        },
+      ],
+    };
+    const result = service.verifyGrounding({ chunks }, input);
+
+    expect(result.ok).toBe(true);
+    expect(result.items[0].failures).toHaveLength(0);
+  });
+
+  test("flags a verbatim_span when the quote is not in the cited chunk", () => {
+    const { service } = makeService();
+    const input: VerifyGroundingInput = {
+      items: [
+        {
+          body_markdown: "note",
+          source_spans: [{ chunk_index: 0, char_start: 0, char_end: 20, text: "Scan from the front" }],
         },
       ],
     };
@@ -61,7 +78,6 @@ describe("verify_grounding tool", () => {
     expect(result.ok).toBe(false);
     const failure = result.items[0].failures.find((f) => f.check === "verbatim_span");
     expect(failure).toBeDefined();
-    expect(failure?.actual_text).toBe("Scan");
     expect(failure?.valid_chunk_indexes).toEqual([0]);
   });
 

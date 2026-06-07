@@ -100,7 +100,7 @@ const toolDescriptions: Record<string, string> = {
   get_block_history:
     "Read the version history of a block to understand how it has changed before proposing a conflicting revision.",
   verify_grounding:
-    "Non-terminal. Pre-flight the citation grounding of the items you intend to submit (verbatim source_spans, evidence chunk ids, no inferred suggestions leaking into body_markdown). If ok=false, fix the reported failures (e.g. correct char offsets using actual_text, drop unknown chunk ids) and call it again. Only call draft_proposal once this returns ok=true.",
+    "Non-terminal. Pre-flight the citation grounding of the items you intend to submit (each source_spans text must be a verbatim substring of its cited chunk, evidence chunk ids must exist, no inferred suggestions leaking into body_markdown). If ok=false, fix the reported failures (make the quoted text exactly match the chunk, drop unknown chunk ids) and call it again. Only call draft_proposal once this returns ok=true.",
   draft_proposal:
     "Terminal. Submit the final proposal you authored from your observations. Allowed only after get_source (when a source id exists) and search_blocks have run. Prefer to verify_grounding first. Call it exactly once.",
   finish_without_proposal:
@@ -208,7 +208,7 @@ function buildInstructions() {
     "- Set conflict_detected true only when the source genuinely contradicts the targeted block, and then provide conflict_summary and conflict_resolution.",
     "",
     "draft_proposal authoring rules:",
-    "- Ground every item in the source: source_spans must be VERBATIM substrings of a chunk's body_markdown, with correct chunk_index/char_start/char_end (non-verbatim spans are flagged as ungrounded by the eval lint).",
+    "- Ground every item in the source: each source_spans text must be a VERBATIM substring of the cited chunk's body_markdown (copy it exactly). Set chunk_index correctly; char_start/char_end are approximate and not strictly checked. Quotes not found verbatim in the chunk are flagged as ungrounded.",
     "- Cite chunk ids you saw in get_source/search results; do not invent ids.",
     "- Do not add facts, steps, or conclusions that are not supported by the source text.",
     "- If a tool returns a validation error, read it, correct your arguments, and call the tool again.",

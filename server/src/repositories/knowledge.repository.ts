@@ -525,6 +525,7 @@ export interface KnowledgeRepository {
   }): Promise<number>;
   getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null>;
   getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null>;
+  compiledNoteIdForBlock(blockId: string): Promise<string | null>;
 }
 
 function vectorLiteral(values: number[]) {
@@ -1379,6 +1380,23 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
     const source = sourceResult.rows[0] ? mapKnowledgeSource(sourceResult.rows[0]) : null;
     return source ? buildKnowledgeSourceTimeline(source) : null;
+  }
+
+  // Maps a knowledge block id to the compiled note it belongs to. Used to land
+  // agent-suggested links: the agent references blocks, but note_links connect
+  // compiled notes.
+  async compiledNoteIdForBlock(blockId: string): Promise<string | null> {
+    const result = await query<{ compiled_note_id: string | null }>(
+      `
+        select knowledge_versions.compiled_note_id
+        from knowledge_blocks
+        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
+        where knowledge_blocks.id = $1
+        limit 1
+      `,
+      [blockId],
+    );
+    return result.rows[0]?.compiled_note_id ?? null;
   }
 
   async createEvidenceLink(input: {

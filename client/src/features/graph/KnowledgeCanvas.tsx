@@ -66,28 +66,6 @@ function sourceTone(sourceRole: string) {
   return 'border-amber-300 bg-amber-50 text-amber-800'
 }
 
-function noteKeywords(note: CompiledNote | undefined) {
-  if (!note) return []
-  const text = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
-  const words = text.match(/[a-z][a-z0-9-]{2,}/g) ?? []
-  const stopWords = new Set([
-    'the',
-    'and',
-    'for',
-    'with',
-    'when',
-    'that',
-    'this',
-    'should',
-    'note',
-    'review',
-    'problem',
-    'algorithm',
-    'using',
-  ])
-  return [...new Set(words.filter((word) => !stopWords.has(word)))].slice(0, 10)
-}
-
 function mergeKnowledgeNotes(data: WorkspaceData) {
   const notes = new globalThis.Map<string, CompiledNote>()
   for (const note of data.compiledNotes) notes.set(note.id, note)
@@ -340,7 +318,6 @@ export function KnowledgeCanvas({
     }
   }, [selectedNote?.id])
 
-  const selectedKeywords = noteKeywords(selectedNote ?? undefined)
   const selectedNoteLinks = selectedNote
     ? data.noteLinks.filter(
         (link) =>
@@ -364,27 +341,10 @@ export function KnowledgeCanvas({
         : null
     })
     .filter((match): match is RelatedNoteMatch & { link: NoteLink } => Boolean(match))
-  const inferredRelatedNotes: RelatedNoteMatch[] = notes
-    .filter((note) => note.id !== selectedNote?.id)
-    .filter((note) => !approvedLinkedNotes.some((match) => match.note.id === note.id))
-    .map((note) => {
-      const noteText = `${note.title} ${note.bodyMarkdown}`.toLowerCase()
-      const titleMatch = selectedNote ? noteText.includes(selectedNote.title.toLowerCase()) : false
-      const keywordMatches = selectedKeywords.filter((keyword) => noteText.includes(keyword)).length
-      return {
-        note,
-        score: (titleMatch ? 4 : 0) + keywordMatches,
-        reason: titleMatch
-          ? 'Backlink by title mention'
-          : keywordMatches > 1
-            ? 'Concept overlap'
-            : 'Nearby compiled note',
-      }
-    })
-    .filter((match) => match.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 5)
-  const relatedNotes = uniqueRelatedMatches([...approvedLinkedNotes, ...inferredRelatedNotes]).slice(0, 5)
+  // Related cards reflect real approved note_links only — no client-side keyword
+  // guessing (previously "Backlink by title mention" / "Concept overlap" /
+  // "Nearby compiled note"), which implied relationships that did not exist.
+  const relatedNotes = uniqueRelatedMatches(approvedLinkedNotes).slice(0, 5)
   const linkVisibleStatuses = new Set(['approved', 'pending'])
   const connectedGraphNotes = selectedNoteLinks
     .filter((link) => linkVisibleStatuses.has(link.status))
@@ -415,7 +375,7 @@ export function KnowledgeCanvas({
     relation:
       note.id === selectedNote?.id
         ? 'selected'
-        : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Nearby note',
+        : relatedNotes.find((match) => match.note.id === note.id)?.reason ?? 'Compiled note',
     link: relatedNotes.find((match) => match.note.id === note.id && 'link' in match)?.link,
   }))
   const sourceGraphNodes = visibleSourceCards.map((source, index) => {

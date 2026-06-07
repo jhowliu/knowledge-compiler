@@ -244,6 +244,13 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.compiledNotes;
   }
 
+  async compiledNoteIdForBlock(blockId: string): Promise<string | null> {
+    const block = this.knowledgeBlocks.find((candidate) => candidate.id === blockId);
+    if (!block) return null;
+    const version = this.knowledgeVersions.find((candidate) => candidate.id === block.knowledgeVersionId);
+    return version?.compiledNoteId ?? null;
+  }
+
   async applyApprovedKnowledge(input: {
     userId?: string | null;
     targetCompiledNoteId: string | null;

@@ -1,4 +1,12 @@
 import { query, transaction } from "../db/postgres.js";
+
+/**
+ * A query executor: either the global {@link query} or a transaction-scoped
+ * query from {@link transaction}. Repo write methods accept one (default
+ * {@link query}) so callers can run them inside a shared transaction by passing
+ * the transaction's executor — the unit-of-work pattern.
+ */
+type Db = typeof query;
 import type {
   CompiledNote,
   Concept,
@@ -474,6 +482,25 @@ export interface KnowledgeRepository {
     changeSummary?: string | null;
     blocks: CreateKnowledgeBlockInput[];
   }): Promise<KnowledgeSourceSnapshot>;
+  applyApprovedKnowledge(input: {
+    userId?: string | null;
+    targetCompiledNoteId: string | null;
+    targetKnowledgeSourceId: string | null;
+    domain: string;
+    noteType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    proposalId: string;
+    changeSummary: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+    evidenceSourceType: string;
+    evidenceSourceId: string;
+    rawSourceId: string | null;
+    confidence: string;
+    impactLevel: number;
+    concepts: Array<{ name: string; conceptType: string }>;
+  }): Promise<{ compiledNote: CompiledNote; snapshot: KnowledgeSourceSnapshot }>;
   listActiveKnowledgeBlocks(limit: number): Promise<KnowledgeBlock[]>;
   listKnowledgeBlocksNeedingEmbeddings(limit: number): Promise<KnowledgeBlock[]>;
   updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]): Promise<void>;
@@ -557,9 +584,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     return this.bm25Support;
   }
 
-  async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }) {
+  async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }, db: Db = query) {
     const normalizedName = normalizeConcept(input.name);
-    const result = await query<ConceptRow>(
+    const result = await db<ConceptRow>(
       `
         insert into concepts (user_id, name, normalized_name, concept_type)
         values ($1, $2, $3, $4)
@@ -581,8 +608,8 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     relationType: string;
     confidence: string;
     source: string;
-  }) {
-    await query(
+  }, db: Db = query) {
+    await db(
       `
         insert into concept_index (
           user_id,
@@ -820,9 +847,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     title: string;
     bodyMarkdown: string;
     structuredData: unknown;
-  }) {
+  }, db: Db = query) {
     if (input.targetCompiledNoteId) {
-      const targeted = await query<CompiledNoteRow>(
+      const targeted = await db<CompiledNoteRow>(
         `
           update compiled_notes
           set domain = $2,
@@ -851,7 +878,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
       }
     }
 
-    const existing = await query<CompiledNoteRow>(
+    const existing = await db<CompiledNoteRow>(
       `
         select *
         from compiled_notes
@@ -865,7 +892,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
 
     const result = existing.rows[0]
-      ? await query<CompiledNoteRow>(
+      ? await db<CompiledNoteRow>(
           `
             update compiled_notes
             set body_markdown = $2,
@@ -876,7 +903,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           `,
           [existing.rows[0].id, input.bodyMarkdown, input.structuredData],
         )
-      : await query<CompiledNoteRow>(
+      : await db<CompiledNoteRow>(
           `
             insert into compiled_notes (
               user_id,
@@ -929,8 +956,10 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     proposalId?: string | null;
     changeSummary?: string | null;
     blocks: CreateKnowledgeBlockInput[];
-  }): Promise<KnowledgeSourceSnapshot> {
-    return transaction(async (transactionQuery) => {
+  }, db?: Db): Promise<KnowledgeSourceSnapshot> {
+    // Join an outer transaction when given one; otherwise own a transaction so a
+    // standalone call stays atomic.
+    const run = async (transactionQuery: Db): Promise<KnowledgeSourceSnapshot> => {
       const existing = input.targetKnowledgeSourceId
         ? await transactionQuery<KnowledgeSourceRow>(
             `
@@ -1143,6 +1172,131 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         version,
         blocks: savedBlocks,
       };
+    };
+    return db ? run(db) : transaction(run);
+  }
+
+  /**
+   * Apply one approved knowledge item atomically: compiled note + evidence link
+   * + versioned knowledge source/blocks + source-chunk evidence + concept index,
+   * all in a single transaction. Either everything lands or nothing does — no
+   * orphan compiled_notes when a later step fails. Block-building (LLM) and
+   * embedding (external) stay OUTSIDE: blocks are passed in, embedding runs after
+   * commit by the caller.
+   */
+  async applyApprovedKnowledge(input: {
+    userId?: string | null;
+    targetCompiledNoteId: string | null;
+    targetKnowledgeSourceId: string | null;
+    domain: string;
+    noteType: string;
+    title: string;
+    bodyMarkdown: string;
+    structuredData: unknown;
+    proposalId: string;
+    changeSummary: string | null;
+    blocks: CreateKnowledgeBlockInput[];
+    evidenceSourceType: string;
+    evidenceSourceId: string;
+    rawSourceId: string | null;
+    confidence: string;
+    impactLevel: number;
+    concepts: Array<{ name: string; conceptType: string }>;
+  }): Promise<{ compiledNote: CompiledNote; snapshot: KnowledgeSourceSnapshot }> {
+    return transaction(async (tx) => {
+      const compiledNote = await this.upsertCompiledNote(
+        {
+          userId: input.userId,
+          targetCompiledNoteId: input.targetCompiledNoteId,
+          domain: input.domain,
+          noteType: input.noteType,
+          title: input.title,
+          bodyMarkdown: input.bodyMarkdown,
+          structuredData: input.structuredData,
+        },
+        tx,
+      );
+
+      await this.createEvidenceLink(
+        {
+          userId: input.userId,
+          sourceType: input.evidenceSourceType,
+          sourceId: input.evidenceSourceId,
+          targetType: "compiled_note",
+          targetId: compiledNote.id,
+          confidence: input.confidence,
+          impactLevel: input.impactLevel,
+          approvalStatus: "approved",
+        },
+        tx,
+      );
+
+      const snapshot = await this.upsertKnowledgeSourceVersion(
+        {
+          userId: input.userId,
+          targetKnowledgeSourceId: input.targetKnowledgeSourceId,
+          domain: compiledNote.domain,
+          knowledgeType: compiledNote.noteType,
+          title: compiledNote.title,
+          bodyMarkdown: compiledNote.bodyMarkdown,
+          structuredData: compiledNote.structuredData,
+          compiledNoteId: compiledNote.id,
+          proposalId: input.proposalId,
+          changeSummary: input.changeSummary,
+          blocks: input.blocks,
+        },
+        tx,
+      );
+
+      await this.createEvidenceLink(
+        {
+          userId: input.userId,
+          sourceType: input.evidenceSourceType,
+          sourceId: input.evidenceSourceId,
+          targetType: "knowledge_version",
+          targetId: snapshot.version.id,
+          confidence: input.confidence,
+          impactLevel: input.impactLevel,
+          approvalStatus: "approved",
+        },
+        tx,
+      );
+
+      if (input.rawSourceId) {
+        await this.createEvidenceLinksFromSourceChunks(
+          {
+            userId: input.userId,
+            rawSourceId: input.rawSourceId,
+            targetType: "knowledge_version",
+            targetId: snapshot.version.id,
+            confidence: input.confidence,
+            impactLevel: input.impactLevel,
+            approvalStatus: "approved",
+          },
+          tx,
+        );
+      }
+
+      for (const concept of input.concepts) {
+        const savedConcept = await this.upsertConcept(
+          { userId: input.userId, name: concept.name, conceptType: concept.conceptType },
+          tx,
+        );
+        await this.indexConcept(
+          {
+            userId: input.userId,
+            conceptId: savedConcept.id,
+            targetType: "compiled_note",
+            targetId: compiledNote.id,
+            relationType: "canonicalizes",
+            confidence: input.confidence,
+            source: "approved_proposal",
+          },
+          tx,
+        );
+      }
+
+      return { compiledNote, snapshot };
     });
   }
 
@@ -1236,8 +1390,8 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     confidence: string;
     impactLevel: number;
     approvalStatus: string;
-  }) {
-    await query(
+  }, db: Db = query) {
+    await db(
       `
         insert into evidence_links (
           user_id,
@@ -1272,8 +1426,8 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     confidence: string;
     impactLevel: number;
     approvalStatus: string;
-  }) {
-    const result = await query<{ id: string }>(
+  }, db: Db = query) {
+    const result = await db<{ id: string }>(
       `
         insert into evidence_links (
           user_id,

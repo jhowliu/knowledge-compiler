@@ -356,6 +356,15 @@ function ProposalItemWarnings({ item }: { item: ProposalItem }) {
             <li>
               Verdict: <span className="font-bold uppercase">{item.evalVerdict}</span>
             </li>
+            {(item.evalWarnings ?? []).map((warning, index) => (
+              <li key={index}>
+                <span className="font-semibold uppercase">
+                  {warning.type.replaceAll('_', ' ')}
+                </span>
+                {': '}
+                {warning.message}
+              </li>
+            ))}
             {item.evalVerdict === 'fail' ? (
               <li>This item requires explicit acknowledgement before applying.</li>
             ) : (

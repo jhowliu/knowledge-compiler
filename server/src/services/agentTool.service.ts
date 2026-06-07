@@ -298,6 +298,7 @@ function toDraftUpdateProposal(
           conflictSummary: item.conflict_summary,
           conflictResolution: item.conflict_resolution,
           evalVerdict: itemEvalVerdict(input, judgeOutput, index, invalidItemIndexes),
+          evalWarnings: judgeOutput.warnings.filter((warning) => warning.affected_item_index === index),
           incompleteReasoning: input.incomplete_reasoning,
         };
       }),

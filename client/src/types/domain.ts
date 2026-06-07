@@ -81,6 +81,7 @@ export type ProposalItem = {
   conflictSummary: string | null
   conflictResolution: 'update' | 'keep_both' | 'needs_user_decision' | null
   evalVerdict: 'pass' | 'warn' | 'fail' | null
+  evalWarnings: EvalWarning[] | null
   incompleteReasoning: boolean
 }
 

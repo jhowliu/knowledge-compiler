@@ -47,6 +47,7 @@ export class InMemoryProposalRepository implements ProposalRepository {
         conflictSummary: item.conflictSummary ?? null,
         conflictResolution: item.conflictResolution ?? null,
         evalVerdict: item.evalVerdict ?? null,
+        evalWarnings: item.evalWarnings ?? null,
         incompleteReasoning: item.incompleteReasoning ?? false,
         createdAt: new Date("2026-05-24T00:00:00.000Z"),
       })),

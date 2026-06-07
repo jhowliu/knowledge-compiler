@@ -1,6 +1,9 @@
 # Recap
 
 ## Summary
+- Refactored `compile_raw_note` agent runtime: `CompileRawNoteHandler` now reads as high-level orchestration, while `compileRawNoteAgentRuntime.ts` owns loop state, tool exposure, terminal proposal handling, fallback incomplete proposals, loop event recording, and the default scripted runner.
+- Removed the unreachable non-agent-tool fallback path from `CompileRawNoteHandler`; source-backed compile still uses `AgentToolService` and preserves existing tool names/events.
+- Compile runtime refactor validation passed: `npm run typecheck --workspace=server`, focused `npm run test --workspace=server -- agentRunQueue.service.test.ts agentLoop.test.ts agentTool.service.test.ts`, full `npm run test --workspace=server`, and `git diff --check`.
 - Implemented issue #133 on `codex/paradedb-bm25-133`: switched local Postgres from `pgvector/pgvector:pg16` to pinned `paradedb/paradedb:0.23.4-pg16`, renamed the init SQL to `01-enable-retrieval-extensions.sql`, and enabled available `vector` / `pg_search` extensions on fresh volumes.
 - Added migration `020_bm25_search.sql` to create `pg_search` when available and add `knowledge_blocks_bm25_idx` using ParadeDB BM25 over `id`, `heading`, `body_markdown`, `status`, and `updated_at`.
 - Added `PostgresBm25Retriever` as a first-class `bm25` signal in the hybrid retrieval pipeline with capability detection for missing `pg_search` or missing BM25 index; `/search`, `/ask`, and agent `search_blocks` inherit BM25 via the existing RRF merge.
@@ -131,6 +134,8 @@
 - Started Phase D Review Inbox polish on `codex/phase-d-review-inbox-conflicts`: added conflict/eval badges, apply acknowledgement gates for unresolved conflicts and failed evals, readable eval warnings in the Agent Run drawer, and `GET /agent-runs/:id/eval-result`.
 
 ## Decisions
+- Keep `CompileRawNoteHandler` as the orchestration module for `compile_raw_note`; the compile agent runtime module is the locality point for loop tools, mutable loop observations, runner fallback behavior, and tool event translation.
+- Do not split `agentRun/` into nested folders yet. The current module count is still small; split later only if `compileRawNoteAgentRuntime.ts` grows into a larger runtime subsystem.
 - BM25 is a separate retrieval source, not a replacement for Postgres FTS or pgvector. The active signal order is FTS + concept + vector + BM25 into the same RRF merge.
 - ParadeDB is the practical local/dev image for combined `pg_search` + `pgvector`; it is pinned to PG16 to avoid a Postgres major-version jump.
 - BM25 remains capability-gated: missing `pg_search` or `knowledge_blocks_bm25_idx` disables only the BM25 signal while preserving fallback retrieval.
@@ -303,6 +308,7 @@
 - App navigation redesign validation: `npm run typecheck`, `npm run build`, `npm run test --workspace=server`, and `git diff --check` pass. Browser smoke on `http://localhost:5176/` confirmed the Sources sidebar no longer contains filters, Index status, or large mode cards; header filters, Agent Activity shortcut, theme toggle, 1280px/1180px layouts, and console-error checks all pass with no horizontal overflow.
 
 ## Next Target
+- If the compile agent runtime grows again, add focused tests around `compileRawNoteAgentRuntime.ts` tool availability / block-id gating before considering a nested `compileRawNote/` folder.
 - After #133 merges, run an enabled BM25 smoke test on a fresh ParadeDB volume and then continue with #134 reranking or #142 query-side concept extraction.
 - Open the #126 PR after staging the source migration files; leave unrelated local untracked files (`AGENT.md`, `deisgn.pen`, `issue.sh`, `seed-notes/`) out of the PR unless they become intentional.
 - Normalize legacy `pattern` / `problem_note` / `algorithm` note-type support so the graph renders only `knowledge_note` cards and concepts remain metadata for linking/search.

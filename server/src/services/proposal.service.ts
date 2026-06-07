@@ -226,14 +226,28 @@ export class ProposalService {
 
     if (item.actionType === "create_link") {
       const sourceNoteType = stringValue(payload, "sourceNoteType", "compiled_note");
+      const targetNoteType = stringValue(payload, "targetNoteType", "compiled_note");
+
+      // The LLM agent references knowledge *blocks* (sourceBlockId/targetBlockId),
+      // but note_links connect compiled *notes*. Resolve block ids to their
+      // compiled note. Keep back-compat with the scripted indexer, which emits
+      // targetNoteId + sourceTitle directly.
+      const targetBlockId = stringValue(payload, "targetBlockId");
+      const targetNoteId =
+        stringValue(payload, "targetNoteId") ||
+        (targetBlockId ? (await this.knowledgeRepository.compiledNoteIdForBlock(targetBlockId)) ?? "" : "");
+
+      const sourceBlockId = stringValue(payload, "sourceBlockId");
       const sourceNoteId =
         stringValue(payload, "sourceNoteId") ||
         context.compiledNoteByTitle.get(normalizedTitle(stringValue(payload, "sourceTitle")))?.id ||
+        (sourceBlockId ? (await this.knowledgeRepository.compiledNoteIdForBlock(sourceBlockId)) ?? "" : "") ||
+        // Common case: the agent links FROM the note this proposal just created
+        // (source_block_id is null), so fall back to that note.
+        [...context.compiledNoteByTitle.values()].at(-1)?.id ||
         "";
-      const targetNoteType = stringValue(payload, "targetNoteType", "compiled_note");
-      const targetNoteId = stringValue(payload, "targetNoteId");
 
-      if (!sourceNoteId || !targetNoteId) {
+      if (!sourceNoteId || !targetNoteId || sourceNoteId === targetNoteId) {
         return;
       }
 

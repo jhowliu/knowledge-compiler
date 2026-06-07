@@ -580,6 +580,82 @@ describe("ProposalService", () => {
     });
   });
 
+  test("lands an agent-suggested link (by block id) as a note_link on approve", async () => {
+    const proposals = new InMemoryProposalRepository();
+    const knowledge = new InMemoryKnowledgeRepository();
+    const noteLinks = new InMemoryNoteLinkRepository();
+    const service = new ProposalService(proposals, knowledge, noteLinks);
+
+    // An existing note the agent will link to. The agent references the block id
+    // (target_block_id), not the compiled-note id.
+    const existing = await knowledge.upsertCompiledNote({
+      domain: "coding",
+      noteType: "algorithm",
+      title: "BFS",
+      bodyMarkdown: "Use BFS for unweighted shortest paths.",
+      structuredData: {},
+    });
+    const existingSnapshot = await knowledge.upsertKnowledgeSourceVersion({
+      domain: existing.domain,
+      knowledgeType: existing.noteType,
+      title: existing.title,
+      bodyMarkdown: existing.bodyMarkdown,
+      structuredData: existing.structuredData,
+      compiledNoteId: existing.id,
+      proposalId: "proposal-existing",
+      changeSummary: "Initial version.",
+      blocks: [{ blockIndex: 0, heading: null, bodyMarkdown: existing.bodyMarkdown, tokenEstimate: 8 }],
+    });
+    const targetBlockId = existingSnapshot.blocks[0].id;
+
+    const proposal = await proposals.create({
+      draft: {
+        detectedDomain: "coding",
+        detectedKnowledgeType: "algorithm",
+        impactLevel: 3,
+        confidence: "high",
+        rationale: "Agent-judged link.",
+        items: [
+          {
+            actionType: "upsert_knowledge",
+            targetType: "knowledge_source",
+            payload: {
+              domain: "coding",
+              knowledgeType: "algorithm",
+              title: "Dijkstra",
+              bodyMarkdown: "Use Dijkstra for positive weighted shortest paths.",
+              structuredData: { concepts: [] },
+            },
+            rationale: "Create approved knowledge.",
+          },
+          {
+            // Pure agent shape: only a block id, no targetNoteId / sourceTitle.
+            actionType: "create_link",
+            targetType: "note_link",
+            payload: {
+              targetBlockId,
+              relationType: "related_concept",
+              confidence: "high",
+            },
+            rationale: "Connect related shortest-path knowledge.",
+          },
+        ],
+      },
+    });
+
+    await service.approveProposal(proposal.id);
+
+    // The block-id link now resolves to a compiled-note note_link (was silently
+    // dropped before, because the consumer only read targetNoteId).
+    expect(noteLinks.noteLinks).toHaveLength(1);
+    expect(noteLinks.noteLinks[0]).toMatchObject({
+      sourceNoteId: "compiled-2", // the Dijkstra note created by this proposal
+      targetNoteId: existing.id,
+      relationType: "related_concept",
+      status: "pending",
+    });
+  });
+
   test("updates targeted existing knowledge instead of creating a duplicate for revisions", async () => {
     const proposals = new InMemoryProposalRepository();
     const knowledge = new InMemoryKnowledgeRepository();

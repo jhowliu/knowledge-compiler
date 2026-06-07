@@ -168,18 +168,22 @@ the answerer composes a scoped, cited answer.
 flowchart TD
   Q["Query"] --> FTS["Postgres FTS<br/>(block-level fallback)"]
   Q --> BM25["BM25 pg_search<br/>(block-level, needs ParadeDB)"]
-  Q --> CON["Concept index match<br/>(note-level → blocks)"]
   Q --> E["Embed query"]
   E --> VEC["Vector cosine<br/>(block-level, needs pgvector)"]
+  Q -.-> CON["Concept index match (note-level)<br/>⚠ dormant: no query-side concept<br/>resolver wired (#142 dropped)"]
   FTS --> RRF["RRF fusion (k=60)"]
   BM25 --> RRF
-  CON --> RRF
   VEC --> RRF
+  CON -.->|currently 0 candidates| RRF
   RRF --> HOP["One-hop graph expand<br/>approved note_links"]
   HOP --> TOP["Top-N blocks + citations"]
   TOP --> ANS["Answerer<br/>exact-question scoping prompt"]
   ANS --> OUT["Answer + citations"]
 ```
+
+> The concept retriever is present in the hybrid set but **dormant**: nothing
+> resolves a query into concept ids (query-side resolution was dropped, #142), so
+> it always returns 0 candidates. RRF currently fuses FTS + BM25 + vector.
 
 ### Design philosophy
 
@@ -194,10 +198,11 @@ flowchart TD
 - **Mechanical boundaries, LLM for context.** Following Anthropic's Contextual
   Retrieval, chunk *boundaries* are mechanical (fixed-size); the LLM is spent on a
   per-chunk *situating context*, not on segmentation.
-- **Hybrid retrieval, complementary granularities.** The concept graph gives global
-  recall and term disambiguation at *note* level; vector + contextual headers give
-  local precision at *chunk* level; BM25 covers exact lexical matches; Postgres FTS
-  remains the built-in lexical fallback. RRF fuses them.
+- **Hybrid retrieval, complementary granularities.** Vector + contextual headers
+  give local precision at *chunk* level; BM25 covers exact lexical matches; Postgres
+  FTS remains the built-in lexical fallback; RRF fuses them. The concept graph is
+  meant to add global recall and term disambiguation at *note* level, but that
+  retriever is currently dormant (no query-side concept resolver, #142).
 
 ### Known gaps (tracked)
 

@@ -126,6 +126,22 @@ test("instructs body markdown authoring to preserve useful source structure", as
   expect(captured!.instructions).toContain("if the source is prose, keep the output mostly prose");
 });
 
+test("instructs targeted updates to read and merge the existing block", async () => {
+  let captured: CompileModelRequest | null = null;
+  const modelClient: CompileModelClient = async (request) => {
+    captured = request;
+    return { toolName: "get_source", arguments: { source_id: "raw-source-1" } };
+  };
+  const runner = createLlmCompileAgentRunner(makeContext(), { modelClient });
+
+  await runner.nextStep(view({ availableTools: ["get_source"] }));
+
+  expect(captured!.instructions).toContain("If you intend to set target_block_id, you MUST call get_block");
+  expect(captured!.instructions).toContain("target_block_id means the proposal body is a complete replacement version");
+  expect(captured!.instructions).toContain("Never submit only the new source, delta, or example");
+  expect(captured!.instructions).toContain("cite the existing target block id");
+});
+
 test("passes a model-authored draft_proposal payload straight through", async () => {
   const draft: DraftProposalInput = {
     indexing_outcome: "create_knowledge",

@@ -827,6 +827,181 @@ describe("agent run queue service", () => {
     expect(calledTools).toEqual(["get_source", "search_blocks", "draft_proposal"]);
   });
 
+  test("requires get_block before drafting a targeted knowledge update", async () => {
+    const agentRunRepository = new InMemoryAgentRunRepository();
+    const knowledgeRepository = new InMemoryKnowledgeRepository();
+    const noteLinkRepository = new InMemoryNoteLinkRepository();
+    const rawSourceRepository = new InMemoryRawSourceRepository();
+    const proposalRepository = new InMemoryProposalRepository();
+    const extractionEvalRepository = new InMemoryExtractionEvalRepository();
+    const sourceText =
+      "At a train station, a passenger sits down looking pale while nearby people wait for someone else to act. This illustrates the bystander effect.";
+    const existingBody =
+      "People are less likely to help someone in trouble when other people are around. The bystander effect is driven by diffusion of responsibility and pluralistic ignorance.";
+    const readRepository: AgentToolReadRepository = {
+      async getBlock(blockId: string) {
+        return {
+          block: {
+            id: blockId,
+            knowledge_source_id: "ks-bystander",
+            knowledge_version_id: "kv-bystander",
+            compiled_note_id: "compiled-bystander",
+            title: "Bystander Effect",
+            heading: null,
+            body_markdown: existingBody,
+            status: "active",
+          },
+          evidence: [],
+          links: [],
+        };
+      },
+      async getBlockHistory() {
+        return { versions: [] };
+      },
+      async lookupConcepts() {
+        return { matches: [] };
+      },
+    };
+    const earlyDraft: DraftProposalInput = {
+      indexing_outcome: "update_existing_knowledge",
+      outcome_reason: "The source adds an example to the existing bystander-effect block.",
+      reasoning_summary: "Attempted to draft before reading the full target block.",
+      incomplete_reasoning: false,
+      items: [
+        {
+          action: "upsert_knowledge",
+          target_block_id: "block-bystander",
+          title: "Bystander Effect",
+          body_markdown: `Example: ${sourceText}`,
+          structured_facets: {
+            summary: "Train-station example.",
+            concepts: [],
+            claims: [
+              {
+                text: "The train-station passenger scenario illustrates the bystander effect.",
+                confidence: "high",
+                evidenceChunkIds: ["raw-source-1-chunk-0"],
+              },
+            ],
+            methods: [],
+            examples: [],
+            constraints: [],
+            inferredSuggestions: [],
+          },
+          source_concept_ids: [],
+          source_spans: [{ chunk_index: 0, char_start: 0, char_end: sourceText.length, text: sourceText }],
+          confidence: "high",
+          conflict_detected: false,
+          conflict_summary: null,
+          conflict_resolution: null,
+        },
+      ],
+      suggested_links: [],
+    };
+    const mergedDraft: DraftProposalInput = {
+      ...earlyDraft,
+      reasoning_summary: "Read the target block and drafted the full merged note.",
+      items: [
+        {
+          ...earlyDraft.items[0],
+          body_markdown: `${existingBody}\n\n## Examples\n${sourceText}`,
+          structured_facets: {
+            summary: "The bystander effect reduces helping when others are present.",
+            concepts: [],
+            claims: [
+              {
+                text: "The bystander effect is driven by diffusion of responsibility and pluralistic ignorance.",
+                confidence: "high",
+                evidenceChunkIds: ["block-bystander"],
+              },
+              {
+                text: "The train-station passenger scenario illustrates the bystander effect.",
+                confidence: "high",
+                evidenceChunkIds: ["raw-source-1-chunk-0"],
+              },
+            ],
+            methods: [],
+            examples: [
+              {
+                title: "Train-station bystander scenario",
+                text: sourceText,
+                illustrates: ["bystander effect"],
+              },
+            ],
+            constraints: [],
+            inferredSuggestions: [],
+          },
+        },
+      ],
+    };
+    const runnerFactory: CompileAgentRunnerFactory = () => {
+      let triedEarlyDraft = false;
+      return {
+        async nextStep(view) {
+          const successfulTools = new Set(
+            view.transcript.filter((entry) => entry.result.ok).map((entry) => entry.tool),
+          );
+          if (!successfulTools.has("get_source") && view.availableTools.includes("get_source")) {
+            return { tool: "get_source", input: { source_id: "raw-source-1" } };
+          }
+          if (!successfulTools.has("search_blocks") && view.availableTools.includes("search_blocks")) {
+            return { tool: "search_blocks", input: { query: "bystander effect", limit: 8 } };
+          }
+          if (!triedEarlyDraft) {
+            triedEarlyDraft = true;
+            return { tool: "draft_proposal", input: earlyDraft };
+          }
+          if (!successfulTools.has("get_block") && view.availableTools.includes("get_block")) {
+            return { tool: "get_block", input: { block_id: "block-bystander" } };
+          }
+          return { tool: "draft_proposal", input: mergedDraft };
+        },
+      };
+    };
+    const service = createAgentRunQueueService({
+      agentRunRepository,
+      knowledgeRepository,
+      noteLinkRepository,
+      proposalRepository,
+      wikiIndexer: llmWikiIndexer,
+      rawSourceRepository,
+      extractionEvalRepository,
+      agentToolReadRepository: readRepository,
+      compileAgentRunnerFactory: runnerFactory,
+    });
+    const rawSource = await rawSourceRepository.create(
+      {
+        title: "Train-station bystander example",
+        sourceRole: "personal_note",
+        sourceType: "markdown",
+        bodyMarkdown: sourceText,
+      },
+      [{ chunkIndex: 0, heading: null, bodyMarkdown: sourceText, tokenEstimate: 28 }],
+    );
+
+    const agentRun = await service.enqueue({ runType: "compile_raw_note", input: { rawSourceId: rawSource.id } });
+    await service.process(agentRun.id);
+
+    const calledTools = agentRunRepository.events
+      .filter((event) => event.category === "tool" && event.name === "called")
+      .map((event) => (event.payload as { tool?: string }).tool);
+    expect(calledTools).toEqual(["get_source", "search_blocks", "draft_proposal", "get_block", "draft_proposal"]);
+    expect(
+      agentRunRepository.events.some(
+        (event) =>
+          event.category === "tool" &&
+          event.name === "result" &&
+          JSON.stringify(event.payload).includes("Targeted updates must call get_block"),
+      ),
+    ).toBe(true);
+    expect(proposalRepository.proposals).toHaveLength(1);
+    expect(proposalRepository.proposals[0].items[0].payload).toMatchObject({
+      bodyMarkdown: expect.stringContaining("diffusion of responsibility"),
+      targetBlockId: "block-bystander",
+    });
+    expect(extractionEvalRepository.extractionEvals[0]).toMatchObject({ verdict: "pass" });
+  });
+
   test("drives the loop with the LLM runner, authoring the draft in a model-chosen order", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();

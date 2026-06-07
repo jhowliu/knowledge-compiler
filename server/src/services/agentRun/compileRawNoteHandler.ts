@@ -264,7 +264,7 @@ export class CompileRawNoteHandler implements AgentRunHandler {
               block_id: result.block_id,
               title: result.title,
               heading: result.heading,
-              body_markdown_preview: result.body_markdown_preview,
+              body_markdown: result.body_markdown,
             })),
             conceptMatches: (loopState.conceptLookup?.matches ?? [])
               .filter((match) => match.match_type !== "none")
@@ -320,11 +320,12 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         .map((item) => {
           const payload = item.payload as Record<string, unknown>;
           const keepOnly = item.actionType === "keep_source_searchable" || incompleteReasoning;
+          const proposedBodyMarkdown = typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown;
           return {
             action: keepOnly ? ("keep_source_searchable" as const) : ("upsert_knowledge" as const),
             target_block_id: keepOnly ? null : loopState.targetBlockId,
             title: typeof payload.title === "string" ? payload.title : source.title ?? "Untitled knowledge",
-            body_markdown: typeof payload.bodyMarkdown === "string" ? payload.bodyMarkdown : source.bodyMarkdown,
+            body_markdown: proposedBodyMarkdown,
             structured_facets: normalizeKnowledgeStructuredData(
               payload.structuredData ?? loopState.extraction.structuredData,
             ),
@@ -371,7 +372,7 @@ export class CompileRawNoteHandler implements AgentRunHandler {
           userId: source.userId,
           sourceText: source.bodyMarkdown,
           chunks: loopState.sourceToolOutput?.chunks ?? contractChunks(source),
-          existingBlocksContext: loopState.candidateBlocks,
+          existingBlocksContext: existingBlocksForDraft(loopState),
         },
         input,
       );
@@ -487,6 +488,8 @@ export class CompileRawNoteHandler implements AgentRunHandler {
     const hasPrerequisiteSource = (view: LoopView) =>
       !requiresSourceTool || hasSuccessfulTool(view, "get_source");
     const hasSearch = (view: LoopView) => hasSuccessfulTool(view, "search_blocks");
+    const hasFetchedTargetBlock = () =>
+      !loopState.targetBlockId || loopState.fetchedBlocks.has(loopState.targetBlockId);
 
     return [
       {
@@ -553,11 +556,19 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       {
         name: "draft_proposal",
         terminal: true,
-        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view),
+        canRun: (view) => hasPrerequisiteSource(view) && hasSearch(view) && hasFetchedTargetBlock(),
         run: async (toolInput, view) => {
           const draftInput = isDraftProposalInput(toolInput)
             ? toolInput
             : buildDraftInput(view);
+          const missingTargetBlockIds = targetBlockIdsFromDraft(draftInput)
+            .filter((blockId) => !loopState.fetchedBlocks.has(blockId));
+          if (missingTargetBlockIds.length) {
+            applyDraftOutcome(loopState, draftInput);
+            throw new Error(
+              `Targeted updates must call get_block before draft_proposal so the existing knowledge can be merged: ${missingTargetBlockIds.join(", ")}`,
+            );
+          }
           if (!loopState.outcomeClassified) {
             applyDraftOutcome(loopState, draftInput);
           }
@@ -670,10 +681,28 @@ function blockSummaryFromBlock(
     compiled_note_id: output.block.compiled_note_id,
     title: output.block.title,
     heading: output.block.heading,
-    body_markdown_preview: output.block.body_markdown.slice(0, 320),
+    body_markdown: output.block.body_markdown,
     rank: 0,
     linked_block_ids: [],
   };
+}
+
+function existingBlocksForDraft(loopState: CompileLoopState): SearchBlocksOutput["results"] {
+  const blocksById = new Map(loopState.candidateBlocks.map((block) => [block.block_id, block]));
+  for (const output of loopState.fetchedBlocks.values()) {
+    const existing = blocksById.get(output.block.id);
+    blocksById.set(output.block.id, {
+      block_id: output.block.id,
+      knowledge_source_id: output.block.knowledge_source_id,
+      compiled_note_id: output.block.compiled_note_id,
+      title: output.block.title,
+      heading: output.block.heading,
+      body_markdown: output.block.body_markdown,
+      rank: existing?.rank ?? 0,
+      linked_block_ids: existing?.linked_block_ids ?? [],
+    });
+  }
+  return Array.from(blocksById.values());
 }
 
 /**
@@ -845,6 +874,16 @@ function isDraftProposalInput(input: unknown): input is DraftProposalInput {
       Array.isArray((input as { items?: unknown }).items) &&
       Array.isArray((input as { suggested_links?: unknown }).suggested_links),
   );
+}
+
+function targetBlockIdsFromDraft(input: DraftProposalInput) {
+  return [
+    ...new Set(
+      input.items
+        .map((item) => item.target_block_id)
+        .filter((blockId): blockId is string => Boolean(blockId)),
+    ),
+  ];
 }
 
 function applyDraftOutcome(loopState: CompileLoopState, input: DraftProposalInput) {

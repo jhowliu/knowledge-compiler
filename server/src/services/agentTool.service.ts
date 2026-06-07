@@ -50,7 +50,7 @@ export type DraftProposalContext = {
     compiled_note_id: string | null;
     title: string;
     heading: string | null;
-    body_markdown_preview: string;
+    body_markdown: string;
     rank: number;
     linked_block_ids: string[];
   }>;
@@ -109,7 +109,7 @@ export class AgentToolService {
         compiled_note_id: result.compiledNoteId,
         title: result.title,
         heading: result.heading,
-        body_markdown_preview: result.bodyMarkdown.slice(0, 320),
+        body_markdown: result.bodyMarkdown,
         rank: result.rank,
         linked_block_ids: [],
       })),
@@ -165,6 +165,10 @@ export class AgentToolService {
   async draftProposal(context: DraftProposalContext, input: DraftProposalInput) {
     const parsedInput = validateToolInput(draftProposalInputSchema, input);
 
+    const existingBlocksContext = await this.withHydratedTargetBlocks(
+      context.existingBlocksContext ?? [],
+      parsedInput.items.map((item) => item.target_block_id).filter((blockId): blockId is string => Boolean(blockId)),
+    );
     const judgeInput = {
       source_text: context.sourceText,
       chunks: context.chunks.map((chunk) => ({
@@ -175,7 +179,7 @@ export class AgentToolService {
         token_estimate: chunk.token_estimate,
       })),
       proposal: parsedInput,
-      existing_blocks_context: context.existingBlocksContext ?? [],
+      existing_blocks_context: existingBlocksContext,
     };
     const judgeOutput = await this.evalJudgeService.judge(judgeInput);
     // The verbatim-span check now lives inside the judge (runGroundingChecks);
@@ -199,7 +203,7 @@ export class AgentToolService {
       parsedInput,
       judgeOutput,
       invalidItemIndexes,
-      context.existingBlocksContext ?? [],
+      existingBlocksContext,
       {
         rawSourceId: context.sourceId,
       },
@@ -216,6 +220,30 @@ export class AgentToolService {
       link_count: judgedLinks(parsedInput).length,
       saved_at: proposal.createdAt.toISOString(),
     });
+  }
+
+  private async withHydratedTargetBlocks(
+    existingBlocksContext: NonNullable<DraftProposalContext["existingBlocksContext"]>,
+    targetBlockIds: string[],
+  ): Promise<NonNullable<DraftProposalContext["existingBlocksContext"]>> {
+    const byId = new Map(existingBlocksContext.map((block) => [block.block_id, block]));
+    for (const blockId of [...new Set(targetBlockIds)]) {
+      const existing = byId.get(blockId);
+      if (existing?.body_markdown) continue;
+      const output = await this.readRepository.getBlock(blockId);
+      if (!output) continue;
+      byId.set(blockId, {
+        block_id: output.block.id,
+        knowledge_source_id: output.block.knowledge_source_id,
+        compiled_note_id: output.block.compiled_note_id,
+        title: output.block.title,
+        heading: output.block.heading,
+        body_markdown: output.block.body_markdown,
+        rank: existing?.rank ?? 0,
+        linked_block_ids: existing?.linked_block_ids ?? [],
+      });
+    }
+    return Array.from(byId.values());
   }
 }
 

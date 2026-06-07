@@ -163,7 +163,7 @@ export class ProposalService {
       // stay canonical in structuredData. Fall back to the facet render only when
       // no prose was authored.
       const authoredBody = stringValue(payload, "bodyMarkdown");
-      const bodyMarkdown = authoredBody.trim()
+      const proposedBodyMarkdown = authoredBody.trim()
         ? authoredBody
         : renderKnowledgeFacetsMarkdown(structuredData, "");
       const noteType = stringValue(
@@ -173,13 +173,15 @@ export class ProposalService {
       );
       const targetCompiledNoteId = stringValue(payload, "targetCompiledNoteId") || null;
       const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
+      const bodyMarkdown = proposedBodyMarkdown;
+      const approvedStructuredData = structuredData;
       const sourceType = proposal.rawSourceId ? "raw_source" : "raw_note";
       const sourceId = proposal.rawSourceId ?? proposal.id;
       // Build blocks (LLM contextualization) BEFORE the transaction — it is an
       // external call and must not run while a DB transaction is held open.
       const blocks = await this.buildKnowledgeBlocks(bodyMarkdown);
 
-      const structuredDataRecord = asRecord(structuredData);
+      const structuredDataRecord = asRecord(approvedStructuredData);
       const concepts = (Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [])
         .map((concept) => {
           const conceptRecord = asRecord(concept);
@@ -201,7 +203,7 @@ export class ProposalService {
         noteType,
         title,
         bodyMarkdown,
-        structuredData,
+        structuredData: approvedStructuredData,
         proposalId: proposal.id,
         changeSummary: item.rationale ?? proposal.rationale,
         blocks,
@@ -313,5 +315,4 @@ export class ProposalService {
       }
     }
   }
-
 }

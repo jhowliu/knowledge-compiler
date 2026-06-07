@@ -129,17 +129,26 @@ that retrieval answers from.
 
 ### Indexing layer — ingest → compile → approve
 
-An agent reads each source, extracts structured facets, and **judges** whether it
-should become knowledge. Only approved knowledge is chunked, contextualized, and
-embedded.
+An agent reads each source through a ReAct loop, extracts structured facets, and
+**judges** whether it should become knowledge. Before submitting, it can call the
+non-terminal `verify_grounding` tool to pre-flight its citations against the
+deterministic hard checks and self-correct. The terminal `draft_proposal` re-runs
+the same checks and records them (`extraction_evals`); a per-item eval verdict
+gates apply in the Review Queue. Only approved knowledge is chunked,
+contextualized, and embedded.
 
 ```mermaid
 flowchart TD
   ING["Ingest source<br/>POST /sources"] --> RS[("raw_sources<br/>raw_source_chunks")]
   ING --> CMP["Compile agent<br/>POST /sources/:id/compile"]
-  CMP --> J{"Agent judgment<br/>ReAct loop + wiki indexer<br/>facets · concepts · conflict"}
+  CMP --> LOOP{"ReAct loop (observe)<br/>get_source · search_blocks<br/>lookup_concepts · get_block(_history)"}
+  LOOP --> VG["verify_grounding (non-terminal, no LLM)<br/>4 deterministic hard checks:<br/>verbatim spans · evidence present<br/>chunk-id exists · no suggestion leak"]
+  VG -->|failures + how to fix| LOOP
+  VG -->|ok| DP["draft_proposal (terminal)<br/>re-runs hard checks → extraction_evals<br/>+ LLM semantic judge (#129, planned)"]
+  LOOP -.->|may skip verify| DP
+  DP --> J{"Indexing outcome<br/>facets · concepts · conflict"}
   J -->|keep_searchable| KS["Stays a source only<br/>no knowledge block"]
-  J -->|create / update_existing| PROP["Update proposal (pending)"]
+  J -->|create / update_existing| PROP["Update proposal (pending)<br/>per-item eval verdict gates apply"]
   PROP --> APR["Human approve<br/>POST /update-proposals/:id/approve"]
   APR --> CH["Fixed-size chunk note<br/>~200 tokens, CJK-aware"]
   CH --> CTX["Per-chunk Contextual Retrieval<br/>LLM situating header → metadata.context"]
@@ -159,18 +168,22 @@ the answerer composes a scoped, cited answer.
 flowchart TD
   Q["Query"] --> FTS["Postgres FTS<br/>(block-level fallback)"]
   Q --> BM25["BM25 pg_search<br/>(block-level, needs ParadeDB)"]
-  Q --> CON["Concept index match<br/>(note-level → blocks)"]
   Q --> E["Embed query"]
   E --> VEC["Vector cosine<br/>(block-level, needs pgvector)"]
+  Q -.-> CON["Concept index match (note-level)<br/>⚠ dormant: no query-side concept<br/>resolver wired (#142 dropped)"]
   FTS --> RRF["RRF fusion (k=60)"]
   BM25 --> RRF
-  CON --> RRF
   VEC --> RRF
+  CON -.->|currently 0 candidates| RRF
   RRF --> HOP["One-hop graph expand<br/>approved note_links"]
   HOP --> TOP["Top-N blocks + citations"]
   TOP --> ANS["Answerer<br/>exact-question scoping prompt"]
   ANS --> OUT["Answer + citations"]
 ```
+
+> The concept retriever is present in the hybrid set but **dormant**: nothing
+> resolves a query into concept ids (query-side resolution was dropped, #142), so
+> it always returns 0 candidates. RRF currently fuses FTS + BM25 + vector.
 
 ### Design philosophy
 
@@ -185,10 +198,11 @@ flowchart TD
 - **Mechanical boundaries, LLM for context.** Following Anthropic's Contextual
   Retrieval, chunk *boundaries* are mechanical (fixed-size); the LLM is spent on a
   per-chunk *situating context*, not on segmentation.
-- **Hybrid retrieval, complementary granularities.** The concept graph gives global
-  recall and term disambiguation at *note* level; vector + contextual headers give
-  local precision at *chunk* level; BM25 covers exact lexical matches; Postgres FTS
-  remains the built-in lexical fallback. RRF fuses them.
+- **Hybrid retrieval, complementary granularities.** Vector + contextual headers
+  give local precision at *chunk* level; BM25 covers exact lexical matches; Postgres
+  FTS remains the built-in lexical fallback; RRF fuses them. The concept graph is
+  meant to add global recall and term disambiguation at *note* level, but that
+  retriever is currently dormant (no query-side concept resolver, #142).
 
 ### Known gaps (tracked)
 
@@ -196,7 +210,12 @@ flowchart TD
 - Vector search requires pgvector, and BM25 requires pg_search plus
   `knowledge_blocks_bm25_idx`; missing capabilities are skipped with diagnostics.
   CJK full-text needs a segmenting parser (#144).
-- Concept matching is substring-based; query-side concept extraction is pending (#142).
+- Concept matching is substring-based at note level. Query-side LLM concept
+  resolution was evaluated and dropped (#142): the concept graph is too sparse for
+  it to beat BM25/vector. Query rewrite is the lower-cost path if revisited.
+- Eval grounding is split: deterministic hard checks ship now (`verify_grounding`
+  harness + terminal record); the LLM semantic judge for paraphrase/cross-language
+  support is the next step (#129).
 
 ## Server Architecture
 

@@ -315,6 +315,55 @@ export const judgeOutputSchema = z.object({
   summary: z.string(),
 });
 
+// Deterministic grounding checks shared by the in-loop verify_grounding tool
+// and the terminal eval. These are the exact, ungameable hard checks; semantic
+// support is judged separately by the LLM judge (see issue #129).
+export const groundingCheckSchema = z.enum([
+  "verbatim_span",
+  "missing_evidence",
+  "unknown_chunk_id",
+  "inferred_suggestion_leak",
+]);
+
+export const groundingFailureSchema = z.object({
+  check: groundingCheckSchema,
+  detail: z.string(),
+  // verbatim_span: the span the author sent + what those offsets actually slice.
+  span: sourceSpanSchema.nullable(),
+  actual_text: z.string().nullable(),
+  valid_chunk_indexes: z.array(z.number().int().nonnegative()).nullable(),
+  // unknown_chunk_id: the offending id + the set of ids that do exist.
+  chunk_id: z.string().nullable(),
+  valid_chunk_ids: z.array(z.string()).nullable(),
+  // missing_evidence / unknown_chunk_id context.
+  claim_text: z.string().nullable(),
+  // inferred_suggestion_leak: the suggestion text that leaked into body_markdown.
+  suggestion_text: z.string().nullable(),
+});
+
+export const groundingItemResultSchema = z.object({
+  item_index: z.number().int().nonnegative(),
+  ok: z.boolean(),
+  failures: z.array(groundingFailureSchema),
+});
+
+export const verifyGroundingInputSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        body_markdown: z.string().min(1),
+        source_spans: z.array(sourceSpanSchema),
+        structured_facets: knowledgeStructuredDataSchema.nullable().optional(),
+      }),
+    )
+    .min(1),
+});
+
+export const verifyGroundingOutputSchema = z.object({
+  ok: z.boolean(),
+  items: z.array(groundingItemResultSchema),
+});
+
 export type SourceSpan = z.infer<typeof sourceSpanSchema>;
 export type ProposalItem = z.infer<typeof proposalItemSchema>;
 export type IndexingOutcome = z.infer<typeof indexingOutcomeSchema>;
@@ -336,6 +385,11 @@ export type DraftProposalOutput = z.infer<typeof draftProposalOutputSchema>;
 export type EvalWarning = z.infer<typeof evalWarningSchema>;
 export type JudgeInput = z.infer<typeof judgeInputSchema>;
 export type JudgeOutput = z.infer<typeof judgeOutputSchema>;
+export type GroundingCheck = z.infer<typeof groundingCheckSchema>;
+export type GroundingFailure = z.infer<typeof groundingFailureSchema>;
+export type GroundingItemResult = z.infer<typeof groundingItemResultSchema>;
+export type VerifyGroundingInput = z.infer<typeof verifyGroundingInputSchema>;
+export type VerifyGroundingOutput = z.infer<typeof verifyGroundingOutputSchema>;
 
 export function validateToolInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -369,4 +423,110 @@ export function verifySourceSpans(
     ok: invalidSpans.length === 0,
     invalidSpans,
   };
+}
+
+function groundingFailure(
+  check: GroundingCheck,
+  detail: string,
+  extra: Partial<Omit<GroundingFailure, "check" | "detail">> = {},
+): GroundingFailure {
+  return {
+    check,
+    detail,
+    span: null,
+    actual_text: null,
+    valid_chunk_indexes: null,
+    chunk_id: null,
+    valid_chunk_ids: null,
+    claim_text: null,
+    suggestion_text: null,
+    ...extra,
+  };
+}
+
+/**
+ * The shared deterministic grounding checks. Used by the in-loop
+ * verify_grounding tool (so the agent can self-correct citations before
+ * submitting) and by the terminal eval (recorded into extraction_evals).
+ * Pure and side-effect free; intentionally does NOT judge semantic support —
+ * that is the LLM judge's job (issue #129).
+ */
+export function runGroundingChecks(
+  chunks: Array<{ id: string; chunk_index: number; body_markdown: string }>,
+  items: Array<{
+    body_markdown: string;
+    source_spans: SourceSpan[];
+    structured_facets?: z.infer<typeof knowledgeStructuredDataSchema> | null;
+  }>,
+): VerifyGroundingOutput {
+  const chunkIds = new Set(chunks.map((chunk) => chunk.id));
+  const validChunkIndexes = chunks.map((chunk) => chunk.chunk_index);
+  const validChunkIds = chunks.map((chunk) => chunk.id);
+
+  const resultItems: GroundingItemResult[] = items.map((item, index) => {
+    const failures: GroundingFailure[] = [];
+
+    // 1. verbatim_span — the cited quote must be a verbatim slice at the offsets.
+    for (const span of item.source_spans) {
+      const chunk = chunks.find((candidate) => candidate.chunk_index === span.chunk_index);
+      const slice = chunk ? chunk.body_markdown.slice(span.char_start, span.char_end) : null;
+      const valid = Boolean(chunk) && slice === span.text;
+      if (!valid) {
+        failures.push(
+          groundingFailure(
+            "verbatim_span",
+            chunk
+              ? "Span text does not match the source at the given offsets."
+              : `No chunk has chunk_index ${span.chunk_index}.`,
+            { span, actual_text: slice, valid_chunk_indexes: validChunkIndexes },
+          ),
+        );
+      }
+    }
+
+    const facets = item.structured_facets ?? null;
+    if (facets) {
+      for (const claim of facets.claims) {
+        // 2. missing_evidence — every claim must cite at least one chunk.
+        if (claim.evidenceChunkIds.length === 0) {
+          failures.push(
+            groundingFailure("missing_evidence", "Claim has no evidence chunk IDs.", {
+              claim_text: claim.text,
+            }),
+          );
+          continue;
+        }
+        // 3. unknown_chunk_id — cited ids must exist in the provided chunks.
+        for (const chunkId of claim.evidenceChunkIds) {
+          if (!chunkIds.has(chunkId)) {
+            failures.push(
+              groundingFailure("unknown_chunk_id", "Claim cites unknown source chunk IDs.", {
+                chunk_id: chunkId,
+                valid_chunk_ids: validChunkIds,
+                claim_text: claim.text,
+              }),
+            );
+          }
+        }
+      }
+
+      // 4. inferred_suggestion_leak — agent inferences must not enter the note body.
+      const body = item.body_markdown.toLowerCase();
+      for (const suggestion of facets.inferredSuggestions) {
+        if (body.includes(suggestion.text.toLowerCase())) {
+          failures.push(
+            groundingFailure(
+              "inferred_suggestion_leak",
+              "Inferred suggestion text appears in body_markdown; remove it or keep it only in inferredSuggestions.",
+              { suggestion_text: suggestion.text },
+            ),
+          );
+        }
+      }
+    }
+
+    return { item_index: index, ok: failures.length === 0, failures };
+  });
+
+  return { ok: resultItems.every((item) => item.ok), items: resultItems };
 }

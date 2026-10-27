@@ -24,7 +24,6 @@ class TestAgentToolReadRepository implements AgentToolReadRepository {
         status: "active",
       },
       evidence: [],
-      links: [],
     };
   }
 
@@ -155,27 +154,6 @@ describe("agent tool service", () => {
             conflict_resolution: "update",
           },
         ],
-        suggested_links: [
-          {
-            source_block_id: null,
-            target_block_id: "knowledge-block-1",
-            relation_type: "related_concept",
-            confidence: "medium",
-            rationale: "Same problem note.",
-            source_evidence: ["uses BFS for shortest path"],
-            target_evidence: ["BFS finds shortest path in unweighted graphs"],
-          },
-          {
-            // Low-confidence judgment: dropped, never becomes a pending link (#98).
-            source_block_id: null,
-            target_block_id: "knowledge-block-1",
-            relation_type: "related_concept",
-            confidence: "low",
-            rationale: "Weak overlap only.",
-            source_evidence: [],
-            target_evidence: [],
-          },
-        ],
       },
     );
 
@@ -189,13 +167,7 @@ describe("agent tool service", () => {
     expect(proposalOutput).toMatchObject({
       proposal_id: "proposal-1",
       item_count: 1,
-      // Two links judged but only the medium-confidence one is kept (#98).
-      link_count: 1,
     });
-    // The low-confidence link produced no create_link item.
-    expect(
-      proposalRepository.proposals[0].items.filter((item) => item.actionType === "create_link"),
-    ).toHaveLength(1);
     expect(extractionEvalRepository.extractionEvals[0]).toMatchObject({
       agentRunId: "agent-run-1",
       sourceId: rawSource.id,
@@ -213,15 +185,6 @@ describe("agent tool service", () => {
       conflictSummary: "This revises the prior scan direction.",
       conflictResolution: "update",
       evalVerdict: "pass",
-    });
-    expect(proposalRepository.proposals[0].items[1]).toMatchObject({
-      actionType: "create_link",
-      evalVerdict: "pass",
-      rationale: "Same problem note.",
-      payload: expect.objectContaining({
-        sourceEvidence: ["uses BFS for shortest path"],
-        targetEvidence: ["BFS finds shortest path in unweighted graphs"],
-      }),
     });
   });
 
@@ -274,7 +237,6 @@ describe("agent tool service", () => {
             conflict_resolution: null,
           },
         ],
-        suggested_links: [],
       },
     );
 

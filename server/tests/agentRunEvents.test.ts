@@ -9,7 +9,6 @@ describe("agent run event model", () => {
       "indexing",
       "proposal",
       "eval",
-      "linking",
       "error",
     ]);
   });

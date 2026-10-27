@@ -1,4 +1,4 @@
-export const retrievalSources = ["fts", "concept", "vector", "bm25", "graph"] as const;
+export const retrievalSources = ["fts", "concept"] as const;
 
 export type RetrievalSource = (typeof retrievalSources)[number];
 
@@ -6,8 +6,6 @@ export type RetrievalQuery = {
   query: string;
   limit: number;
   includeArchived?: boolean;
-  topicIds?: string[];
-  queryEmbedding?: number[] | null;
 };
 
 export type RetrievalCandidate = {

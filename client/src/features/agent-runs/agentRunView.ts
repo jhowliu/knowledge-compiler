@@ -1,14 +1,5 @@
-import { relationOptions } from '../../lib/constants'
 import { isRecord } from '../../lib/knowledge'
 import type { AgentRun, AgentRunEvent } from '../../types/domain'
-
-export function relationLabel(relationType: string) {
-  return relationType.replaceAll('_', ' ')
-}
-
-export function relationOptionLabel(relationType: string) {
-  return relationOptions.find(([value]) => value === relationType)?.[1] ?? relationLabel(relationType)
-}
 
 export function agentRunLabel(runType: string) {
   return runType.replaceAll('_', ' ')
@@ -59,10 +50,6 @@ export function eventLabel(event: Pick<AgentRunEvent, 'category' | 'name'>) {
     'indexing.loop_exited': 'Agent loop exited',
     'proposal.created': 'Proposal created',
     'eval.completed': 'Eval completed',
-    'linking.scored': 'Link candidates scored',
-    'linking.candidates_found': 'Link candidates found',
-    'linking.judged': 'Links judged',
-    'linking.suggestion_created': 'Link suggestion created',
     'error.failed': 'Failed',
     'error.unknown': 'Unknown legacy event',
   }
@@ -70,31 +57,36 @@ export function eventLabel(event: Pick<AgentRunEvent, 'category' | 'name'>) {
 }
 
 export function eventCategoryClass(category: AgentRunEvent['category']) {
-  if (category === 'lifecycle') return 'border-sky-800/70 bg-sky-950/30 text-sky-200'
-  if (category === 'source') return 'border-emerald-800/70 bg-emerald-950/30 text-emerald-200'
-  if (category === 'tool') return 'border-violet/50 bg-violet/15 text-violet'
-  if (category === 'indexing') return 'border-cyan-800/70 bg-cyan-950/30 text-cyan-200'
-  if (category === 'proposal') return 'border-amber-800/70 bg-amber-950/30 text-amber-200'
-  if (category === 'eval') return 'border-fuchsia-800/70 bg-fuchsia-950/30 text-fuchsia-200'
-  if (category === 'linking') return 'border-teal-800/70 bg-teal-950/30 text-teal-200'
-  return 'border-red-800/70 bg-red-950/30 text-red-200'
+  if (category === 'lifecycle') return 'border-sky-200 bg-sky-50 text-sky-700'
+  if (category === 'source') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (category === 'tool') return 'border-violet/30 bg-violet/10 text-accent'
+  if (category === 'indexing') return 'border-blue-200 bg-blue-50 text-blue-700'
+  if (category === 'proposal') return 'border-amber-200 bg-amber-50 text-amber-800'
+  if (category === 'eval') return 'border-gray-200 bg-slate-100 text-gray-600'
+  return 'border-red-200 bg-red-50 text-red-700'
+}
+
+/** "compile_raw_note" -> "Compile raw note". */
+export function agentRunTitle(runType: string) {
+  const label = agentRunLabel(runType)
+  return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
 export function agentRunOutputText(agentRun: AgentRun | null) {
   if (!agentRun) return 'No agent run selected.'
   if (agentRun.error) return agentRun.error
+  if (agentRun.status === 'queued') return 'Waiting in the queue.'
+  if (agentRun.status === 'running') return 'Still working. This updates as the run progresses.'
   if (isRecord(agentRun.output)) {
     const proposalId = typeof agentRun.output.proposalId === 'string' ? agentRun.output.proposalId : null
     const indexingOutcome =
       typeof agentRun.output.indexingOutcome === 'string' ? agentRun.output.indexingOutcome : null
-    const suggestionsCreated =
-      typeof agentRun.output.suggestionsCreated === 'number' ? agentRun.output.suggestionsCreated : null
     const relatedNoteCount =
       typeof agentRun.output.relatedNoteCount === 'number' ? agentRun.output.relatedNoteCount : null
     if (proposalId && indexingOutcome === 'keep_searchable') return `Created source-only proposal ${proposalId}.`
     if (proposalId) return `Created proposal ${proposalId}.`
-    if (suggestionsCreated !== null) return `Created ${suggestionsCreated} pending link suggestions.`
     if (relatedNoteCount !== null) return `Found ${relatedNoteCount} related notes.`
   }
+  if (agentRun.output === null || agentRun.output === undefined) return 'No output was recorded.'
   return compactJson(agentRun.output)
 }

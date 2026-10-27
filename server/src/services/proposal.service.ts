@@ -1,19 +1,8 @@
 import type { CompiledNote, Confidence, ProposalItem, ProposalWithItems } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
-import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../repositories/proposal.repository.js";
-import {
-  embedKnowledgeBlock,
-  NoopEmbeddingService,
-  type EmbeddingService,
-} from "./embedding.service.js";
 import { renderKnowledgeFacetsMarkdown } from "./knowledgeFacets.service.js";
-import {
-  NoopKnowledgeContextualizer,
-  type KnowledgeContextualizer,
-} from "./knowledgeContextualizer.service.js";
 import { chunkKnowledgeMarkdown } from "./sourceChunker.service.js";
-import type { CreateKnowledgeBlockInput } from "../domain/knowledge.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -42,9 +31,6 @@ export class ProposalService {
   constructor(
     private readonly proposalRepository: ProposalRepository,
     private readonly knowledgeRepository: KnowledgeRepository,
-    private readonly noteLinkRepository: NoteLinkRepository,
-    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
-    private readonly contextualizer: KnowledgeContextualizer = new NoopKnowledgeContextualizer(),
   ) {}
 
   async listRecentProposals() {
@@ -105,9 +91,7 @@ export class ProposalService {
 
     if (
       indexingOutcomeOverride === "keep_searchable" &&
-      (item.actionType === "upsert_compiled_note" ||
-        item.actionType === "upsert_knowledge" ||
-        item.actionType === "create_link")
+      (item.actionType === "upsert_compiled_note" || item.actionType === "upsert_knowledge")
     ) {
       return;
     }
@@ -175,9 +159,7 @@ export class ProposalService {
       const targetKnowledgeSourceId = stringValue(payload, "targetKnowledgeSourceId") || null;
       const sourceType = proposal.rawSourceId ? "raw_source" : "raw_note";
       const sourceId = proposal.rawSourceId ?? proposal.id;
-      // Build blocks (LLM contextualization) BEFORE the transaction — it is an
-      // external call and must not run while a DB transaction is held open.
-      const blocks = await this.buildKnowledgeBlocks(bodyMarkdown);
+      const blocks = chunkKnowledgeMarkdown(bodyMarkdown);
 
       const structuredDataRecord = asRecord(structuredData);
       const concepts = (Array.isArray(structuredDataRecord.concepts) ? structuredDataRecord.concepts : [])
@@ -193,7 +175,7 @@ export class ProposalService {
       // Compiled note + evidence + version/blocks + concept index land atomically
       // (one transaction in the repo), so a mid-apply failure never leaves an
       // orphan compiled_note without a knowledge_version.
-      const { compiledNote, snapshot } = await this.knowledgeRepository.applyApprovedKnowledge({
+      const { compiledNote } = await this.knowledgeRepository.applyApprovedKnowledge({
         userId: proposal.userId,
         targetCompiledNoteId,
         targetKnowledgeSourceId,
@@ -214,104 +196,7 @@ export class ProposalService {
       });
       context.compiledNoteByTitle.set(normalizedTitle(compiledNote.title), compiledNote);
 
-      // Embedding is an external call; run it AFTER commit so an embedding
-      // failure only leaves embedding=null (backfillable) instead of rolling
-      // back or orphaning the approved knowledge.
-      await this.embedSnapshotBlocks(snapshot.blocks);
-
-      // Related links are no longer created blindly here (#98): the agent judges
-      // candidates in the compile loop and emits explicit create_link items.
-      return;
-    }
-
-    if (item.actionType === "create_link") {
-      const sourceNoteType = stringValue(payload, "sourceNoteType", "compiled_note");
-      const targetNoteType = stringValue(payload, "targetNoteType", "compiled_note");
-
-      // The LLM agent references knowledge *blocks* (sourceBlockId/targetBlockId),
-      // but note_links connect compiled *notes*. Resolve block ids to their
-      // compiled note. Keep back-compat with the scripted indexer, which emits
-      // targetNoteId + sourceTitle directly.
-      const targetBlockId = stringValue(payload, "targetBlockId");
-      const targetNoteId =
-        stringValue(payload, "targetNoteId") ||
-        (targetBlockId ? (await this.knowledgeRepository.compiledNoteIdForBlock(targetBlockId)) ?? "" : "");
-
-      const sourceBlockId = stringValue(payload, "sourceBlockId");
-      const sourceNoteId =
-        stringValue(payload, "sourceNoteId") ||
-        context.compiledNoteByTitle.get(normalizedTitle(stringValue(payload, "sourceTitle")))?.id ||
-        (sourceBlockId ? (await this.knowledgeRepository.compiledNoteIdForBlock(sourceBlockId)) ?? "" : "") ||
-        // Common case: the agent links FROM the note this proposal just created
-        // (source_block_id is null), so fall back to that note.
-        [...context.compiledNoteByTitle.values()].at(-1)?.id ||
-        "";
-
-      if (!sourceNoteId || !targetNoteId || sourceNoteId === targetNoteId) {
-        return;
-      }
-
-      await this.noteLinkRepository.createSuggestion({
-        userId: proposal.userId,
-        sourceNoteType,
-        sourceNoteId,
-        targetNoteType,
-        targetNoteId,
-        relationType: stringValue(payload, "relationType", "related_concept"),
-        confidence: confidenceValue(payload.confidence, proposal.confidence),
-        rationale: item.rationale ?? (stringValue(payload, "rationale") || null),
-      });
-      return;
-    }
-
-    if (["create_mistake", "create_review_task", "upsert_readiness"].includes(item.actionType)) {
       return;
     }
   }
-
-  // Fixed-size chunk the note, then enrich each chunk with an LLM-generated
-  // situating context (Contextual Retrieval) stored on the block metadata so it
-  // can be prepended at embed time and reused later (e.g. for lexical search).
-  private async buildKnowledgeBlocks(noteMarkdown: string): Promise<CreateKnowledgeBlockInput[]> {
-    const chunks = chunkKnowledgeMarkdown(noteMarkdown);
-    const enriched: CreateKnowledgeBlockInput[] = [];
-    for (const chunk of chunks) {
-      const context = await this.contextualizer.contextualize({
-        note: noteMarkdown,
-        chunk: chunk.bodyMarkdown,
-      });
-      enriched.push({
-        ...chunk,
-        metadata: {
-          ...(chunk.metadata ?? {}),
-          ...(context ? { context } : {}),
-        },
-      });
-    }
-    return enriched;
-  }
-
-  private async embedSnapshotBlocks(
-    blocks: {
-      id: string;
-      heading?: string | null;
-      bodyMarkdown: string;
-      metadata?: Record<string, unknown> | null;
-    }[],
-  ) {
-    for (const block of blocks) {
-      // Embedding runs after the approve transaction has committed, so a failure
-      // here must not abort the approve: leave embedding null (backfillable via
-      // `backfill:embeddings`) instead of throwing.
-      try {
-        const embedding = await embedKnowledgeBlock(this.embeddingService, block);
-        if (embedding) {
-          await this.knowledgeRepository.updateKnowledgeBlockEmbedding(block.id, embedding);
-        }
-      } catch (error) {
-        console.warn(`Embedding failed for block ${block.id}; leaving it unembedded.`, error);
-      }
-    }
-  }
-
 }

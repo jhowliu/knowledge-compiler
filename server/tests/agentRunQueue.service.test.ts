@@ -4,8 +4,6 @@ import {
 } from "../src/services/agentRunQueue.service.js";
 import type { AgentRunHandler } from "../src/services/agentRun/agentRunHandler.js";
 import { CompileRawNoteHandler } from "../src/services/agentRun/compileRawNoteHandler.js";
-import { ReindexLinksHandler } from "../src/services/agentRun/reindexLinksHandler.js";
-import type { LinkJudge } from "../src/services/agentRun/linkJudge.js";
 import { WikiIndexerService, type WikiIndexer, type WikiIndexingSource } from "../src/services/wikiIndexer.service.js";
 import {
   createLlmCompileAgentRunner,
@@ -16,14 +14,12 @@ import type { SearchResult } from "../src/domain/knowledge.js";
 import type { DraftProposalInput } from "@knowledge-compiler/agent-contracts";
 import { InMemoryAgentRunRepository } from "./support/inMemoryAgentRun.repository.js";
 import { InMemoryKnowledgeRepository } from "./support/inMemoryKnowledge.repository.js";
-import { InMemoryNoteLinkRepository } from "./support/inMemoryNoteLink.repository.js";
 import { InMemoryProposalRepository } from "./support/inMemoryProposal.repository.js";
 import { InMemoryRawSourceRepository } from "./support/inMemoryRawSource.repository.js";
 import { InMemoryExtractionEvalRepository } from "./support/inMemoryExtractionEval.repository.js";
 import type { AgentToolReadRepository } from "../src/repositories/agentTool.repository.js";
 import type { AgentRunRepository } from "../src/repositories/agentRun.repository.js";
 import type { KnowledgeRepository } from "../src/repositories/knowledge.repository.js";
-import type { NoteLinkRepository } from "../src/repositories/noteLink.repository.js";
 import type { ProposalRepository } from "../src/repositories/proposal.repository.js";
 import type { RawSourceRepository } from "../src/repositories/rawSource.repository.js";
 import type { ExtractionEvalRepository } from "../src/repositories/extractionEval.repository.js";
@@ -31,36 +27,14 @@ import type { ExtractionEvalRepository } from "../src/repositories/extractionEva
 function createAgentRunQueueService(input: {
   agentRunRepository: AgentRunRepository;
   knowledgeRepository: KnowledgeRepository;
-  noteLinkRepository: NoteLinkRepository;
   proposalRepository?: ProposalRepository;
   wikiIndexer?: WikiIndexer;
   rawSourceRepository?: RawSourceRepository | null;
   extractionEvalRepository?: ExtractionEvalRepository;
   agentToolReadRepository?: AgentToolReadRepository;
   compileAgentRunnerFactory?: CompileAgentRunnerFactory;
-  linkJudge?: LinkJudge;
 }) {
-  // Default to a deterministic offline judge: link iff the two notes share a
-  // non-trivial keyword, so reindex tests never reach the network.
-  const linkJudge: LinkJudge =
-    input.linkJudge ??
-    (async ({ source, target }) => {
-      const overlap = source.bodyMarkdown
-        .toLowerCase()
-        .split(/\W+/)
-        .filter((word) => word.length > 3 && target.bodyMarkdown.toLowerCase().includes(word));
-      return {
-        should_link: overlap.length > 0,
-        relation_type: "related_concept",
-        confidence: overlap.length > 0 ? "medium" : "low",
-        rationale: overlap.length ? `Shared: ${overlap.slice(0, 3).join(", ")}.` : "No clear relationship.",
-        source_evidence: [],
-        target_evidence: [],
-      };
-    });
-  const handlers: AgentRunHandler[] = [
-    new ReindexLinksHandler(input.agentRunRepository, input.knowledgeRepository, input.noteLinkRepository, linkJudge),
-  ];
+  const handlers: AgentRunHandler[] = [];
   if (input.proposalRepository) {
     handlers.push(
       new CompileRawNoteHandler(
@@ -227,10 +201,7 @@ describe("agent run queue service", () => {
       },
     ]);
 
-    expect(draft.items.map((item) => item.actionType)).toEqual([
-      "upsert_knowledge",
-      "create_link",
-    ]);
+    expect(draft.items.map((item) => item.actionType)).toEqual(["upsert_knowledge"]);
     expect(draft.items.some((item) => item.actionType === "create_mistake")).toBe(false);
     expect(draft.items.some((item) => item.actionType === "create_review_task")).toBe(false);
     expect(draft.items.some((item) => item.actionType === "upsert_readiness")).toBe(false);
@@ -420,85 +391,14 @@ describe("agent run queue service", () => {
     });
   });
 
-  test("runs agent-judged reindex links and creates pending link suggestions", async () => {
-    const agentRunRepository = new InMemoryAgentRunRepository();
-    const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
-    const service = createAgentRunQueueService({
-      agentRunRepository,
-      knowledgeRepository,
-      noteLinkRepository,
-    });
-
-    await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
-      noteType: "algorithm",
-      title: "BFS shortest path",
-      bodyMarkdown: "Use BFS for unweighted shortest path and graph levels.",
-      structuredData: {},
-    });
-    await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
-      noteType: "knowledge_note",
-      title: "Shortest path decision guide",
-      bodyMarkdown: "Choose BFS for unweighted shortest path and Dijkstra for positive weights.",
-      structuredData: {},
-    });
-    await knowledgeRepository.upsertCompiledNote({
-      domain: "coding",
-      noteType: "algorithm",
-      title: "Binary search",
-      bodyMarkdown: "Use binary search for monotonic predicates.",
-      structuredData: {},
-    });
-
-    const agentRun = await service.enqueue({ runType: "reindex_links" });
-    await service.process(agentRun.id);
-
-    const completedRun = await agentRunRepository.getById(agentRun.id);
-
-    expect(completedRun).toMatchObject({
-      runType: "reindex_links",
-      status: "completed",
-    });
-    expect(completedRun?.output).toMatchObject({
-      notesScanned: 3,
-      suggestionsCreated: 1,
-    });
-    expect(noteLinkRepository.noteLinks).toHaveLength(1);
-    expect(noteLinkRepository.noteLinks[0]).toMatchObject({
-      status: "pending",
-      relationType: "related_concept",
-      createdByAgentRunId: agentRun.id,
-    });
-    // Rationale comes from the judge, not a generic message.
-    expect(noteLinkRepository.noteLinks[0].rationale).toMatch(/Shared:/);
-    expect(agentRunRepository.events.map((event) => `${event.category}.${event.name}`)).toEqual(
-      expect.arrayContaining([
-        "lifecycle.queued",
-        "lifecycle.started",
-        "source.notes_loaded",
-        "linking.candidates_found",
-        "linking.suggestion_created",
-        "linking.judged",
-        "lifecycle.completed",
-      ]),
-    );
-    expect(agentRunRepository.events.map((event) => event.category)).toEqual(
-      expect.arrayContaining(["lifecycle", "source", "linking"]),
-    );
-  });
-
   test("runs compile_raw_note with LLM wiki-style variant indexing", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -555,7 +455,6 @@ describe("agent run queue service", () => {
   test("keeps a non-English interview draft searchable when the LLM decides keep_searchable", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const keepSearchableIndexer = {
@@ -593,7 +492,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: keepSearchableIndexer,
       rawSourceRepository,
@@ -638,7 +536,6 @@ describe("agent run queue service", () => {
   test("runs compile_raw_note from a raw source and indexes source chunks", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const seenSources: Array<{ rawSourceId: string | null; chunkCount: number; bodyMarkdown: string }> = [];
@@ -656,7 +553,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: sourceAwareIndexer,
       rawSourceRepository,
@@ -726,7 +622,6 @@ describe("agent run queue service", () => {
   test("accepts draft_proposal content supplied by the compile runner", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -767,17 +662,6 @@ describe("agent run queue service", () => {
                 conflict_resolution: null,
               },
             ],
-            suggested_links: [
-              {
-                source_block_id: null,
-                target_block_id: "knowledge-block-1",
-                relation_type: "related_concept",
-                confidence: "medium",
-                rationale: "Runner judged this link from observations.",
-                source_evidence: ["bounded graph state"],
-                target_evidence: ["track remaining stops in the state"],
-              },
-            ],
           };
           return { tool: "draft_proposal", input: draftInput };
         },
@@ -787,7 +671,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -815,10 +698,6 @@ describe("agent run queue service", () => {
           payload: expect.objectContaining({ title: "Runner Authored Knowledge" }),
           rationale: "The runner authored the proposal payload after observing the source and search.",
         }),
-        expect.objectContaining({
-          actionType: "create_link",
-          rationale: "Runner judged this link from observations.",
-        }),
       ]),
     );
     const calledTools = agentRunRepository.events
@@ -830,7 +709,6 @@ describe("agent run queue service", () => {
   test("drives the loop with the LLM runner, authoring the draft in a model-chosen order", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -868,7 +746,6 @@ describe("agent run queue service", () => {
             conflict_resolution: null,
           },
         ],
-        suggested_links: [],
       };
       return { toolName: "draft_proposal", arguments: draftInput };
     };
@@ -876,7 +753,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -911,7 +787,6 @@ describe("agent run queue service", () => {
   test("creates an incomplete proposal when the compile runner exceeds loop guardrails", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -931,7 +806,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: llmWikiIndexer,
       rawSourceRepository,
@@ -992,13 +866,11 @@ describe("agent run queue service", () => {
     try {
       const agentRunRepository = new InMemoryAgentRunRepository();
       const knowledgeRepository = new InMemoryKnowledgeRepository();
-      const noteLinkRepository = new InMemoryNoteLinkRepository();
       const rawSourceRepository = new InMemoryRawSourceRepository();
       const proposalRepository = new InMemoryProposalRepository();
       const service = createAgentRunQueueService({
         agentRunRepository,
         knowledgeRepository,
-        noteLinkRepository,
         proposalRepository,
         rawSourceRepository,
       });
@@ -1037,7 +909,6 @@ describe("agent run queue service", () => {
   test("classifies the indexing outcome after searching knowledge blocks and uses the chosen target", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -1073,7 +944,6 @@ describe("agent run queue service", () => {
             status: "active",
           },
           evidence: [],
-          links: [],
         };
       },
       async getBlockHistory() {
@@ -1095,7 +965,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,
@@ -1165,7 +1034,6 @@ describe("agent run queue service", () => {
   test("updates a block surfaced via the concept index even when full-text search misses", async () => {
     const agentRunRepository = new InMemoryAgentRunRepository();
     const knowledgeRepository = new InMemoryKnowledgeRepository();
-    const noteLinkRepository = new InMemoryNoteLinkRepository();
     const rawSourceRepository = new InMemoryRawSourceRepository();
     const proposalRepository = new InMemoryProposalRepository();
     const extractionEvalRepository = new InMemoryExtractionEvalRepository();
@@ -1202,7 +1070,6 @@ describe("agent run queue service", () => {
             status: "active",
           },
           evidence: [],
-          links: [],
         };
       },
       async getBlockHistory() {
@@ -1225,7 +1092,6 @@ describe("agent run queue service", () => {
     const service = createAgentRunQueueService({
       agentRunRepository,
       knowledgeRepository,
-      noteLinkRepository,
       proposalRepository,
       wikiIndexer: reclassifyingIndexer,
       rawSourceRepository,

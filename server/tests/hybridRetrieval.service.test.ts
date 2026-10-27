@@ -19,27 +19,21 @@ describe("hybrid retrieval merge", () => {
         { blockId: "block-c", source: "concept", rankPosition: 2, score: 2 },
       ],
     } satisfies RetrievalCandidateSet;
-    const bm25 = {
-      source: "bm25",
-      status: "enabled",
-      candidates: [{ blockId: "block-a", source: "bm25", rankPosition: 1, score: 4.2 }],
-    } satisfies RetrievalCandidateSet;
 
-    const result = mergeRetrievalCandidateSets([fts, concept, bm25], 60);
+    const result = mergeRetrievalCandidateSets([fts, concept], 60);
 
     expect(result.candidates.map((candidate) => candidate.blockId)).toEqual([
-      "block-a",
       "block-b",
+      "block-a",
       "block-c",
     ]);
     expect(result.candidates[0]?.contributions.map((contribution) => contribution.source)).toEqual([
       "fts",
-      "bm25",
+      "concept",
     ]);
     expect(result.trace.sources).toEqual([
       { source: "fts", status: "enabled", reason: undefined, candidateCount: 2 },
       { source: "concept", status: "enabled", reason: undefined, candidateCount: 2 },
-      { source: "bm25", status: "enabled", reason: undefined, candidateCount: 1 },
     ]);
   });
 
@@ -49,20 +43,20 @@ describe("hybrid retrieval merge", () => {
       status: "enabled",
       candidates: [{ blockId: "block-a", source: "fts", rankPosition: 1 }],
     } satisfies RetrievalCandidateSet;
-    const vector = {
-      source: "vector",
+    const concept = {
+      source: "concept",
       status: "disabled",
-      reason: "missing_query_embedding",
+      reason: "no_concepts_indexed",
       candidates: [],
     } satisfies RetrievalCandidateSet;
 
-    const result = mergeRetrievalCandidateSets([fts, vector]);
+    const result = mergeRetrievalCandidateSets([fts, concept]);
 
     expect(result.candidates).toHaveLength(1);
     expect(result.trace.sources).toContainEqual({
-      source: "vector",
+      source: "concept",
       status: "disabled",
-      reason: "missing_query_embedding",
+      reason: "no_concepts_indexed",
       candidateCount: 0,
     });
   });

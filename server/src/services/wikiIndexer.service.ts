@@ -20,7 +20,6 @@ export type WikiIndexingSource = {
   sourceType: string;
   title: string | null;
   bodyMarkdown: string;
-  topicNames?: string[];
   chunks: RawSourceChunk[];
 };
 
@@ -275,13 +274,13 @@ export class WikiIndexerService {
           {
             role: "system",
             content:
-              "You are the LLM wiki editor deciding what to do with a source AFTER searching the existing knowledge base. Decide one outcome: keep_searchable when the source is not reusable knowledge (interview drafts, self-introductions, pitches, meeting notes, TODOs, one-off personal artifacts); update_existing_knowledge when one of the provided candidate blocks already covers this concept and should be revised/merged rather than duplicated; create_knowledge only when the source teaches reusable knowledge that no candidate block already covers. Judge meaning, not keywords, and apply the same rules regardless of the language the source is written in. Prefer update_existing_knowledge over creating a near-duplicate. When you choose update_existing_knowledge you MUST set targetBlockId to the Block ID of the block to update; otherwise set targetBlockId to null. Also assess whether the source contradicts the targeted block: set conflictDetected true only when it genuinely contradicts or revises that block, and then provide a conflictSummary describing the contradiction and a conflictResolution of update, keep_both, or needs_user_decision. When there is no contradiction set conflictDetected false, conflictSummary null, and conflictResolution null. Base the decision only on the provided extraction, candidate blocks, concept matches, and topics.",
+              "You are the LLM wiki editor deciding what to do with a source AFTER searching the existing knowledge base. Decide one outcome: keep_searchable when the source is not reusable knowledge (interview drafts, self-introductions, pitches, meeting notes, TODOs, one-off personal artifacts); update_existing_knowledge when one of the provided candidate blocks already covers this concept and should be revised/merged rather than duplicated; create_knowledge only when the source teaches reusable knowledge that no candidate block already covers. Judge meaning, not keywords, and apply the same rules regardless of the language the source is written in. Prefer update_existing_knowledge over creating a near-duplicate. When you choose update_existing_knowledge you MUST set targetBlockId to the Block ID of the block to update; otherwise set targetBlockId to null. Also assess whether the source contradicts the targeted block: set conflictDetected true only when it genuinely contradicts or revises that block, and then provide a conflictSummary describing the contradiction and a conflictResolution of update, keep_both, or needs_user_decision. When there is no contradiction set conflictDetected false, conflictSummary null, and conflictResolution null. Base the decision only on the provided extraction, candidate blocks, and concept matches.",
           },
           {
             role: "user",
             content: `Provisional outcome from extraction: ${extraction.outcome}\nProvisional reason: ${extraction.outcomeReason}\nSource title: ${
               source.title ?? "Untitled"
-            }\nTopics: ${(source.topicNames ?? []).join(", ") || "none"}\nExtraction summary: ${
+            }\nExtraction summary: ${
               extraction.structuredData.summary
             }\nExtracted concepts: ${extraction.structuredData.concepts
               .map((concept) => concept.name)
@@ -386,9 +385,7 @@ export class WikiIndexerService {
       detectedKnowledgeType: knowledgeType,
       impactLevel: routedExtraction.outcome === "update_existing_knowledge" ? 3 : relatedCompiledNotes.length ? 3 : 2,
       confidence: routedExtraction.confidence,
-      rationale: `Recommended: ${outcomeLabel(routedExtraction.outcome)}. ${routedExtraction.outcomeReason} LLM wiki indexing proposed one approved knowledge update${
-        relatedCompiledNotes.length ? ` and ${relatedCompiledNotes.length} related-note link suggestions` : ""
-      }.`,
+      rationale: `Recommended: ${outcomeLabel(routedExtraction.outcome)}. ${routedExtraction.outcomeReason} LLM wiki indexing proposed one approved knowledge update.`,
       items: [
         {
           actionType: "upsert_knowledge",
@@ -396,23 +393,6 @@ export class WikiIndexerService {
           payload: knowledgePayload,
           rationale: routedExtraction.outcomeReason || "Create or update approved knowledge from this source.",
         },
-        ...relatedCompiledNotes.map((note) => ({
-          actionType: "create_link",
-          targetType: "note_link",
-          payload: {
-            sourceTitle: title,
-            sourceKnowledgeType: knowledgeType,
-            targetNoteType: note.targetType,
-            targetNoteId: note.id,
-            targetTitle: note.title,
-            relationType: "related_concept",
-            confidence: routedExtraction.confidence,
-            indexingOutcome: routedExtraction.outcome,
-          },
-          rationale: note.title
-            ? `LLM wiki indexing found overlap with "${note.title}".`
-            : "LLM wiki indexing found related approved knowledge.",
-        })),
       ],
     };
   }
@@ -455,7 +435,7 @@ export class WikiIndexerService {
             role: "user",
             content: `Source role: ${source.sourceRole}\nSource type: ${source.sourceType}\nTitle: ${
               source.title ?? "Untitled"
-            }\nTopics: ${(source.topicNames ?? []).join(", ") || "none"}\nRaw source id: ${
+            }\nRaw source id: ${
               source.rawSourceId ?? "none"
             }\nRaw note id: ${source.rawNoteId ?? "none"}\n\n${chunkContext}`,
           },

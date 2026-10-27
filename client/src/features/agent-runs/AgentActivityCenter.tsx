@@ -8,9 +8,10 @@ import {
   RotateCw,
 } from 'lucide-react'
 import { useState } from 'react'
+import { Banner, Pill, pluralize, type Tone } from '../../components/ui'
 import { isRecord, payloadLabel } from '../../lib/knowledge'
 import type { AgentRun, Proposal, RawSource } from '../../types/domain'
-import { agentRunLabel, agentRunOutputText, shortTimestamp } from './agentRunView'
+import { agentRunOutputText, agentRunTitle, shortTimestamp } from './agentRunView'
 
 type ActivityGroup = 'running' | 'needsReview' | 'failed' | 'completed'
 
@@ -25,18 +26,13 @@ function proposalIdForRun(agentRun: AgentRun) {
   return typeof agentRun.output.proposalId === 'string' ? agentRun.output.proposalId : null
 }
 
-function sourceIdForRun(agentRun: AgentRun) {
-  if (!isRecord(agentRun.input)) return null
-  const rawSourceId = typeof agentRun.input.rawSourceId === 'string' ? agentRun.input.rawSourceId : null
-  return { rawSourceId }
-}
-
 function sourceTitleForRun(agentRun: AgentRun, rawSources: RawSource[]) {
-  const ids = sourceIdForRun(agentRun)
-  const rawSource = ids?.rawSourceId
-    ? rawSources.find((source) => source.id === ids.rawSourceId) ?? null
-    : null
-  return rawSource?.title ?? agentRunLabel(agentRun.runType)
+  const rawSourceId =
+    isRecord(agentRun.input) && typeof agentRun.input.rawSourceId === 'string'
+      ? agentRun.input.rawSourceId
+      : null
+  const rawSource = rawSourceId ? rawSources.find((source) => source.id === rawSourceId) : null
+  return rawSource ? (rawSource.title ?? 'Untitled source') : null
 }
 
 function runStep(agentRun: AgentRun, proposal: Proposal | null) {
@@ -98,31 +94,55 @@ function groupCopy(group: ActivityGroup) {
       icon: Clock3,
       label: 'Running',
       empty: 'No active runs.',
-      className: 'border-violet/30 bg-violet/10 text-violet',
+      tone: 'accent' as Tone,
+      dot: 'bg-violet animate-pulse',
     },
     needsReview: {
       icon: FileText,
       label: 'Needs review',
       empty: 'No generated proposals waiting for review.',
-      className: 'border-amber-200 bg-amber-50 text-amber-800',
+      tone: 'warning' as Tone,
+      dot: 'bg-amber-700',
     },
     failed: {
       icon: AlertTriangle,
       label: 'Failed',
       empty: 'No failed runs.',
-      className: 'border-red-200 bg-red-50 text-red-700',
+      tone: 'danger' as Tone,
+      dot: 'bg-red-600',
     },
     completed: {
       icon: CheckCircle2,
       label: 'Completed',
       empty: 'No completed runs yet.',
-      className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+      tone: 'success' as Tone,
+      dot: 'bg-emerald-700',
     },
   }[group]
 }
 
+const groupIconClass: Record<Tone, string> = {
+  neutral: 'border-gray-200 bg-slate-100 text-gray-600',
+  accent: 'border-violet/30 bg-violet/10 text-accent',
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800',
+  danger: 'border-red-200 bg-red-50 text-red-700',
+  info: 'border-sky-200 bg-sky-50 text-sky-700',
+}
+
+function runStatusTone(status: string): Tone {
+  if (status === 'completed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'running') return 'accent'
+  return 'neutral'
+}
+
+const rowButton =
+  'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-bold'
+
 function ActivityRow({
   agentRun,
+  dotClass,
   onOpenProposal,
   onRetry,
   onSelectAgentRun,
@@ -130,60 +150,62 @@ function ActivityRow({
   rawSources,
 }: {
   agentRun: AgentRun
+  dotClass: string
   onOpenProposal: (proposalId: string) => void
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
   proposal: Proposal | null
   rawSources: RawSource[]
 }) {
+  const sourceTitle = sourceTitleForRun(agentRun, rawSources)
+
   return (
     <article className="grid gap-3 border-t border-gray-200 px-4 py-3 first:border-t-0 md:grid-cols-[1fr_auto] md:items-center">
-      <div className="min-w-0">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-violet" />
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-extrabold text-ink">
-            {agentRunLabel(agentRun.runType)} · {sourceTitleForRun(agentRun, rawSources)}
+      <div className="flex min-w-0 items-start gap-3">
+        <span aria-hidden className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dotClass}`} />
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-bold text-ink">
+            {sourceTitle ?? agentRunTitle(agentRun.runType)}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">{agentRunTitle(agentRun.runType)}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-600">{runStep(agentRun, proposal)}</p>
+          {proposal ? (
+            <p className="mt-1 line-clamp-1 text-xs font-semibold text-gray-500">
+              {payloadLabel(proposal.items[0]?.payload ?? {})}
             </p>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{runStep(agentRun, proposal)}</p>
-            {proposal ? (
-              <p className="mt-1 line-clamp-1 text-[11px] font-bold text-gray-400">
-                {payloadLabel(proposal.items[0]?.payload ?? {})}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 md:justify-end">
-        <span className="shrink-0 rounded-full border border-gray-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-600">
+        <Pill className="capitalize" tone={runStatusTone(agentRun.status)}>
           {agentRun.status}
-        </span>
-        <span className="text-[11px] font-semibold text-gray-400">
+        </Pill>
+        <span className="text-xs font-medium text-gray-500">
           {shortTimestamp(agentRun.startedAt ?? agentRun.createdAt)}
         </span>
         {proposal?.status === 'pending' ? (
           <button
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-violet px-2.5 text-xs font-bold text-white"
+            className={`${rowButton} bg-violet text-white hover:bg-violet-dark`}
             onClick={() => onOpenProposal(proposal.id)}
             type="button"
           >
-            <ExternalLink size={13} />
+            <ExternalLink aria-hidden size={13} />
             Open review
           </button>
         ) : null}
         {agentRun.status === 'failed' ? (
           <button
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-xs font-bold text-ink hover:bg-slate-50"
+            className={`${rowButton} border border-gray-300 bg-surface text-ink hover:bg-slate-50`}
             onClick={() => onRetry(agentRun.id)}
             type="button"
           >
-            <RotateCw size={13} />
+            <RotateCw aria-hidden size={13} />
             Retry
           </button>
         ) : null}
         <button
-          className="inline-flex h-8 items-center rounded-md border border-gray-200 bg-white px-2.5 text-xs font-bold text-gray-600 hover:bg-slate-50 hover:text-ink"
+          className={`${rowButton} border border-gray-300 bg-surface text-gray-600 hover:bg-slate-50 hover:text-ink`}
           onClick={() => onSelectAgentRun(agentRun.id)}
           type="button"
         >
@@ -215,55 +237,58 @@ function ActivityGroupSection({
 }) {
   const copy = groupCopy(group)
   const Icon = copy.icon
+  const panelId = `activity-group-${group}`
 
   return (
-    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <button
-        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50"
-        onClick={onToggle}
-        type="button"
-      >
-        <span className="inline-flex min-w-0 items-center gap-3">
-          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${copy.className}`}>
-            <Icon size={15} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-extrabold text-ink">{copy.label}</span>
-            <span className="block text-xs leading-5 text-gray-500">
-              {items.length ? `${items.length} runs` : copy.empty}
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-surface">
+      <h2>
+        <button
+          aria-controls={panelId}
+          aria-expanded={isOpen}
+          className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50"
+          onClick={onToggle}
+          type="button"
+        >
+          <span className="inline-flex min-w-0 items-center gap-3">
+            <span
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${groupIconClass[copy.tone]}`}
+            >
+              <Icon aria-hidden size={15} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-ink">{copy.label}</span>
+              <span className="block text-xs leading-5 text-gray-500">
+                {items.length ? pluralize(items.length, 'run') : copy.empty}
+              </span>
             </span>
           </span>
-        </span>
-        <span className="inline-flex shrink-0 items-center gap-3">
-          <span className="rounded-full border border-gray-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-gray-500">
-            {items.length}
+          <span className="inline-flex shrink-0 items-center gap-3">
+            <span className="min-w-[28px] rounded-full border border-gray-200 bg-slate-50 px-2 py-0.5 text-center text-xs font-bold tabular-nums text-gray-600">
+              {items.length}
+            </span>
+            <ChevronDown
+              aria-hidden
+              className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              size={17}
+            />
           </span>
-          <ChevronDown
-            className={`text-gray-400 transition ${isOpen ? 'rotate-180' : ''}`}
-            size={17}
-          />
-        </span>
-      </button>
-      {isOpen ? (
-        items.length ? (
-          <div className="border-t border-gray-200">
-            {items.map(({ agentRun, proposal }) => (
-              <ActivityRow
-                agentRun={agentRun}
-                key={agentRun.id}
-                onOpenProposal={onOpenProposal}
-                onRetry={onRetry}
-                onSelectAgentRun={onSelectAgentRun}
-                proposal={proposal}
-                rawSources={rawSources}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="border-t border-gray-200 bg-slate-50 px-4 py-4 text-xs leading-5 text-gray-500">
-            {copy.empty}
-          </p>
-        )
+        </button>
+      </h2>
+      {isOpen && items.length ? (
+        <div className="border-t border-gray-200" id={panelId}>
+          {items.map(({ agentRun, proposal }) => (
+            <ActivityRow
+              agentRun={agentRun}
+              dotClass={copy.dot}
+              key={agentRun.id}
+              onOpenProposal={onOpenProposal}
+              onRetry={onRetry}
+              onSelectAgentRun={onSelectAgentRun}
+              proposal={proposal}
+              rawSources={rawSources}
+            />
+          ))}
+        </div>
       ) : null}
     </section>
   )
@@ -271,6 +296,9 @@ function ActivityGroupSection({
 
 export function AgentActivityPage({
   agentRuns,
+  error,
+  isLoading,
+  notice,
   onOpenProposal,
   onRetry,
   onSelectAgentRun,
@@ -278,6 +306,9 @@ export function AgentActivityPage({
   rawSources,
 }: {
   agentRuns: AgentRun[]
+  error: string | null
+  isLoading: boolean
+  notice: string | null
   onOpenProposal: (proposalId: string) => void
   onRetry: (agentRunId: string) => void
   onSelectAgentRun: (agentRunId: string) => void
@@ -295,47 +326,60 @@ export function AgentActivityPage({
   const groupOrder: ActivityGroup[] = ['running', 'needsReview', 'failed', 'completed']
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
-      <header className="border-b border-gray-200 bg-white px-8 py-6">
-        <div className="flex items-start justify-between gap-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-8 py-7">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+        <div className="flex items-end justify-between gap-6">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-violet">Agent</p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink">Activity</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-              Workspace-level indexing, review, retry, and run timeline state.
+            <h1 className="text-2xl font-extrabold text-ink">Agent activity</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
+              Every compile run the agent has made, what it needs from you, and anything that failed.
             </p>
           </div>
-          <div className="grid w-[420px] grid-cols-3 gap-2">
+          <dl className="flex shrink-0 gap-2">
             {[
               ['Running', summary.running],
               ['Needs review', summary.needsReview],
               ['Failed', summary.failed],
             ].map(([label, value]) => (
-              <div className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={label}>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                <p className="mt-1 text-xl font-extrabold text-ink">{value}</p>
+              <div className="min-w-[104px] rounded-lg border border-gray-200 bg-surface px-3 py-2" key={label}>
+                <dt className="text-xs font-medium text-gray-500">{label}</dt>
+                <dd className="mt-0.5 text-xl font-extrabold tabular-nums text-ink">{value}</dd>
               </div>
             ))}
-          </div>
+          </dl>
         </div>
-      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3">
-          {groupOrder.map((group) => (
-            <ActivityGroupSection
-              group={group}
-              items={groups[group]}
-              isOpen={openGroups[group]}
-              key={group}
-              onToggle={() => setOpenGroups((current) => ({ ...current, [group]: !current[group] }))}
-              onOpenProposal={onOpenProposal}
-              onRetry={onRetry}
-              onSelectAgentRun={onSelectAgentRun}
-              rawSources={rawSources}
-            />
-          ))}
-        </div>
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+        {notice ? <Banner tone="success">{notice}</Banner> : null}
+
+        {agentRuns.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 bg-surface px-6 py-12 text-center">
+            <p className="text-base font-bold text-ink">
+              {isLoading ? 'Loading agent runs…' : 'No agent runs yet'}
+            </p>
+            {isLoading ? null : (
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-600">
+                Capture a source and index it. The agent&apos;s runs show up here as they happen.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {groupOrder.map((group) => (
+              <ActivityGroupSection
+                group={group}
+                isOpen={openGroups[group]}
+                items={groups[group]}
+                key={group}
+                onOpenProposal={onOpenProposal}
+                onRetry={onRetry}
+                onSelectAgentRun={onSelectAgentRun}
+                onToggle={() => setOpenGroups((current) => ({ ...current, [group]: !current[group] }))}
+                rawSources={rawSources}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const toolContractVersion = "1.2.0";
+export const toolContractVersion = "2.0.0";
 
 export class AgentContractError extends Error {
   constructor(
@@ -106,41 +106,6 @@ export const proposalItemSchema = z
     }
   });
 
-export const suggestedLinkSchema = z.object({
-  source_block_id: z.string().nullable(),
-  target_block_id: z.string(),
-  relation_type: z.string().min(1),
-  confidence: confidenceSchema,
-  rationale: z.string().nullable(),
-  // Agent-judged evidence for the relationship (#98). Verbatim snippets the
-  // agent used to decide the link, surfaced in the Link Inbox.
-  source_evidence: z.array(z.string()).default([]),
-  target_evidence: z.array(z.string()).default([]),
-});
-
-export const linkRelationTypeSchema = z.enum([
-  "related_concept",
-  "supports",
-  "contrasts",
-  "example_of",
-  "prerequisite",
-]);
-
-/**
- * Standalone agent judgment for whether two knowledge notes should link (#98).
- * Used by the reindex_links backfill trigger; the compile loop expresses the
- * same judgment inline via {@link suggestedLinkSchema}. Only should_link with
- * medium/high confidence becomes a pending link.
- */
-export const linkJudgmentSchema = z.object({
-  should_link: z.boolean(),
-  relation_type: linkRelationTypeSchema,
-  confidence: confidenceSchema,
-  rationale: z.string().min(1),
-  source_evidence: z.array(z.string()).default([]),
-  target_evidence: z.array(z.string()).default([]),
-});
-
 export const getSourceInputSchema = z.object({
   source_id: z.string().min(1),
 });
@@ -161,7 +126,6 @@ export const getSourceOutputSchema = z.object({
     source_role: z.enum(["personal_note", "reference"]),
     source_type: z.string(),
     subtype: z.string().nullable(),
-    topic_ids: z.array(z.string()),
     body_markdown: z.string(),
   }),
   chunks: z.array(sourceChunkSchema),
@@ -169,7 +133,6 @@ export const getSourceOutputSchema = z.object({
 
 export const searchBlocksInputSchema = z.object({
   query: z.string().min(1),
-  topic_ids: z.array(z.string()).optional(),
   limit: z.number().int().positive().max(20).optional(),
   include_archived: z.boolean().optional(),
 });
@@ -182,7 +145,6 @@ export const blockSummarySchema = z.object({
   heading: z.string().nullable(),
   body_markdown_preview: z.string(),
   rank: z.number(),
-  linked_block_ids: z.array(z.string()),
 });
 
 export const searchBlocksOutputSchema = z.object({
@@ -201,14 +163,6 @@ export const evidenceReferenceSchema = z.object({
   chunk_body_markdown: z.string().nullable(),
 });
 
-export const blockLinkSchema = z.object({
-  id: z.string(),
-  source_block_id: z.string().nullable(),
-  target_block_id: z.string().nullable(),
-  relation_type: z.string(),
-  confidence: confidenceSchema,
-});
-
 export const getBlockOutputSchema = z.object({
   block: z.object({
     id: z.string(),
@@ -221,7 +175,6 @@ export const getBlockOutputSchema = z.object({
     status: z.string(),
   }),
   evidence: z.array(evidenceReferenceSchema),
-  links: z.array(blockLinkSchema),
 });
 
 export const lookupConceptsInputSchema = z.object({
@@ -264,13 +217,11 @@ export const draftProposalInputSchema = z.object({
   reasoning_summary: z.string().min(1),
   incomplete_reasoning: z.boolean(),
   items: z.array(proposalItemSchema).min(1),
-  suggested_links: z.array(suggestedLinkSchema),
 });
 
 export const draftProposalOutputSchema = z.object({
   proposal_id: z.string(),
   item_count: z.number().int().nonnegative(),
-  link_count: z.number().int().nonnegative(),
   saved_at: z.string(),
 });
 
@@ -367,9 +318,6 @@ export const verifyGroundingOutputSchema = z.object({
 export type SourceSpan = z.infer<typeof sourceSpanSchema>;
 export type ProposalItem = z.infer<typeof proposalItemSchema>;
 export type IndexingOutcome = z.infer<typeof indexingOutcomeSchema>;
-export type SuggestedLink = z.infer<typeof suggestedLinkSchema>;
-export type LinkRelationType = z.infer<typeof linkRelationTypeSchema>;
-export type LinkJudgment = z.infer<typeof linkJudgmentSchema>;
 export type GetSourceInput = z.infer<typeof getSourceInputSchema>;
 export type GetSourceOutput = z.infer<typeof getSourceOutputSchema>;
 export type SearchBlocksInput = z.infer<typeof searchBlocksInputSchema>;

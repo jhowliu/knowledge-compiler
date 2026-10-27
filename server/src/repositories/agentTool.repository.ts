@@ -138,7 +138,6 @@ export class PostgresAgentToolReadRepository implements AgentToolReadRepository 
         chunk_index: row.chunk_index,
         chunk_body_markdown: row.chunk_body_markdown,
       })),
-      links: [],
     };
   }
 

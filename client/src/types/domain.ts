@@ -1,14 +1,5 @@
-export type Topic = {
-  id: string
-  userId: string | null
-  name: string
-  color: string | null
-  createdAt: string
-}
-
 export type ProposalStatus = 'pending' | 'approved' | 'rejected'
-export type NoteLinkStatus = 'pending' | 'approved' | 'rejected'
-export type ActiveView = 'knowledge_map' | 'source_editor' | 'update_proposals' | 'agent_activity'
+export type ActiveView = 'source_editor' | 'update_proposals' | 'agent_activity'
 export type ThemeMode = 'light' | 'dark'
 export type RawSourceRole = 'reference' | 'personal_note'
 
@@ -26,13 +17,10 @@ export type RawSourceChunk = {
 export type RawSource = {
   id: string
   userId: string | null
-  projectId: string | null
-  folderId: string | null
   domain: string | null
   subtype: string | null
   sourceType: string
   sourceRole: RawSourceRole
-  topicIds: string[]
   title: string | null
   bodyMarkdown: string
   metadata: Record<string, unknown>
@@ -40,33 +28,6 @@ export type RawSource = {
   createdAt: string
   updatedAt: string
   chunks: RawSourceChunk[]
-}
-
-export type SourceFolder = {
-  id: string
-  projectId: string
-  userId: string | null
-  name: string
-  sourceCount: number
-  metadata: Record<string, unknown>
-  createdAt: string
-  updatedAt: string
-}
-
-export type SourceProject = {
-  id: string
-  userId: string | null
-  name: string
-  sourceCount: number
-  uncategorizedSourceCount: number
-  metadata: Record<string, unknown>
-  createdAt: string
-  updatedAt: string
-  folders: SourceFolder[]
-}
-
-export type SourceOrganization = {
-  projects: SourceProject[]
 }
 
 export type ProposalItem = {
@@ -163,6 +124,7 @@ export type AskCitation = {
 }
 
 export type AskResponse = {
+  question: string
   answer: string
   citations: AskCitation[]
 }
@@ -199,31 +161,6 @@ export type KnowledgeSourceTimeline = {
   versions: KnowledgeTimelineVersion[]
 }
 
-export type NoteLink = {
-  id: string
-  sourceNoteType: string
-  sourceNoteId: string
-  sourceTitle: string | null
-  targetNoteType: string
-  targetNoteId: string
-  targetTitle: string | null
-  relationType: string
-  confidence: string
-  status: NoteLinkStatus
-  rationale: string | null
-  createdByAgentRunId: string | null
-  updatedAt: string
-}
-
-export type NoteCardPosition = {
-  id: string
-  boardKey: string
-  noteId: string
-  x: number
-  y: number
-  updatedAt: string
-}
-
 export type AgentRun = {
   id: string
   runType: string
@@ -239,7 +176,7 @@ export type AgentRun = {
 export type AgentRunEvent = {
   id: string
   agentRunId: string
-  category: 'lifecycle' | 'source' | 'tool' | 'indexing' | 'proposal' | 'eval' | 'linking' | 'error'
+  category: 'lifecycle' | 'source' | 'tool' | 'indexing' | 'proposal' | 'eval' | 'error'
   name: string
   payload: unknown
   createdAt: string
@@ -280,18 +217,7 @@ export type SourceIndexingTrace = {
 
 export type WorkspaceData = {
   rawSources: RawSource[]
-  sourceOrganization: SourceOrganization
-  topics: Topic[]
   proposals: Proposal[]
   compiledNotes: CompiledNote[]
-  noteLinks: NoteLink[]
-  noteCardPositions: NoteCardPosition[]
   agentRuns: AgentRun[]
-}
-
-export type RelatedNoteMatch = {
-  note: CompiledNote
-  score: number
-  reason: string
-  link?: NoteLink
 }

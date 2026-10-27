@@ -41,7 +41,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
   readonly knowledgeBlocks: KnowledgeBlock[] = [];
   readonly evidenceLinks: EvidenceLinkRecord[] = [];
   readonly conceptIndex: ConceptIndexRecord[] = [];
-  readonly embeddings = new Map<string, number[]>();
   readonly rawSourceChunkIdsByRawSourceId = new Map<string, string[]>();
   relatedResults: SearchResult[] = [];
 
@@ -86,13 +85,10 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
-    topicIds?: string[];
-    queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
     const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = this.knowledgeBlocks
       .filter((block) => input.includeArchived || block.status === "active")
-      .filter((block) => blockMatchesTopics(block, input.topicIds ?? []))
       .map((block) => {
         const source = this.knowledgeSources.find((item) => item.id === block.knowledgeSourceId);
         const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
@@ -100,13 +96,9 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
         const conceptRank = version?.compiledNoteId
           ? this.conceptRankForQuery(input.query, version.compiledNoteId)
           : 0;
-        const vectorRank = input.queryEmbedding?.length
-          ? cosineSimilarity(input.queryEmbedding, this.embeddings.get(block.id) ?? [])
-          : 0;
         const rank =
           terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0) +
-          conceptRank +
-          vectorRank;
+          conceptRank;
         return { block, source, version, rank };
       })
       .filter((item) => item.source && item.version && item.source.status === "active" && item.rank > 0)
@@ -158,42 +150,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     });
   }
 
-  async listKnowledgeBlocksByCompiledNoteIds(input: {
-    compiledNoteIds: string[];
-    limit: number;
-    topicIds?: string[];
-  }): Promise<KnowledgeBlockSearchResult[]> {
-    const compiledNoteIds = new Set(input.compiledNoteIds);
-    const matches = this.knowledgeBlocks
-      .filter((block) => block.status === "active")
-      .filter((block) => blockMatchesTopics(block, input.topicIds ?? []))
-      .map((block) => {
-        const source = this.knowledgeSources.find((item) => item.id === block.knowledgeSourceId);
-        const version = this.knowledgeVersions.find((item) => item.id === block.knowledgeVersionId);
-        return { block, source, version };
-      })
-      .filter((item) => item.version?.compiledNoteId && compiledNoteIds.has(item.version.compiledNoteId))
-      .slice(0, input.limit);
-
-    return matches.map(({ block, source, version }) => ({
-      blockId: block.id,
-      knowledgeSourceId: block.knowledgeSourceId,
-      knowledgeVersionId: block.knowledgeVersionId,
-      compiledNoteId: version?.compiledNoteId ?? null,
-      title: source?.title ?? "Untitled",
-      domain: source?.domain ?? "general",
-      knowledgeType: source?.knowledgeType ?? "note",
-      versionNumber: version?.versionNumber ?? 1,
-      blockIndex: block.blockIndex,
-      heading: block.heading,
-      bodyMarkdown: block.bodyMarkdown,
-      rank: 0.25,
-      status: block.status,
-      updatedAt: block.updatedAt,
-      evidenceReferences: this.evidenceReferencesForSearchResult(block),
-    }));
-  }
-
   async upsertCompiledNote(input: {
     userId?: string | null;
     targetCompiledNoteId?: string | null;
@@ -242,13 +198,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
 
   async listCompiledNotes(): Promise<CompiledNote[]> {
     return this.compiledNotes;
-  }
-
-  async compiledNoteIdForBlock(blockId: string): Promise<string | null> {
-    const block = this.knowledgeBlocks.find((candidate) => candidate.id === blockId);
-    if (!block) return null;
-    const version = this.knowledgeVersions.find((candidate) => candidate.id === block.knowledgeVersionId);
-    return version?.compiledNoteId ?? null;
   }
 
   async applyApprovedKnowledge(input: {
@@ -447,16 +396,6 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
     return this.knowledgeBlocks.filter((block) => block.status === "active");
   }
 
-  async listKnowledgeBlocksNeedingEmbeddings(): Promise<KnowledgeBlock[]> {
-    return this.knowledgeBlocks.filter(
-      (block) => block.status === "active" && !this.embeddings.has(block.id),
-    );
-  }
-
-  async updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]): Promise<void> {
-    this.embeddings.set(blockId, embedding);
-  }
-
   async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {
     const source = this.knowledgeSources.find((item) => item.id === id) ?? null;
     return source ? this.buildKnowledgeSourceTimeline(source) : null;
@@ -594,35 +533,4 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepository {
       return score + 1;
     }, 0);
   }
-}
-
-function cosineSimilarity(left: number[], right: number[]) {
-  if (left.length === 0 || right.length === 0 || left.length !== right.length) {
-    return 0;
-  }
-
-  let dot = 0;
-  let leftMagnitude = 0;
-  let rightMagnitude = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    dot += left[index] * right[index];
-    leftMagnitude += left[index] * left[index];
-    rightMagnitude += right[index] * right[index];
-  }
-
-  if (leftMagnitude === 0 || rightMagnitude === 0) {
-    return 0;
-  }
-
-  return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
-}
-
-function blockMatchesTopics(block: KnowledgeBlock, topicIds: string[]) {
-  if (topicIds.length === 0) {
-    return true;
-  }
-  const metadataTopicIds = Array.isArray(block.metadata.topicIds)
-    ? block.metadata.topicIds.filter((topicId): topicId is string => typeof topicId === "string")
-    : [];
-  return metadataTopicIds.some((topicId) => topicIds.includes(topicId));
 }

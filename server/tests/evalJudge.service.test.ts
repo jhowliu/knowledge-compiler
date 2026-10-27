@@ -55,7 +55,6 @@ describe("eval judge service", () => {
             conflict_resolution: null,
           },
         ],
-        suggested_links: [],
       },
       existing_blocks_context: [],
     });
@@ -126,7 +125,6 @@ describe("eval judge service", () => {
             conflict_resolution: null,
           },
         ],
-        suggested_links: [],
       },
       existing_blocks_context: [],
     });

@@ -16,5 +16,4 @@ export type AskResponse = {
 
 export type AskRequest = {
   query: string;
-  topicIds?: string[];
 };

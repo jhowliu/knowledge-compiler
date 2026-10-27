@@ -1,4 +1,4 @@
-import { apiBaseUrl, graphBoardKey } from './constants'
+import { apiBaseUrl } from './constants'
 import type {
   AgentRun,
   AgentRunDetail,
@@ -6,13 +6,9 @@ import type {
   CompiledNote,
   KnowledgeSearchResult,
   KnowledgeSourceTimeline,
-  NoteCardPosition,
-  NoteLink,
   Proposal,
   RawSource,
   SourceIndexingTrace,
-  SourceOrganization,
-  Topic,
   WorkspaceData,
 } from '../types/domain'
 
@@ -66,88 +62,34 @@ export function createAgentRunEventSource() {
   return new EventSource(`${apiBaseUrl}/agent-runs/stream`)
 }
 
-const workspaceDataRequests = new Map<string, Promise<WorkspaceData>>()
+let workspaceDataRequest: Promise<WorkspaceData> | null = null
 
 export async function loadWorkspaceData(): Promise<WorkspaceData> {
-  const inFlightRequest = workspaceDataRequests.get(graphBoardKey)
-  if (inFlightRequest) {
-    return inFlightRequest
+  if (workspaceDataRequest) {
+    return workspaceDataRequest
   }
 
   const request = loadWorkspaceDataWithoutCache().finally(() => {
-    workspaceDataRequests.delete(graphBoardKey)
+    workspaceDataRequest = null
   })
-  workspaceDataRequests.set(graphBoardKey, request)
+  workspaceDataRequest = request
   return request
 }
 
 async function loadWorkspaceDataWithoutCache(): Promise<WorkspaceData> {
-  const [
-    rawSources,
-    sourceOrganization,
-    topics,
-    proposals,
-    compiledNotes,
-    noteLinks,
-    noteCardPositions,
-    agentRuns,
-  ] =
-    await Promise.all([
-      requestJson<{ rawSources: RawSource[] }>('/sources'),
-      requestJson<{ sourceOrganization: SourceOrganization }>('/sources/organization'),
-      requestJson<{ topics: Topic[] }>('/topics'),
-      requestJson<{ proposals: Proposal[] }>('/update-proposals'),
-      requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
-      requestJson<{ noteLinks: NoteLink[] }>('/note-links'),
-      requestJson<{ noteCardPositions: NoteCardPosition[] }>(
-        `/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`,
-      ),
-      requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
-    ])
+  const [rawSources, proposals, compiledNotes, agentRuns] = await Promise.all([
+    requestJson<{ rawSources: RawSource[] }>('/sources'),
+    requestJson<{ proposals: Proposal[] }>('/update-proposals'),
+    requestJson<{ compiledNotes: CompiledNote[] }>('/compiled-notes'),
+    requestJson<{ agentRuns: AgentRun[] }>('/agent-runs'),
+  ])
 
   return {
     rawSources: rawSources.rawSources,
-    sourceOrganization: sourceOrganization.sourceOrganization,
-    topics: topics.topics,
     proposals: proposals.proposals,
     compiledNotes: compiledNotes.compiledNotes,
-    noteLinks: noteLinks.noteLinks,
-    noteCardPositions: noteCardPositions.noteCardPositions,
     agentRuns: agentRuns.agentRuns,
   }
-}
-
-export async function listTopics() {
-  const result = await requestJson<{ topics: Topic[] }>('/topics')
-  return result.topics
-}
-
-export async function createTopic(name: string, color?: string | null) {
-  const result = await requestJson<{ topic: Topic }>('/topics', {
-    method: 'POST',
-    body: JSON.stringify({ name, color }),
-  })
-  return result.topic
-}
-
-export async function updateTopic(id: string, updates: { name?: string; color?: string | null }) {
-  const result = await requestJson<{ topic: Topic }>(`/topics/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  })
-  return result.topic
-}
-
-export async function deleteTopic(id: string) {
-  await requestVoid(`/topics/${id}`, { method: 'DELETE' })
-}
-
-export async function applySourceTopics(sourceId: string, topicIds: string[]) {
-  const result = await requestJson<{ rawSource: RawSource }>(`/sources/${sourceId}/topics`, {
-    method: 'PATCH',
-    body: JSON.stringify({ topicIds }),
-  })
-  return result.rawSource
 }
 
 export async function loadSourceIndexingTrace(rawSourceId: string) {
@@ -207,13 +149,14 @@ type AskApiResponse = {
   }>
 }
 
-export async function askKnowledgeBase(query: string, topicIds: string[] = []): Promise<AskResponse> {
+export async function askKnowledgeBase(query: string): Promise<AskResponse> {
   const result = await requestJson<AskApiResponse>('/ask', {
     method: 'POST',
-    body: JSON.stringify({ query, topic_ids: topicIds }),
+    body: JSON.stringify({ query }),
   })
 
   return {
+    question: query,
     answer: result.answer,
     citations: result.citations.map((citation) => ({
       blockId: citation.block_id,

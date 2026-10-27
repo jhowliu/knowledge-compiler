@@ -23,17 +23,17 @@ depend on the base notes existing first.
 | `B2-self-intro-zh.md` | 自我介紹草稿 | personal_note | **keep_searchable** | #105: non-English keep works (no regex) |
 | `B3-meeting-notes.md` | Sync notes 2026-06-02 | personal_note | **keep_searchable** | meeting/TODO stays a source |
 
-After Phase 1 also check: B1/B2/B3 created **no** Knowledge Block and **no** graph node,
+After Phase 1 also check: B1/B2/B3 created **no** Knowledge Block,
 but are still searchable (concepts indexed).
 
-### Phase 2 — iteration + conflict + links (compile AFTER Phase 1)
+### Phase 2 — iteration + conflict (compile AFTER Phase 1)
 
 | File | Title | Role | Expected | What it verifies |
 |---|---|---|---|---|
 | `C1-dijkstra-k-stops-cleaner.md` | Dijkstra K-stops, cleaner template | reference | **update_existing_knowledge** → targets A2's block | #104: same concept, different wording → updates, not a duplicate |
 | `C2-rag-eval-supplement-zh.md` | RAG 評估流程補充 | reference | **update_existing_knowledge** → targets A3's block | #104 cross-language recall (advanced; see note below) |
 | `D1-rag-eval-contradiction.md` | Why retrieval-first eval is wrong | reference | **update** with **conflict_detected: true** vs A3 | conflict is LLM-judged, `needs_user_decision`, summary present |
-| `E1-monotonic-predicate.md` | Monotonic feasibility predicate | reference | **create_knowledge** + **suggested link → A1** | link discovery (related but distinct concept) |
+| `E1-monotonic-predicate.md` | Monotonic feasibility predicate | reference | **create_knowledge** | a related but distinct concept is a new note, not an update to A1 |
 
 ## What to check per compile (quality rubric)
 
@@ -42,8 +42,7 @@ but are still searchable (concepts indexed).
 - **Conflict**: D1 has `conflict_detected: true`, a real `conflict_summary`, resolution `needs_user_decision`; the others have no false conflict.
 - **Grounding**: every knowledge item's `source_spans` are verbatim from the note; no invented claims (check the eval grounding lint shows no `ungrounded`).
 - **Concepts**: sensible concept names extracted; reused across related notes (A1↔E1, A2↔C1, A3↔C2/D1).
-- **Links**: E1 proposes a link to A1; weak/unrelated notes do not spew links.
-- **keep_searchable**: B1/B2/B3 produce a keep proposal only — no block, no graph node.
+- **keep_searchable**: B1/B2/B3 produce a keep proposal only — no block.
 - **Trace**: open the Agent Run drawer — tool order should make sense and vary by note (search before the keep/create/update decision).
 
 ## Notes / known limits

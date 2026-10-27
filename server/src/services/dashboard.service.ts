@@ -1,12 +1,10 @@
 import { AppError } from "../domain/errors.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
-import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
 
 export class DashboardService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
-    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
     private readonly rawSourceRepository: RawSourceRepository | null = null,
   ) {}
 
@@ -19,7 +17,7 @@ export class DashboardService {
   // surfaced here so kept_searchable material is actually findable.
   async search(
     query: string,
-    options: { includeArchived?: boolean; limit?: number; topicIds?: string[] } = {},
+    options: { includeArchived?: boolean; limit?: number } = {},
   ) {
     const queryText = query.trim();
     const limit = options.limit ?? 20;
@@ -27,14 +25,10 @@ export class DashboardService {
       return [];
     }
 
-    const queryEmbedding = await this.embeddingService.embedText(queryText);
-
     const knowledge = await this.knowledgeRepository.searchKnowledgeBlocks({
       query: queryText,
       limit,
       includeArchived: options.includeArchived ?? false,
-      topicIds: options.topicIds ?? [],
-      queryEmbedding,
     });
     const knowledgeHits = knowledge.map((hit) => ({ ...hit, tier: "knowledge" as const }));
 
@@ -43,7 +37,6 @@ export class DashboardService {
       const sources = await this.rawSourceRepository.searchRawSourceChunks({
         query: queryText,
         limit,
-        queryEmbedding,
       });
       sourceHits = sources.map((hit) => ({ ...hit, tier: "source" as const }));
     }

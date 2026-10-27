@@ -8,15 +8,12 @@ import {
 } from './features/agent-runs/AgentActivityCenter'
 import { AgentRunDrawer } from './features/agent-runs/AgentRunDrawer'
 import { AskPanel } from './features/ask/AskPanel'
-import { KnowledgeCanvas } from './features/graph/KnowledgeCanvas'
 import { SourceEditorPage } from './features/sources/SourceEditorPage'
 import { ReviewQueuePage } from './features/review-queue/ReviewQueuePage'
 import { KnowledgeSearchPanel } from './features/search/KnowledgeSearchPanel'
 import {
-  applySourceTopics,
   askKnowledgeBase,
   createAgentRunEventSource,
-  createTopic,
   loadAgentRunDetail,
   loadSourceIndexingTrace,
   loadWorkspaceData,
@@ -24,20 +21,18 @@ import {
   requestVoid,
   searchKnowledgeBlocks,
 } from './lib/api'
-import { emptyWorkspaceData, graphBoardKey } from './lib/constants'
+import { emptyWorkspaceData } from './lib/constants'
 import type {
   ActiveView,
   AgentRun,
   AgentRunDetail,
   AskResponse,
   KnowledgeSearchResult,
-  NoteCardPosition,
   Proposal,
   RawSource,
   RawSourceRole,
   SourceIndexingTrace,
   ThemeMode,
-  Topic,
   WorkspaceData,
 } from './types/domain'
 
@@ -45,15 +40,13 @@ function App() {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const selectedAgentRunIdRef = useRef<string | null>(null)
   const agentStreamRefreshTimerRef = useRef<number | null>(null)
-  const [activeView, setActiveView] = useState<ActiveView>('knowledge_map')
+  const [activeView, setActiveView] = useState<ActiveView>('source_editor')
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const savedTheme = window.localStorage.getItem('knowledgeCompilerTheme')
-    return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   })
   const [title, setTitle] = useState('')
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [sourceRole, setSourceRole] = useState<RawSourceRole>('personal_note')
-  const [draftTopicIds, setDraftTopicIds] = useState<string[]>([])
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(emptyWorkspaceData)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
@@ -71,11 +64,11 @@ function App() {
   const [askError, setAskError] = useState<string | null>(null)
   const [isAskOpen, setIsAskOpen] = useState(false)
   const [isAskLoading, setIsAskLoading] = useState(false)
-  const [askTopicIds, setAskTopicIds] = useState<string[]>([])
   const [isSourceDirty, setIsSourceDirty] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const pendingCount = workspaceData.proposals.filter((proposal) => proposal.status === 'pending').length
@@ -96,10 +89,10 @@ function App() {
     try {
       const nextData = await loadWorkspaceData()
       setWorkspaceData(nextData)
-      setError(null)
+      setLoadError(null)
       return nextData
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to load workspace')
+      setLoadError(nextError instanceof Error ? nextError.message : 'Unable to reach the server')
       return null
     } finally {
       if (showLoading) {
@@ -192,7 +185,7 @@ function App() {
     }
   }
 
-  async function runKnowledgeAsk(nextQuery = askQuery, topicIds = askTopicIds) {
+  async function runKnowledgeAsk(nextQuery = askQuery) {
     const trimmedQuery = nextQuery.trim()
     setIsAskOpen(true)
     setAskError(null)
@@ -204,17 +197,13 @@ function App() {
 
     setIsAskLoading(true)
     try {
-      setAskResponse(await askKnowledgeBase(trimmedQuery, topicIds))
+      setAskResponse(await askKnowledgeBase(trimmedQuery))
     } catch (nextError) {
       setAskError(nextError instanceof Error ? nextError.message : 'Unable to ask knowledge')
       setAskResponse(null)
     } finally {
       setIsAskLoading(false)
     }
-  }
-
-  function updateAskTopicIds(topicIds: string[]) {
-    setAskTopicIds(topicIds)
   }
 
   function openProposalFromAgentRun(proposalId: string) {
@@ -269,7 +258,12 @@ function App() {
   }, [isAgentRunning])
 
   useEffect(() => {
-    window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
+    document.documentElement.dataset.theme = themeMode
+    try {
+      window.localStorage.setItem('knowledgeCompilerTheme', themeMode)
+    } catch {
+      // Private windows can block storage; the theme just will not persist.
+    }
   }, [themeMode])
 
   useEffect(() => {
@@ -283,7 +277,6 @@ function App() {
       title: title.trim() || null,
       sourceRole,
       sourceType: sourceRole === 'reference' ? 'paper' : 'manual',
-      topicIds: draftTopicIds,
       bodyMarkdown,
     }
   }
@@ -294,7 +287,7 @@ function App() {
     }
 
     if (!bodyMarkdown.trim()) {
-      setError('Write a practice note first.')
+      setError('Write something in the source body first.')
       return null
     }
 
@@ -331,7 +324,6 @@ function App() {
       setTitle('')
       setBodyMarkdown('')
       setSourceRole('personal_note')
-      setDraftTopicIds([])
       setSelectedSourceId(null)
       setSelectedSourceTrace(null)
       setIsSourceDirty(false)
@@ -349,7 +341,7 @@ function App() {
   async function submitSource(event: React.FormEvent) {
     event.preventDefault()
     if (!bodyMarkdown.trim()) {
-      setError('Write a practice note first.')
+      setError('Write something in the source body first.')
       return
     }
 
@@ -400,12 +392,11 @@ function App() {
       if (result.rawSource) {
         setTitle(result.rawSource.title ?? '')
         setSourceRole(result.rawSource.sourceRole)
-        setDraftTopicIds(result.rawSource.topicIds)
         setBodyMarkdown(result.rawSource.bodyMarkdown)
       }
       setNotice(
         result.agentRunId
-          ? 'Source queued for agentic wiki indexing. Trace is available in this editor.'
+          ? 'Source queued for indexing. Progress shows in the details panel.'
           : result.proposal
             ? isCompilingSavedSource
               ? 'Source compiled. Review the generated update proposal.'
@@ -437,7 +428,7 @@ function App() {
             if (delayedProposal) {
               setSelectedProposalId(delayedProposal.id)
               setActiveView('update_proposals')
-              setNotice('Agent finished wiki indexing. Review the proposed incremental updates.')
+              setNotice('Indexing finished. Review the proposed updates.')
             }
             await refreshSelectedSourceTrace(nextSourceId)
           })()
@@ -475,7 +466,6 @@ function App() {
     setTitle('')
     setBodyMarkdown('')
     setSourceRole('personal_note')
-    setDraftTopicIds([])
     setSelectedSourceId(null)
     setSelectedSourceTrace(null)
     setIsSourceDirty(false)
@@ -487,7 +477,6 @@ function App() {
     setSelectedSourceTrace(null)
     setTitle(rawSource.title ?? '')
     setSourceRole(rawSource.sourceRole)
-    setDraftTopicIds(rawSource.topicIds)
     setBodyMarkdown(rawSource.bodyMarkdown)
     setIsSourceDirty(false)
     setNotice(null)
@@ -508,149 +497,6 @@ function App() {
   function updateSourceRole(value: RawSourceRole) {
     setSourceRole(value)
     setIsSourceDirty(true)
-  }
-
-  function updateDraftTopicIds(topicIds: string[]) {
-    setDraftTopicIds(topicIds)
-    setIsSourceDirty(true)
-  }
-
-  async function createSourceProject(name: string) {
-    try {
-      await requestJson('/sources/projects', {
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      })
-      setNotice(`Project "${name}" created.`)
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to create project')
-      setNotice(null)
-    }
-  }
-
-  async function createSourceFolder(projectId: string, name: string) {
-    try {
-      await requestJson(`/sources/projects/${projectId}/folders`, {
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      })
-      setNotice(`Folder "${name}" created.`)
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to create folder')
-      setNotice(null)
-    }
-  }
-
-  async function renameSourceProject(projectId: string, name: string) {
-    try {
-      await requestJson(`/sources/projects/${projectId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name }),
-      })
-      setNotice(`Project renamed to "${name}".`)
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to rename project')
-      setNotice(null)
-    }
-  }
-
-  async function renameSourceFolder(projectId: string, folderId: string, name: string) {
-    try {
-      await requestJson(`/sources/projects/${projectId}/folders/${folderId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name }),
-      })
-      setNotice(`Folder renamed to "${name}".`)
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to rename folder')
-      setNotice(null)
-    }
-  }
-
-  async function deleteSourceProject(projectId: string) {
-    try {
-      await requestVoid(`/sources/projects/${projectId}`, { method: 'DELETE' })
-      setNotice('Project deleted.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to delete project')
-      setNotice(null)
-    }
-  }
-
-  async function deleteSourceFolder(projectId: string, folderId: string) {
-    try {
-      await requestVoid(`/sources/projects/${projectId}/folders/${folderId}`, { method: 'DELETE' })
-      setNotice('Folder deleted.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to delete folder')
-      setNotice(null)
-    }
-  }
-
-  async function moveRawSource(rawSourceId: string, input: { projectId: string; folderId: string | null }) {
-    try {
-      await requestJson(`/sources/${rawSourceId}/organization`, {
-        method: 'PATCH',
-        body: JSON.stringify(input),
-      })
-      setNotice('Source moved.')
-      setError(null)
-      const nextData = await refresh()
-      const selectedSource = selectedSourceId
-        ? nextData?.rawSources.find((source) => source.id === selectedSourceId)
-        : null
-      if (selectedSource) {
-        setTitle(selectedSource.title ?? '')
-        setSourceRole(selectedSource.sourceRole)
-        setDraftTopicIds(selectedSource.topicIds)
-        setBodyMarkdown(selectedSource.bodyMarkdown)
-        setIsSourceDirty(false)
-      }
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to move source')
-      setNotice(null)
-    }
-  }
-
-  async function addTopic(name: string): Promise<Topic | null> {
-    try {
-      const topic = await createTopic(name)
-      setNotice(`Topic "${name}" created.`)
-      setError(null)
-      await refresh()
-      return topic
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to create topic')
-      setNotice(null)
-      return null
-    }
-  }
-
-  async function applyTopicsToSource(rawSourceId: string, topicIds: string[]): Promise<RawSource | null> {
-    try {
-      const rawSource = await applySourceTopics(rawSourceId, topicIds)
-      setDraftTopicIds(rawSource.topicIds)
-      setNotice('Topics updated.')
-      setError(null)
-      await refresh()
-      return rawSource
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to update topics')
-      setNotice(null)
-      return null
-    }
   }
 
   async function decideProposal(
@@ -676,9 +522,9 @@ function App() {
       setNotice(
         decision === 'approve'
           ? keepingSourceOnly
-            ? 'Source kept searchable and visible on the graph. No Knowledge Note was created.'
-            : 'Updates applied to compiled knowledge. Review any new link suggestions on the right.'
-          : 'Proposal rejected. No compiled knowledge was changed.',
+            ? 'Source kept searchable. No knowledge note was created.'
+            : 'Updates applied to your knowledge.'
+          : 'Proposal rejected. Your knowledge was not changed.',
       )
       setError(null)
     } catch (nextError) {
@@ -686,131 +532,6 @@ function App() {
       setNotice(null)
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  async function decideNoteLink(linkId: string, decision: 'approve' | 'reject') {
-    try {
-      await requestJson(`/note-links/${linkId}/${decision}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      })
-      setNotice(decision === 'approve' ? 'Note link approved.' : 'Note link rejected.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to update note link')
-      setNotice(null)
-    }
-  }
-
-  async function createManualNoteLink(input: {
-    sourceNoteId: string
-    targetNoteId: string
-    relationType: string
-  }) {
-    try {
-      await requestJson('/note-links', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      })
-      setNotice('Note link added.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to create note link')
-      setNotice(null)
-    }
-  }
-
-  async function updateManualNoteLink(linkId: string, relationType: string) {
-    try {
-      await requestJson(`/note-links/${linkId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ relationType }),
-      })
-      setNotice('Note link updated.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to update note link')
-      setNotice(null)
-    }
-  }
-
-  async function removeManualNoteLink(linkId: string) {
-    try {
-      await requestJson(`/note-links/${linkId}`, {
-        method: 'DELETE',
-        body: JSON.stringify({}),
-      })
-      setNotice('Note link removed.')
-      setError(null)
-      await refresh()
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to remove note link')
-      setNotice(null)
-    }
-  }
-
-  async function saveNoteCardPosition(noteId: string, position: { x: number; y: number }) {
-    try {
-      const result = await requestJson<{ noteCardPosition: NoteCardPosition }>(
-        `/note-card-positions/${noteId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({ ...position, boardKey: graphBoardKey }),
-        },
-      )
-      setWorkspaceData((current) => ({
-        ...current,
-        noteCardPositions: [
-          result.noteCardPosition,
-          ...current.noteCardPositions.filter(
-            (item) =>
-              item.boardKey !== result.noteCardPosition.boardKey ||
-              item.noteId !== result.noteCardPosition.noteId,
-          ),
-        ],
-      }))
-      setError(null)
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to save card position')
-    }
-  }
-
-  async function resetBoardLayout() {
-    try {
-      await requestVoid(`/note-card-positions?boardKey=${encodeURIComponent(graphBoardKey)}`, {
-        method: 'DELETE',
-      })
-      setWorkspaceData((current) => ({ ...current, noteCardPositions: [] }))
-      setNotice('Board layout reset.')
-      setError(null)
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to reset board layout')
-      setNotice(null)
-    }
-  }
-
-  async function startReindexLinksRun() {
-    try {
-      const result = await requestJson<{ agentRun: AgentRun }>('/agent-runs', {
-        method: 'POST',
-        body: JSON.stringify({ runType: 'reindex_links' }),
-      })
-      setWorkspaceData((current) => ({
-        ...current,
-        agentRuns: [result.agentRun, ...current.agentRuns],
-      }))
-      setNotice('Agent re-index started.')
-      setError(null)
-      window.setTimeout(() => {
-        void refresh()
-      }, 900)
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unable to start agent run')
-      setNotice(null)
     }
   }
 
@@ -837,34 +558,43 @@ function App() {
   }
 
   return (
-    <main
-      className={`theme-${themeMode} flex h-screen min-w-[1180px] overflow-hidden bg-canvas text-ink`}
-    >
+    <main className="flex h-screen min-w-[1024px] overflow-hidden bg-canvas text-ink">
       {activeView === 'source_editor' ? null : (
         <LeftNavigation
           activeView={activeView}
           agentActivitySummary={agentActivitySummary}
           onAgentActivityClick={openAgentActivityView}
           onCaptureClick={openNewSourceEditor}
-          onKnowledgeMapClick={() => setActiveView('knowledge_map')}
           onSourcesClick={openSourcesView}
           onUpdateProposalsClick={openUpdateProposalsView}
           pendingCount={pendingCount}
-          themeMode={themeMode}
         />
       )}
       <section className="flex min-w-0 flex-1 flex-col">
+        {loadError ? (
+          <div
+            className="flex shrink-0 items-center justify-between gap-4 border-b border-red-200 bg-red-50 px-6 py-2.5 text-sm text-red-800"
+            role="alert"
+          >
+            <span className="min-w-0">
+              Couldn&apos;t load your workspace: {loadError}
+            </span>
+            <button
+              className="shrink-0 rounded-md border border-red-200 bg-surface px-3 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+              onClick={() => void refresh()}
+              type="button"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
         {activeView !== 'source_editor' ? (
           <TopToolbar
             activeView={activeView}
             agentActivitySummary={agentActivitySummary}
             agentRunStatus={latestAgentRun?.status ?? 'idle'}
-            compiledCount={workspaceData.compiledNotes.length}
-            isAgentRunning={isAgentRunning}
-            noteCount={workspaceData.rawSources.length}
             onAgentActivityClick={openAgentActivityView}
             onAskClick={() => setIsAskOpen(true)}
-            onReindexLinks={() => void startReindexLinksRun()}
             onSearchQueryChange={setSearchQuery}
             onSearchSubmit={() => void runKnowledgeSearch()}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
@@ -873,47 +603,16 @@ function App() {
             themeMode={themeMode}
           />
         ) : null}
-        {activeView === 'knowledge_map' ? (
-          <>
-            {error ? (
-              <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {error}
-              </div>
-            ) : null}
-            <div className="relative flex min-h-0 flex-1" data-knowledge-map-panel="true">
-              {notice ? (
-                <div
-                  aria-live="polite"
-                  className="pointer-events-none absolute right-6 top-4 z-40 max-w-sm rounded-lg border border-emerald-200 bg-emerald-50/95 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-lg"
-                  role="status"
-                >
-                  {notice}
-                </div>
-              ) : null}
-              <KnowledgeCanvas
-                data={workspaceData}
-                onCreateNoteLink={(input) => void createManualNoteLink(input)}
-                onDecideNoteLink={(linkId, decision) => void decideNoteLink(linkId, decision)}
-                onMoveNoteCard={(noteId, position) => void saveNoteCardPosition(noteId, position)}
-                onResetBoardLayout={() => void resetBoardLayout()}
-                onRemoveNoteLink={(linkId) => void removeManualNoteLink(linkId)}
-                onUpdateNoteLink={(linkId, relationType) => void updateManualNoteLink(linkId, relationType)}
-              />
-            </div>
-          </>
-        ) : activeView === 'update_proposals' ? (
+        {activeView === 'update_proposals' ? (
           <ReviewQueuePage
             compiledNotes={workspaceData.compiledNotes}
             error={error}
             isSubmitting={isSubmitting || isLoading}
-            noteLinks={workspaceData.noteLinks}
             notice={notice}
-            onApproveNoteLink={(linkId) => void decideNoteLink(linkId, 'approve')}
             onApproveProposal={(proposalId, indexingOutcomeOverride) =>
               void decideProposal(proposalId, 'approve', indexingOutcomeOverride)
             }
             onRefresh={() => void refresh()}
-            onRejectNoteLink={(linkId) => void decideNoteLink(linkId, 'reject')}
             onRejectProposal={(proposalId) => void decideProposal(proposalId, 'reject')}
             onSelectProposal={setSelectedProposalId}
             proposals={workspaceData.proposals}
@@ -923,6 +622,9 @@ function App() {
         ) : activeView === 'agent_activity' ? (
           <AgentActivityPage
             agentRuns={workspaceData.agentRuns}
+            error={error}
+            isLoading={isLoading}
+            notice={notice}
             onOpenProposal={openProposalFromAgentRun}
             onRetry={(agentRunId) => void retryAgentRun(agentRunId)}
             onSelectAgentRun={(agentRunId) => void openAgentRunDetail(agentRunId)}
@@ -937,40 +639,29 @@ function App() {
             error={error}
             indexingTrace={selectedSourceTrace}
             isDirty={isSourceDirty}
+            isLoading={isLoading}
             isSubmitting={isSubmitting || isLoading}
             notice={notice}
-            onApplyTopics={(rawSourceId, topicIds) => void applyTopicsToSource(rawSourceId, topicIds)}
             onBodyChange={updateDraftBody}
-            onCreateFolder={(projectId, name) => void createSourceFolder(projectId, name)}
-            onCreateProject={(name) => void createSourceProject(name)}
-            onCreateTopic={(name) => addTopic(name)}
             onDelete={() => void deleteSelectedSource()}
-            onDeleteFolder={(projectId, folderId) => void deleteSourceFolder(projectId, folderId)}
-            onDeleteProject={(projectId) => void deleteSourceProject(projectId)}
-            onMoveSource={(rawSourceId, input) => void moveRawSource(rawSourceId, input)}
+            onAskClick={() => setIsAskOpen(true)}
             onNewNote={openNewSourceEditor}
             onOpenAgentActivity={openAgentActivityView}
-            onOpenKnowledgeMap={() => setActiveView('knowledge_map')}
             onOpenReviewQueue={openUpdateProposalsView}
             onThemeToggle={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
-            onRenameFolder={(projectId, folderId, name) => void renameSourceFolder(projectId, folderId, name)}
-            onRenameProject={(projectId, name) => void renameSourceProject(projectId, name)}
             onSave={() => void saveSelectedSource()}
+            onSearchClick={() => setIsSearchOpen(true)}
             onSelectSource={selectSource}
             onSourceRoleChange={updateSourceRole}
             onSubmit={submitSource}
             onTitleChange={updateDraftTitle}
-            onTopicIdsChange={updateDraftTopicIds}
             proposals={workspaceData.proposals}
             rawSources={workspaceData.rawSources}
-            sourceProjects={workspaceData.sourceOrganization.projects}
             selectedSourceId={selectedSourceId}
             sourceRole={sourceRole}
             themeMode={themeMode}
             title={title}
             titleInputRef={titleInputRef}
-            topicIds={draftTopicIds}
-            topics={workspaceData.topics}
           />
         )}
       </section>
@@ -1003,11 +694,8 @@ function App() {
         onClose={() => setIsAskOpen(false)}
         onQueryChange={setAskQuery}
         onSubmit={() => void runKnowledgeAsk()}
-        onTopicIdsChange={updateAskTopicIds}
         query={askQuery}
         response={askResponse}
-        selectedTopicIds={askTopicIds}
-        topics={workspaceData.topics}
       />
     </main>
   )

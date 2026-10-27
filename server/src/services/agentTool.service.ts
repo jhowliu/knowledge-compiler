@@ -52,7 +52,6 @@ export type DraftProposalContext = {
     heading: string | null;
     body_markdown_preview: string;
     rank: number;
-    linked_block_ids: string[];
   }>;
 };
 
@@ -81,7 +80,6 @@ export class AgentToolService {
         source_role: source.sourceRole,
         source_type: source.sourceType,
         subtype: source.subtype,
-        topic_ids: source.topicIds,
         body_markdown: source.bodyMarkdown,
       },
       chunks: source.chunks.map((chunk) => ({
@@ -111,7 +109,6 @@ export class AgentToolService {
         heading: result.heading,
         body_markdown_preview: result.bodyMarkdown.slice(0, 320),
         rank: result.rank,
-        linked_block_ids: [],
       })),
     });
   }
@@ -213,15 +210,9 @@ export class AgentToolService {
     return validateToolOutput(draftProposalOutputSchema, {
       proposal_id: proposal.id,
       item_count: parsedInput.items.length,
-      link_count: judgedLinks(parsedInput).length,
       saved_at: proposal.createdAt.toISOString(),
     });
   }
-}
-
-/** Links the agent judged strong enough to create (#98): medium/high only. */
-function judgedLinks(input: DraftProposalInput) {
-  return input.suggested_links.filter((link) => link.confidence !== "low");
 }
 
 function groundingScore(grounding: Array<{ verdict: "grounded" | "weak" | "ungrounded" }>) {
@@ -302,23 +293,6 @@ function toDraftUpdateProposal(
           incompleteReasoning: input.incomplete_reasoning,
         };
       }),
-      // Only medium/high-confidence judged links become pending links (#98);
-      // low-confidence judgments are dropped rather than creating noisy links.
-      ...judgedLinks(input).map((link) => ({
-        actionType: "create_link",
-        targetType: "note_link",
-        payload: {
-          sourceBlockId: link.source_block_id,
-          targetBlockId: link.target_block_id,
-          relationType: link.relation_type,
-          confidence: link.confidence,
-          sourceEvidence: link.source_evidence,
-          targetEvidence: link.target_evidence,
-        },
-        rationale: link.rationale ?? "Agent suggested a relationship link.",
-        evalVerdict: judgeOutput.overall_verdict,
-        incompleteReasoning: input.incomplete_reasoning,
-      })),
     ],
   };
 }

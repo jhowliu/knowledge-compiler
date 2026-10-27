@@ -156,11 +156,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
       ...agentRunEvents.indexing.relatedFound,
       payload: { relatedNotes },
     });
-    await this.agentRunRepository.addEvent({
-      agentRunId,
-      ...agentRunEvents.linking.candidatesFound,
-      payload: { candidateCount: relatedNotes.length },
-    });
 
     if (!agentToolService) {
       for (const concept of extractedConcepts) {
@@ -348,7 +343,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         reasoning_summary: draft.rationale,
         incomplete_reasoning: incompleteReasoning,
         items,
-        suggested_links: [],
       };
     };
 
@@ -385,16 +379,6 @@ export class CompileRawNoteHandler implements AgentRunHandler {
         agentRunId,
         ...agentRunEvents.proposal.created,
         payload: { proposalId: proposalOutput.proposal_id },
-      });
-      await this.agentRunRepository.addEvent({
-        agentRunId,
-        ...agentRunEvents.linking.judged,
-        payload: {
-          candidateCount: loopState.candidateBlocks.length,
-          suggestedCount: input.suggested_links.length,
-          // medium/high-confidence links that became pending create_link items
-          linkedCount: proposalOutput.link_count,
-        },
       });
       return proposalOutput;
     };
@@ -672,7 +656,6 @@ function blockSummaryFromBlock(
     heading: output.block.heading,
     body_markdown_preview: output.block.body_markdown.slice(0, 320),
     rank: 0,
-    linked_block_ids: [],
   };
 }
 
@@ -842,8 +825,7 @@ function isDraftProposalInput(input: unknown): input is DraftProposalInput {
     input &&
       typeof input === "object" &&
       typeof (input as { indexing_outcome?: unknown }).indexing_outcome === "string" &&
-      Array.isArray((input as { items?: unknown }).items) &&
-      Array.isArray((input as { suggested_links?: unknown }).suggested_links),
+      Array.isArray((input as { items?: unknown }).items),
   );
 }
 

@@ -12,15 +12,15 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useDialog } from '../../components/ui'
 import { isRecord } from '../../lib/knowledge'
 import type { AgentRun, AgentRunDetail, AgentRunEvent, WorkspaceData } from '../../types/domain'
 import {
-  agentRunLabel,
   agentRunOutputText,
+  agentRunTitle,
   compactJson,
   eventCategoryClass,
   eventLabel,
-  relationOptionLabel,
   shortTimestamp,
 } from './agentRunView'
 
@@ -44,11 +44,11 @@ function durationLabel(agentRun: AgentRun | null, now = Date.now()) {
 }
 
 function statusTone(status: string | null | undefined) {
-  if (status === 'completed') return 'border-emerald-800 bg-emerald-950/40 text-emerald-200'
-  if (status === 'failed') return 'border-red-800 bg-red-950/40 text-red-200'
-  if (status === 'running') return 'border-sky-800 bg-sky-950/40 text-sky-200'
-  if (status === 'queued') return 'border-amber-800 bg-amber-950/40 text-amber-200'
-  return 'border-[#303030] bg-[#202020] text-gray-300'
+  if (status === 'completed') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (status === 'failed') return 'border-red-200 bg-red-50 text-red-700'
+  if (status === 'running') return 'border-sky-200 bg-sky-50 text-sky-700'
+  if (status === 'queued') return 'border-amber-200 bg-amber-50 text-amber-800'
+  return 'border-gray-200 bg-slate-50 text-gray-600'
 }
 
 function eventKey(event: AgentRunEvent) {
@@ -121,24 +121,6 @@ function eventSummary(event: AgentRunEvent) {
     return proposalId ? `Created review proposal ${proposalId}.` : 'Created a review proposal.'
   }
   if (key === 'eval.completed') return 'Grounding and proposal checks completed.'
-  if (key === 'linking.scored') {
-    const count = numberValue(payload.candidateCount)
-    return count === null ? 'Scored link candidates.' : `Scored ${count} link candidates.`
-  }
-  if (key === 'linking.candidates_found') {
-    const count = numberValue(payload.candidateCount)
-    return count === null ? 'Found link candidates.' : `Found ${count} link candidates.`
-  }
-  if (key === 'linking.judged') {
-    const candidates = numberValue(payload.candidateCount)
-    const linked = numberValue(payload.linkedCount)
-    if (candidates === null && linked === null) return 'Judged link candidates.'
-    return `Judged ${candidates ?? 0} candidate${candidates === 1 ? '' : 's'} → ${linked ?? 0} link${linked === 1 ? '' : 's'} accepted.`
-  }
-  if (key === 'linking.suggestion_created') {
-    const noteLinkId = typeof payload.noteLinkId === 'string' ? shortId(payload.noteLinkId) : null
-    return noteLinkId ? `Created link suggestion ${noteLinkId}.` : 'Created a link suggestion.'
-  }
 
   return compactJson(event.payload)
 }
@@ -198,7 +180,7 @@ function progressSteps(agentRun: AgentRun | null, events: AgentRunEvent[], hasPr
     {
       label: 'Searched related knowledge',
       summary: 'Existing knowledge notes were checked for overlap.',
-      keys: ['indexing.related_found', 'linking.scored'],
+      keys: ['indexing.related_found'],
     },
     {
       label: 'Classified outcome',
@@ -228,9 +210,9 @@ function progressSteps(agentRun: AgentRun | null, events: AgentRunEvent[], hasPr
 }
 
 function StepIcon({ status }: { status: string }) {
-  if (status === 'done') return <CheckCircle2 size={18} className="text-emerald-300" />
-  if (status === 'current') return <Clock3 size={18} className="text-sky-300" />
-  return <Circle size={18} className="text-gray-600" />
+  if (status === 'done') return <CheckCircle2 size={18} className="text-emerald-700" />
+  if (status === 'current') return <Clock3 size={18} className="text-sky-700" />
+  return <Circle size={18} className="text-gray-400" />
 }
 
 function RelatedOutput({ match }: { match: Record<string, unknown> }) {
@@ -246,9 +228,9 @@ function RelatedOutput({ match }: { match: Record<string, unknown> }) {
       : 'Related candidate'
 
   return (
-    <div className="rounded-md border border-[#303030] bg-[#181818] p-2">
-      <p className="line-clamp-1 text-xs font-extrabold text-gray-100">{title}</p>
-      <p className="mt-1 text-[11px] leading-4 text-gray-500">{reason}</p>
+    <div className="rounded-md border border-gray-200 bg-surface p-2">
+      <p className="line-clamp-1 text-xs font-extrabold text-ink">{title}</p>
+      <p className="mt-1 text-xs leading-4 text-gray-500">{reason}</p>
     </div>
   )
 }
@@ -276,9 +258,6 @@ export function AgentRunDrawer({
   const generatedProposal = generatedProposalId
     ? data.proposals.find((proposal) => proposal.id === generatedProposalId) ?? null
     : null
-  const generatedLinks = agentRun
-    ? data.noteLinks.filter((link) => link.createdByAgentRunId === agentRun.id)
-    : []
   const extractionEval = detail?.extractionEval ?? null
   const evalWarnings = Array.isArray(extractionEval?.warnings)
     ? extractionEval.warnings.filter(isRecord)
@@ -295,7 +274,6 @@ export function AgentRunDrawer({
   const outputStats = [
     ['Concepts', concepts.length],
     ['Related', relatedNotes.length],
-    ['Links', generatedLinks.length],
   ]
 
   useEffect(() => {
@@ -307,35 +285,41 @@ export function AgentRunDrawer({
     return () => window.clearInterval(intervalId)
   }, [agentRun?.completedAt, agentRun?.startedAt, agentRun?.status])
 
+  useDialog(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
       <button
-        aria-label="Close agent run detail"
+        aria-hidden
         className="absolute inset-0 cursor-default"
         onClick={onClose}
+        tabIndex={-1}
         type="button"
       />
-      <aside className="relative z-10 flex h-full w-[560px] max-w-[min(560px,100vw)] flex-col border-l border-[#303030] bg-[#181818] text-white shadow-2xl">
-        <header className="border-b border-[#303030] px-6 py-5">
+      <aside
+        aria-labelledby="agent-run-title"
+        aria-modal="true"
+        className="relative z-10 flex h-full w-[560px] max-w-[min(560px,100vw)] flex-col border-l border-gray-200 bg-surface text-ink shadow-2xl"
+        role="dialog"
+      >
+        <header className="border-b border-gray-200 px-6 py-5">
           <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-violet">
-                Agent run
-              </p>
-              <h2 className="mt-1 text-xl font-extrabold capitalize text-white">
-                {agentRun ? agentRunLabel(agentRun.runType) : 'Loading run'}
+            <div className="min-w-0">
+              <h2 className="text-xl font-extrabold text-ink" id="agent-run-title">
+                {agentRun ? agentRunTitle(agentRun.runType) : 'Loading run'}
               </h2>
-              <p className="mt-2 text-sm leading-5 text-gray-400">
+              <p className="mt-2 text-sm leading-5 text-gray-600">
                 {runningStep}
               </p>
             </div>
             <button
               aria-label="Close agent run detail"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#303030] text-gray-400 hover:border-gray-500 hover:text-white"
+              autoFocus
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-ink"
               onClick={onClose}
               type="button"
             >
-              <X size={16} />
+              <X aria-hidden size={16} />
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -344,12 +328,12 @@ export function AgentRunDrawer({
               ['Started', shortTimestamp(agentRun?.startedAt ?? null)],
               ['Duration', durationLabel(agentRun, now)],
             ].map(([label, value]) => (
-              <div className="rounded-lg border border-[#303030] bg-[#202020] p-2" key={label}>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                <p className={`mt-1 truncate text-xs font-extrabold uppercase ${
+              <div className="min-w-0 rounded-lg border border-gray-200 bg-slate-50 p-2.5" key={label}>
+                <p className="text-xs font-medium text-gray-500">{label}</p>
+                <p className={`mt-1 truncate text-xs font-bold capitalize ${
                   label === 'Status'
                     ? `inline-flex rounded-full border px-2 py-0.5 ${statusTone(String(value))}`
-                    : 'text-gray-100'
+                    : 'text-ink'
                 }`}>
                   {value}
                 </p>
@@ -360,13 +344,13 @@ export function AgentRunDrawer({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {isLoading ? (
-            <p className="rounded-lg border border-[#303030] bg-[#202020] p-4 text-sm text-gray-400">
+            <p className="rounded-lg border border-gray-200 bg-slate-50 p-4 text-sm text-gray-500">
               Loading agent run details...
             </p>
           ) : null}
 
           {!isLoading && !agentRun ? (
-            <p className="rounded-lg border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-100">
+            <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
               Agent run not found.
             </p>
           ) : null}
@@ -374,16 +358,16 @@ export function AgentRunDrawer({
           {agentRun ? (
             <>
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Summary</h3>
-                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
-                  <p className="text-sm leading-6 text-gray-300">{agentRunOutputText(agentRun)}</p>
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Summary</h3>
+                <div className="rounded-lg border border-gray-200 bg-slate-50 p-4">
+                  <p className="text-sm leading-6 text-gray-600">{agentRunOutputText(agentRun)}</p>
                   {agentRun.error ? (
-                    <div className="mt-3 rounded-md border border-red-900/60 bg-red-950/40 p-3">
-                      <p className="flex items-center gap-2 text-xs font-extrabold uppercase text-red-100">
+                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3">
+                      <p className="flex items-center gap-2 text-xs font-bold text-red-800">
                         <AlertTriangle size={14} />
-                        Indexing failed
+                        Run failed
                       </p>
-                      <p className="mt-2 text-xs leading-5 text-red-100">{agentRun.error}</p>
+                      <p className="mt-2 text-xs leading-5 text-red-800">{agentRun.error}</p>
                     </div>
                   ) : null}
                   {agentRun.status === 'failed' ? (
@@ -400,8 +384,8 @@ export function AgentRunDrawer({
               </section>
 
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Progress</h3>
-                <div className="rounded-lg border border-[#303030] bg-[#202020] p-4">
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Progress</h3>
+                <div className="rounded-lg border border-gray-200 bg-slate-50 p-4">
                   <div className="space-y-4">
                     {steps.map((step, index) => (
                       <div className="grid grid-cols-[22px_1fr] gap-3" key={step.label}>
@@ -409,13 +393,13 @@ export function AgentRunDrawer({
                           <StepIcon status={step.status} />
                           {index < steps.length - 1 ? (
                             <div className={`mt-2 h-8 w-px ${
-                              step.status === 'done' ? 'bg-emerald-800/70' : 'bg-[#303030]'
+                              step.status === 'done' ? 'bg-emerald-800/70' : 'bg-slate-100'
                             }`} />
                           ) : null}
                         </div>
                         <div className="-mt-0.5">
                           <p className={`text-sm font-extrabold ${
-                            step.status === 'pending' ? 'text-gray-500' : 'text-white'
+                            step.status === 'pending' ? 'text-gray-500' : 'text-ink'
                           }`}>
                             {step.label}
                           </p>
@@ -425,7 +409,7 @@ export function AgentRunDrawer({
                     ))}
                   </div>
                   {agentRun.status === 'completed' && generatedProposal ? (
-                    <div className="mt-4 rounded-md border border-violet/30 bg-violet/10 p-3 text-xs leading-5 text-violet">
+                    <div className="mt-4 rounded-md border border-violet/30 bg-violet/10 p-3 text-xs leading-5 text-accent">
                       <Check size={14} className="mr-1 inline" />
                       Proposal is ready for review.
                     </div>
@@ -434,27 +418,27 @@ export function AgentRunDrawer({
               </section>
 
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Output</h3>
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Output</h3>
                 <div className="mb-3 grid grid-cols-3 gap-2">
                   {outputStats.map(([label, value]) => (
-                    <div className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={label}>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                      <p className="mt-1 text-lg font-extrabold text-white">{value}</p>
+                    <div className="rounded-lg border border-gray-200 bg-slate-50 p-3" key={label}>
+                      <p className="text-xs font-medium text-gray-500">{label}</p>
+                      <p className="mt-1 text-lg font-extrabold text-ink">{value}</p>
                     </div>
                   ))}
                 </div>
                 {generatedProposal ? (
                   <article className="rounded-lg border border-violet/30 bg-violet/10 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="flex min-w-0 items-center gap-2 text-[13px] font-extrabold capitalize text-white">
-                        <FileText size={15} className="shrink-0 text-violet" />
+                      <p className="flex min-w-0 items-center gap-2 text-[13px] font-extrabold capitalize text-ink">
+                        <FileText size={15} className="shrink-0 text-accent" />
                         {generatedProposal.detectedKnowledgeType ?? 'Knowledge update'}
                       </p>
-                      <span className="rounded-full border border-violet/30 px-2 py-0.5 text-[10px] font-bold uppercase text-violet">
+                      <span className="rounded-full border border-violet/30 px-2 py-0.5 text-[11px] font-semibold capitalize text-accent">
                         {generatedProposal.status}
                       </span>
                     </div>
-                    <p className="text-xs leading-5 text-gray-300">
+                    <p className="text-xs leading-5 text-gray-600">
                       {generatedProposal.rationale ?? 'Proposal generated by this run.'}
                     </p>
                     <p className="mt-2 text-[11px] font-semibold text-gray-500">
@@ -466,20 +450,22 @@ export function AgentRunDrawer({
                       type="button"
                     >
                       <ExternalLink size={14} />
-                      Open in Review Inbox
+                      Open in Review queue
                     </button>
                   </article>
                 ) : (
-                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                    This run did not report a proposal id.
+                  <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-600">
+                    {agentRun.status === 'queued' || agentRun.status === 'running'
+                      ? 'No proposal yet. It appears here when the run finishes.'
+                      : 'This run did not produce a proposal.'}
                   </p>
                 )}
                 {concepts.length ? (
-                  <div className="mt-3 rounded-lg border border-[#303030] bg-[#202020] p-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Concepts detected</p>
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-gray-500">Concepts detected</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {concepts.map((concept) => (
-                        <span className="rounded-full border border-[#3A3A3A] bg-[#181818] px-2 py-1 text-[11px] font-bold text-gray-300" key={concept}>
+                        <span className="rounded-full border border-gray-300 bg-surface px-2 py-1 text-[11px] font-bold text-gray-600" key={concept}>
                           {concept}
                         </span>
                       ))}
@@ -487,10 +473,10 @@ export function AgentRunDrawer({
                   </div>
                 ) : null}
                 {relatedNotes.length ? (
-                  <div className="mt-3 rounded-lg border border-[#303030] bg-[#202020] p-3">
-                    <p className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                      <Link2 size={14} className="text-violet" />
-                      Related cards
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-slate-50 p-3">
+                    <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
+                      <Link2 size={14} className="text-accent" />
+                      Related knowledge
                     </p>
                     <div className="space-y-2">
                       {relatedNotes.map((match, index) => (
@@ -502,33 +488,33 @@ export function AgentRunDrawer({
               </section>
 
               <section className="mb-6">
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Eval result</h3>
+                <h3 className="mb-3 text-sm font-extrabold text-ink">Grounding check</h3>
                 {extractionEval ? (
-                  <article className="rounded-lg border border-[#303030] bg-[#202020] p-3">
+                  <article className="rounded-lg border border-gray-200 bg-slate-50 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-[13px] font-extrabold text-white">Judge verdict</p>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      <p className="text-[13px] font-extrabold text-ink">Result</p>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
                         extractionEval.verdict === 'pass'
-                          ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                           : extractionEval.verdict === 'warn'
-                            ? 'border-amber-800 bg-amber-950/40 text-amber-200'
-                            : 'border-red-800 bg-red-950/40 text-red-200'
+                            ? 'border-amber-200 bg-amber-50 text-amber-800'
+                            : 'border-red-200 bg-red-50 text-red-700'
                       }`}>
                         {extractionEval.verdict}
                       </span>
                     </div>
                     <div className="mb-3 grid grid-cols-2 gap-2">
-                      <div className="rounded-md border border-[#303030] bg-[#181818] p-2">
-                        <p className="text-[10px] font-bold uppercase text-gray-500">Coverage</p>
-                        <p className="mt-1 text-xs font-extrabold text-gray-100">
+                      <div className="rounded-md border border-gray-200 bg-surface p-2">
+                        <p className="text-xs font-medium text-gray-500">Coverage</p>
+                        <p className="mt-1 text-xs font-extrabold text-ink">
                           {extractionEval.coverageScore === null
                             ? 'Unknown'
                             : `${Math.round(extractionEval.coverageScore * 100)}%`}
                         </p>
                       </div>
-                      <div className="rounded-md border border-[#303030] bg-[#181818] p-2">
-                        <p className="text-[10px] font-bold uppercase text-gray-500">Grounding</p>
-                        <p className="mt-1 text-xs font-extrabold text-gray-100">
+                      <div className="rounded-md border border-gray-200 bg-surface p-2">
+                        <p className="text-xs font-medium text-gray-500">Grounding</p>
+                        <p className="mt-1 text-xs font-extrabold text-ink">
                           {extractionEval.groundingScore === null
                             ? 'Unknown'
                             : `${Math.round(extractionEval.groundingScore * 100)}%`}
@@ -536,15 +522,15 @@ export function AgentRunDrawer({
                       </div>
                     </div>
                     {judgeSummary ? (
-                      <p className="mb-3 rounded-md border border-[#303030] bg-[#181818] p-2 text-xs leading-5 text-gray-300">
+                      <p className="mb-3 rounded-md border border-gray-200 bg-surface p-2 text-xs leading-5 text-gray-600">
                         {judgeSummary}
                       </p>
                     ) : null}
                     {evalWarnings.length ? (
                       <ul className="space-y-2">
                         {evalWarnings.map((warning, index) => (
-                          <li className="rounded-md border border-[#303030] bg-[#181818] p-2 text-xs leading-5 text-gray-300" key={index}>
-                            <span className="font-bold uppercase text-amber-200">
+                          <li className="rounded-md border border-gray-200 bg-surface p-2 text-xs leading-5 text-gray-600" key={index}>
+                            <span className="font-bold capitalize text-amber-800">
                               {typeof warning.type === 'string' ? warning.type.replaceAll('_', ' ') : 'warning'}
                             </span>
                             {typeof warning.affected_item_index === 'number' ? (
@@ -559,79 +545,50 @@ export function AgentRunDrawer({
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-xs leading-5 text-gray-500">No eval warnings recorded.</p>
+                      <p className="text-xs leading-5 text-gray-500">No warnings recorded.</p>
                     )}
                   </article>
                 ) : (
-                  <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                    No eval result is attached to this run.
+                  <p className="rounded-lg border border-gray-200 bg-slate-50 p-3 text-xs leading-5 text-gray-500">
+                    No grounding check is attached to this run.
                   </p>
                 )}
               </section>
 
-              <section>
-                <h3 className="mb-3 text-sm font-extrabold text-gray-100">Generated links</h3>
-                <div className="space-y-2">
-                  {generatedLinks.length ? (
-                    generatedLinks.map((link) => (
-                      <article className="rounded-lg border border-[#303030] bg-[#202020] p-3" key={link.id}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="line-clamp-1 text-[13px] font-extrabold text-white">
-                              {link.sourceTitle ?? 'Note'} {'->'} {link.targetTitle ?? 'Note'}
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-gray-400">
-                              {link.rationale ?? relationOptionLabel(link.relationType)}
-                            </p>
-                          </div>
-                          <span className="rounded-full border border-[#3A3A3A] px-2 py-0.5 text-[10px] font-bold uppercase text-gray-300">
-                            {link.status}
-                          </span>
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-[#303030] bg-[#202020] p-3 text-xs leading-5 text-gray-500">
-                      No generated note links are attached to this run.
-                    </p>
-                  )}
-                </div>
-              </section>
-
               <section className="mt-6">
-                <details className="group rounded-lg border border-[#303030] bg-[#202020]">
+                <details className="group rounded-lg border border-gray-200 bg-slate-50">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
                     <div>
-                      <h3 className="text-sm font-extrabold text-gray-100">Technical details</h3>
+                      <h3 className="text-sm font-extrabold text-ink">Technical details</h3>
                       <p className="mt-1 text-xs leading-5 text-gray-500">
                         {events.length} raw events. Payloads are hidden by default.
                       </p>
                     </div>
                     <ChevronDown size={16} className="text-gray-500 transition group-open:rotate-180" />
                   </summary>
-                  <div className="border-t border-[#303030] p-3">
+                  <div className="border-t border-gray-200 p-3">
                     <div className="space-y-2">
                       {events.length ? (
                         events.map((event) => (
-                          <details className="rounded-md border border-[#303030] bg-[#181818]" key={event.id}>
+                          <details className="rounded-md border border-gray-200 bg-surface" key={event.id}>
                             <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-3">
                               <div className="min-w-0">
-                                <p className="text-xs font-extrabold text-white">{eventLabel(event)}</p>
+                                <p className="text-xs font-extrabold text-ink">{eventLabel(event)}</p>
                                 <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-gray-500">
                                   {eventSummary(event)}
                                 </p>
                               </div>
-                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${eventCategoryClass(event.category)}`}>
+                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${eventCategoryClass(event.category)}`}>
                                 {event.category}
                               </span>
                             </summary>
-                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap border-t border-[#303030] bg-[#141414] p-3 text-[11px] leading-5 text-gray-400">
+                            <pre className="max-h-56 overflow-auto whitespace-pre-wrap border-t border-gray-200 bg-slate-100 p-3 text-[11px] leading-5 text-gray-500">
                               {compactJson(event.payload)}
                             </pre>
                           </details>
                         ))
                       ) : (
-                        <p className="rounded-md border border-[#303030] bg-[#181818] p-3 text-xs leading-5 text-gray-500">
+                        <p className="rounded-md border border-gray-200 bg-surface p-3 text-xs leading-5 text-gray-500">
                           No raw events recorded yet.
                         </p>
                       )}

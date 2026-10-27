@@ -37,7 +37,6 @@ const source: WikiIndexingSource = {
   sourceType: "markdown",
   title: "Graph state",
   bodyMarkdown: "Track remaining stops as part of the distance state.",
-  topicNames: ["graphs"],
   chunks: [],
 };
 
@@ -146,7 +145,6 @@ test("passes a model-authored draft_proposal payload straight through", async ()
         conflict_resolution: null,
       },
     ],
-    suggested_links: [],
   };
   const modelClient: CompileModelClient = async () => ({ toolName: "draft_proposal", arguments: draft });
   const runner = createLlmCompileAgentRunner(makeContext(), { modelClient });

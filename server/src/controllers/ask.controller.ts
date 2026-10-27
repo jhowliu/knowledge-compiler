@@ -6,10 +6,7 @@ export class AskController {
 
   ask = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const result = await this.askService.ask({
-        query: request.body.query,
-        topicIds: request.body.topic_ids ?? request.body.topicIds ?? [],
-      });
+      const result = await this.askService.ask({ query: request.body.query });
       response.json({
         answer: result.answer,
         citations: result.citations.map((citation) => ({

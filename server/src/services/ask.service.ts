@@ -2,10 +2,7 @@ import { env } from "../config/env.js";
 import type { AskCitation, AskResponse } from "../domain/ask.js";
 import type { KnowledgeBlockSearchResult } from "../domain/knowledge.js";
 import type { KnowledgeRepository } from "../repositories/knowledge.repository.js";
-import type { NoteLinkRepository } from "../repositories/noteLink.repository.js";
 import type { RawSourceRepository } from "../repositories/rawSource.repository.js";
-import { NoopEmbeddingService, type EmbeddingService } from "./embedding.service.js";
-import { KnowledgeRetrievalService } from "./knowledgeRetrieval.service.js";
 
 const notEnoughInformationAnswer =
   "I don't have enough information in the approved knowledge base to answer that.";
@@ -108,26 +105,19 @@ export class OpenAIAskAnswerer implements AskAnswerer {
 export class AskService {
   constructor(
     private readonly knowledgeRepository: KnowledgeRepository,
-    private readonly noteLinkRepository: NoteLinkRepository,
-    private readonly embeddingService: EmbeddingService = new NoopEmbeddingService(),
-    private readonly knowledgeRetrievalService = new KnowledgeRetrievalService(
-      knowledgeRepository,
-      embeddingService,
-    ),
     private readonly answerer: AskAnswerer = new OpenAIAskAnswerer(),
     private readonly rawSourceRepository: RawSourceRepository | null = null,
   ) {}
 
-  async ask(input: { query: string; topicIds?: string[] }): Promise<AskResponse> {
+  async ask(input: { query: string }): Promise<AskResponse> {
     const query = input.query.trim();
     if (!query) {
       return { answer: notEnoughInformationAnswer, citations: [] };
     }
 
-    const seedBlocks = await this.knowledgeRetrievalService.search({
+    const seedBlocks = await this.knowledgeRepository.searchKnowledgeBlocks({
       query,
       limit: 8,
-      topicIds: input.topicIds ?? [],
     });
     if (seedBlocks.length === 0) {
       // No approved knowledge — fall back to the user's raw source notes (#143),
@@ -135,8 +125,7 @@ export class AskService {
       return this.answerFromSources(query);
     }
 
-    const graphBlocks = await this.loadOneHopBlocks(seedBlocks, input.topicIds ?? []);
-    const rankedBlocks = mergeAndRankBlocks([...seedBlocks, ...graphBlocks]).slice(0, 8);
+    const rankedBlocks = seedBlocks.slice(0, 8);
     const citations = rankedBlocks.map((block) => citationFromBlock(block));
     const contextBlocks: AskContextBlock[] = rankedBlocks.map((block, index) => ({
       citationIndex: index + 1,
@@ -159,11 +148,9 @@ export class AskService {
       return { answer: notEnoughInformationAnswer, citations: [] };
     }
 
-    const queryEmbedding = await this.embeddingService.embedText(query);
     const chunks = await this.rawSourceRepository.searchRawSourceChunks({
       query,
       limit: 8,
-      queryEmbedding,
     });
     if (chunks.length === 0) {
       return { answer: notEnoughInformationAnswer, citations: [] };
@@ -192,57 +179,6 @@ export class AskService {
       citations,
     };
   }
-
-  private async loadOneHopBlocks(
-    blocks: KnowledgeBlockSearchResult[],
-    topicIds: string[],
-  ): Promise<KnowledgeBlockSearchResult[]> {
-    const linkedCompiledNoteIds = new Set<string>();
-    for (const block of blocks) {
-      if (!block.compiledNoteId) {
-        continue;
-      }
-      const links = await this.noteLinkRepository.listForNote({
-        noteType: "compiled_note",
-        noteId: block.compiledNoteId,
-        statuses: ["approved"],
-        limit: 8,
-      });
-      for (const link of links) {
-        const neighborId =
-          link.sourceNoteType === "compiled_note" && link.sourceNoteId !== block.compiledNoteId
-            ? link.sourceNoteId
-            : link.targetNoteType === "compiled_note" && link.targetNoteId !== block.compiledNoteId
-              ? link.targetNoteId
-              : null;
-        if (neighborId) {
-          linkedCompiledNoteIds.add(neighborId);
-        }
-      }
-    }
-
-    return this.knowledgeRepository.listKnowledgeBlocksByCompiledNoteIds({
-      compiledNoteIds: [...linkedCompiledNoteIds],
-      limit: 12,
-      topicIds,
-    });
-  }
-}
-
-function mergeAndRankBlocks(blocks: KnowledgeBlockSearchResult[]) {
-  const byId = new Map<string, KnowledgeBlockSearchResult>();
-  for (const block of blocks) {
-    const existing = byId.get(block.blockId);
-    if (!existing || block.rank > existing.rank) {
-      byId.set(block.blockId, block);
-    }
-  }
-  return [...byId.values()].sort((left, right) => {
-    if (right.rank !== left.rank) {
-      return right.rank - left.rank;
-    }
-    return right.updatedAt.getTime() - left.updatedAt.getTime();
-  });
 }
 
 function citationFromBlock(block: KnowledgeBlockSearchResult): AskCitation {

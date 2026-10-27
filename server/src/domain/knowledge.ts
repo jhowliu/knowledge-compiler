@@ -119,7 +119,6 @@ export type KnowledgeSourceTimeline = {
 };
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
-export type NoteLinkStatus = "pending" | "approved" | "rejected";
 
 export type UpdateProposal = {
   id: string;
@@ -156,35 +155,6 @@ export type ProposalItem = {
 
 export type ProposalWithItems = UpdateProposal & {
   items: ProposalItem[];
-};
-
-export type NoteLink = {
-  id: string;
-  userId: string | null;
-  sourceNoteType: string;
-  sourceNoteId: string;
-  sourceTitle: string | null;
-  targetNoteType: string;
-  targetNoteId: string;
-  targetTitle: string | null;
-  relationType: string;
-  confidence: Confidence;
-  status: NoteLinkStatus;
-  rationale: string | null;
-  createdByAgentRunId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type NoteCardPosition = {
-  id: string;
-  userId: string | null;
-  boardKey: string;
-  noteId: string;
-  x: number;
-  y: number;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export type AgentRun = {

@@ -13,88 +13,9 @@ export class RawSourceController {
     }
   };
 
-  organization = async (_request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({ sourceOrganization: await this.rawSourceService.getSourceOrganization() });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {
       response.status(201).json({ rawSource: await this.rawSourceService.createRawSource(request.body) });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  createProject = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response
-        .status(201)
-        .json({ sourceProject: await this.rawSourceService.createSourceProject(request.body) });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  createFolder = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.status(201).json({
-        sourceFolder: await this.rawSourceService.createSourceFolder(
-          requireStringParam(request, "projectId"),
-          request.body,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  renameProject = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({
-        sourceProject: await this.rawSourceService.renameSourceProject(
-          requireStringParam(request, "projectId"),
-          request.body,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  renameFolder = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({
-        sourceFolder: await this.rawSourceService.renameSourceFolder(
-          requireStringParam(request, "projectId"),
-          requireStringParam(request, "folderId"),
-          request.body,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  deleteProject = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      await this.rawSourceService.deleteSourceProject(requireStringParam(request, "projectId"));
-      response.status(204).send();
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  deleteFolder = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      await this.rawSourceService.deleteSourceFolder(
-        requireStringParam(request, "projectId"),
-        requireStringParam(request, "folderId"),
-      );
-      response.status(204).send();
     } catch (error) {
       next(error);
     }
@@ -112,32 +33,6 @@ export class RawSourceController {
     try {
       response.json({
         rawSource: await this.rawSourceService.updateRawSource(
-          requireStringParam(request, "id"),
-          request.body,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  updateTopics = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({
-        rawSource: await this.rawSourceService.updateSourceTopics(
-          requireStringParam(request, "id"),
-          request.body.topicIds,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  move = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      response.json({
-        rawSource: await this.rawSourceService.moveRawSource(
           requireStringParam(request, "id"),
           request.body,
         ),

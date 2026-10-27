@@ -1,4 +1,3 @@
-import { env } from "../config/env.js";
 import { query } from "../db/postgres.js";
 import type {
   RetrievalCandidate,
@@ -13,14 +12,6 @@ type RetrievalCandidateRow = {
   rank_position: number | string;
   score: number | string | null;
 };
-
-export type Bm25SupportStatus =
-  | { enabled: true }
-  | { enabled: false; reason: "missing_pg_search_extension" | "missing_bm25_index" };
-
-function vectorLiteral(values: number[]) {
-  return `[${values.map((value) => Number(value).toString()).join(",")}]`;
-}
 
 function candidateSet(input: {
   source: RetrievalSource;
@@ -118,102 +109,6 @@ export class PostgresConceptRetriever implements Retriever {
         from concept_matches
       `,
       [input.query],
-    );
-
-    return candidateSet({
-      source: this.source,
-      candidates: result.rows.map((row) => mapRetrievalCandidate(this.source, row)),
-    });
-  }
-}
-
-export class PostgresPgVectorRetriever implements Retriever {
-  readonly source = "vector" as const;
-
-  constructor(private readonly hasEmbeddingSupport: () => Promise<boolean>) {}
-
-  async search(input: RetrievalQuery): Promise<RetrievalCandidateSet> {
-    if (!input.queryEmbedding?.length) {
-      return candidateSet({
-        source: this.source,
-        status: "disabled",
-        reason: "missing_query_embedding",
-      });
-    }
-    if (!(await this.hasEmbeddingSupport())) {
-      return candidateSet({
-        source: this.source,
-        status: "disabled",
-        reason: "missing_embedding_column",
-      });
-    }
-
-    const result = await query<RetrievalCandidateRow>(
-      `
-        with query as (
-          select $1::vector as query_embedding
-        )
-        select
-          knowledge_blocks.id as block_id,
-          row_number() over (
-            order by knowledge_blocks.embedding <=> query.query_embedding,
-                     knowledge_blocks.updated_at desc
-          ) as rank_position,
-          knowledge_blocks.embedding <=> query.query_embedding as score
-        from knowledge_blocks
-        cross join query
-        where knowledge_blocks.embedding is not null
-          and (knowledge_blocks.embedding <=> query.query_embedding) < $2::float8
-      `,
-      [vectorLiteral(input.queryEmbedding), env.VECTOR_MAX_DISTANCE],
-    );
-
-    return candidateSet({
-      source: this.source,
-      candidates: result.rows.map((row) => mapRetrievalCandidate(this.source, row)),
-    });
-  }
-}
-
-export class PostgresBm25Retriever implements Retriever {
-  readonly source = "bm25" as const;
-
-  constructor(private readonly getBm25Support: () => Promise<Bm25SupportStatus>) {}
-
-  async search(input: RetrievalQuery): Promise<RetrievalCandidateSet> {
-    const support = await this.getBm25Support();
-    if (!support.enabled) {
-      return candidateSet({
-        source: this.source,
-        status: "disabled",
-        reason: support.reason,
-      });
-    }
-
-    const candidateLimit = Math.max(input.limit * 8, 50);
-    const result = await query<RetrievalCandidateRow>(
-      `
-        with bm25_matches as (
-          select
-            knowledge_blocks.id as block_id,
-            pdb.score(knowledge_blocks.id) as score,
-            knowledge_blocks.updated_at
-          from knowledge_blocks
-          where knowledge_blocks.heading ||| $1
-             or knowledge_blocks.body_markdown ||| $1
-          order by score desc, knowledge_blocks.updated_at desc
-          limit $2
-        )
-        select
-          block_id,
-          row_number() over (
-            order by score desc,
-                     updated_at desc
-          ) as rank_position,
-          score
-        from bm25_matches
-      `,
-      [input.query, candidateLimit],
     );
 
     return candidateSet({

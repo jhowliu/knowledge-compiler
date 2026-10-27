@@ -223,10 +223,6 @@ function buildInstructions() {
     "- Do NOT put ids, confidence scores, chunk/source ids, or other metadata in the body.",
     "- Put the structured extraction in structured_facets; keep the body readable prose that stands on its own.",
     "",
-    "suggested_links (relationship judgment):",
-    "- Judge each related block you saw in search_blocks/get_block: only add a suggested_link when the two genuinely relate (supports, contrasts, example_of, prerequisite, related_concept). Search overlap alone is NOT enough.",
-    "- For each link set target_block_id to a real block id you saw, a precise relation_type, and confidence; give a concrete rationale plus source_evidence/target_evidence snippets justifying it.",
-    "- Use confidence low for weak/uncertain relationships — low-confidence links are dropped and will not be created. Reserve medium/high for clear relationships. If nothing clearly relates, return an empty suggested_links list.",
     "Respond only by calling a tool.",
   ].join("\n");
 }
@@ -237,7 +233,6 @@ function buildInput(context: CompileAgentRunnerContext, view: LoopView) {
     `Source role: ${source.sourceRole}`,
     `Source type: ${source.sourceType}`,
     `Title: ${source.title ?? "Untitled"}`,
-    `Topics: ${(source.topicNames ?? []).join(", ") || "none"}`,
     `Raw source id: ${source.rawSourceId ?? "none"}`,
     `Raw note id: ${source.rawNoteId ?? "none"}`,
     "",

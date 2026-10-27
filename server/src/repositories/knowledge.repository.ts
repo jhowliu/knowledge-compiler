@@ -22,13 +22,7 @@ import type {
 } from "../domain/knowledge.js";
 import { HybridRetrievalService } from "../services/retrieval/hybridRetrieval.service.js";
 import type { MergedRetrievalCandidate } from "../services/retrieval/retrieval.types.js";
-import {
-  type Bm25SupportStatus,
-  PostgresBm25Retriever,
-  PostgresConceptRetriever,
-  PostgresFtsRetriever,
-  PostgresPgVectorRetriever,
-} from "./knowledgeRetrievers.js";
+import { PostgresConceptRetriever, PostgresFtsRetriever } from "./knowledgeRetrievers.js";
 
 type ConceptRow = {
   id: string;
@@ -141,16 +135,6 @@ type EvidenceReferenceRow = {
 
 function normalizeConcept(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function topicIdsFrom(value: unknown) {
-  if (!value || typeof value !== "object") {
-    return [];
-  }
-  const topicIds = (value as Record<string, unknown>).topicIds;
-  return Array.isArray(topicIds)
-    ? topicIds.filter((topicId): topicId is string => typeof topicId === "string")
-    : [];
 }
 
 function mapConcept(row: ConceptRow): Concept {
@@ -451,13 +435,6 @@ export interface KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
-    topicIds?: string[];
-    queryEmbedding?: number[] | null;
-  }): Promise<KnowledgeBlockSearchResult[]>;
-  listKnowledgeBlocksByCompiledNoteIds(input: {
-    compiledNoteIds: string[];
-    limit: number;
-    topicIds?: string[];
   }): Promise<KnowledgeBlockSearchResult[]>;
   upsertCompiledNote(input: {
     userId?: string | null;
@@ -502,8 +479,6 @@ export interface KnowledgeRepository {
     concepts: Array<{ name: string; conceptType: string }>;
   }): Promise<{ compiledNote: CompiledNote; snapshot: KnowledgeSourceSnapshot }>;
   listActiveKnowledgeBlocks(limit: number): Promise<KnowledgeBlock[]>;
-  listKnowledgeBlocksNeedingEmbeddings(limit: number): Promise<KnowledgeBlock[]>;
-  updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]): Promise<void>;
   createEvidenceLink(input: {
     userId?: string | null;
     sourceType: string;
@@ -525,65 +500,13 @@ export interface KnowledgeRepository {
   }): Promise<number>;
   getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null>;
   getKnowledgeSourceTimelineByCompiledNoteId(id: string): Promise<KnowledgeSourceTimeline | null>;
-  compiledNoteIdForBlock(blockId: string): Promise<string | null>;
-}
-
-function vectorLiteral(values: number[]) {
-  return `[${values.map((value) => Number(value).toString()).join(",")}]`;
 }
 
 export class PostgresKnowledgeRepository implements KnowledgeRepository {
-  private embeddingSupport: boolean | null = null;
-  private bm25Support: Bm25SupportStatus | null = null;
   private readonly hybridRetrievalService = new HybridRetrievalService([
     new PostgresFtsRetriever(),
     new PostgresConceptRetriever(),
-    new PostgresPgVectorRetriever(() => this.hasEmbeddingSupport()),
-    new PostgresBm25Retriever(() => this.getBm25Support()),
   ]);
-
-  private async hasEmbeddingSupport() {
-    if (this.embeddingSupport !== null) {
-      return this.embeddingSupport;
-    }
-
-    const result = await query<{ supported: boolean }>(
-      `
-        select exists (
-          select 1
-          from information_schema.columns
-          where table_name = 'knowledge_blocks'
-            and column_name = 'embedding'
-        ) as supported
-      `,
-    );
-    this.embeddingSupport = result.rows[0]?.supported ?? false;
-    return this.embeddingSupport;
-  }
-
-  private async getBm25Support(): Promise<Bm25SupportStatus> {
-    if (this.bm25Support !== null) {
-      return this.bm25Support;
-    }
-
-    const result = await query<{
-      extension_installed: boolean;
-      index_exists: boolean;
-    }>(
-      `
-        select
-          exists(select 1 from pg_extension where extname = 'pg_search') as extension_installed,
-          to_regclass('public.knowledge_blocks_bm25_idx') is not null as index_exists
-      `,
-    );
-    const row = result.rows[0];
-    this.bm25Support = row?.extension_installed
-      ? row.index_exists
-        ? { enabled: true }
-        : { enabled: false, reason: "missing_bm25_index" }
-      : { enabled: false, reason: "missing_pg_search_extension" };
-    return this.bm25Support;
-  }
 
   async upsertConcept(input: { userId?: string | null; name: string; conceptType: string }, db: Db = query) {
     const normalizedName = normalizeConcept(input.name);
@@ -717,14 +640,11 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     query: string;
     limit: number;
     includeArchived?: boolean;
-    topicIds?: string[];
-    queryEmbedding?: number[] | null;
   }): Promise<KnowledgeBlockSearchResult[]> {
     const retrievalResult = await this.hybridRetrievalService.search(input);
     return this.hydrateRankedKnowledgeBlocks({
       candidates: retrievalResult.candidates,
       includeArchived: input.includeArchived ?? false,
-      topicIds: input.topicIds ?? [],
       limit: input.limit,
     });
   }
@@ -732,7 +652,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
   private async hydrateRankedKnowledgeBlocks(input: {
     candidates: MergedRetrievalCandidate[];
     includeArchived: boolean;
-    topicIds: string[];
     limit: number;
   }): Promise<KnowledgeBlockSearchResult[]> {
     if (input.candidates.length === 0) {
@@ -766,15 +685,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
         where knowledge_sources.status = 'active'
           and ($3::boolean or knowledge_blocks.status = 'active')
-          and (
-            cardinality($5::uuid[]) = 0
-            or exists (
-              select 1
-              from block_topics
-              where block_topics.block_id = knowledge_blocks.id
-                and block_topics.topic_id = any($5::uuid[])
-            )
-          )
         order by candidate_ranks.rank desc, knowledge_blocks.updated_at desc
         limit $4
       `,
@@ -783,58 +693,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
         input.candidates.map((candidate) => candidate.rank),
         input.includeArchived,
         input.limit,
-        input.topicIds,
       ],
-    );
-
-    return hydrateKnowledgeBlockSearchRows(blockResult.rows);
-  }
-
-  async listKnowledgeBlocksByCompiledNoteIds(input: {
-    compiledNoteIds: string[];
-    limit: number;
-    topicIds?: string[];
-  }): Promise<KnowledgeBlockSearchResult[]> {
-    if (input.compiledNoteIds.length === 0) {
-      return [];
-    }
-
-    const blockResult = await query<KnowledgeBlockSearchRow>(
-      `
-        select
-          knowledge_blocks.id as block_id,
-          knowledge_blocks.knowledge_source_id,
-          knowledge_blocks.knowledge_version_id,
-          knowledge_versions.compiled_note_id,
-          knowledge_sources.title,
-          knowledge_sources.domain,
-          knowledge_sources.knowledge_type,
-          knowledge_versions.version_number,
-          knowledge_blocks.block_index,
-          knowledge_blocks.heading,
-          knowledge_blocks.body_markdown,
-          0.25::real as rank,
-          knowledge_blocks.status,
-          knowledge_blocks.updated_at
-        from knowledge_blocks
-        join knowledge_sources on knowledge_sources.id = knowledge_blocks.knowledge_source_id
-        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-        where knowledge_sources.status = 'active'
-          and knowledge_blocks.status = 'active'
-          and knowledge_versions.compiled_note_id = any($1::uuid[])
-          and (
-            cardinality($3::uuid[]) = 0
-            or exists (
-              select 1
-              from block_topics
-              where block_topics.block_id = knowledge_blocks.id
-                and block_topics.topic_id = any($3::uuid[])
-            )
-          )
-        order by knowledge_blocks.updated_at desc
-        limit $2
-      `,
-      [input.compiledNoteIds, input.limit, input.topicIds ?? []],
     );
 
     return hydrateKnowledgeBlockSearchRows(blockResult.rows);
@@ -1110,7 +969,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
       );
 
       const savedBlocks: KnowledgeBlock[] = [];
-      const structuredTopicIds = topicIdsFrom(input.structuredData);
       for (const block of input.blocks) {
         const blockResult = await transactionQuery<KnowledgeBlockRow>(
           `
@@ -1137,19 +995,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
           ],
         );
         const savedBlock = mapKnowledgeBlock(blockResult.rows[0]);
-        const blockTopicIds = topicIdsFrom(block.metadata).length
-          ? topicIdsFrom(block.metadata)
-          : structuredTopicIds;
-        for (const topicId of blockTopicIds) {
-          await transactionQuery(
-            `
-              insert into block_topics (block_id, topic_id, confidence, source)
-              values ($1, $2, 'high', 'user')
-              on conflict do nothing
-            `,
-            [savedBlock.id, topicId],
-          );
-        }
         savedBlocks.push(savedBlock);
       }
 
@@ -1181,9 +1026,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
    * Apply one approved knowledge item atomically: compiled note + evidence link
    * + versioned knowledge source/blocks + source-chunk evidence + concept index,
    * all in a single transaction. Either everything lands or nothing does — no
-   * orphan compiled_notes when a later step fails. Block-building (LLM) and
-   * embedding (external) stay OUTSIDE: blocks are passed in, embedding runs after
-   * commit by the caller.
+   * orphan compiled_notes when a later step fails.
    */
   async applyApprovedKnowledge(input: {
     userId?: string | null;
@@ -1316,42 +1159,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     return result.rows.map(mapKnowledgeBlock);
   }
 
-  async listKnowledgeBlocksNeedingEmbeddings(limit: number) {
-    if (!(await this.hasEmbeddingSupport())) {
-      return [];
-    }
-
-    const result = await query<KnowledgeBlockRow>(
-      `
-        select *
-        from knowledge_blocks
-        where status = 'active'
-          and embedding is null
-        order by updated_at desc
-        limit $1
-      `,
-      [limit],
-    );
-
-    return result.rows.map(mapKnowledgeBlock);
-  }
-
-  async updateKnowledgeBlockEmbedding(blockId: string, embedding: number[]) {
-    if (!(await this.hasEmbeddingSupport())) {
-      return;
-    }
-
-    await query(
-      `
-        update knowledge_blocks
-        set embedding = $2::vector,
-            updated_at = now()
-        where id = $1
-      `,
-      [blockId, vectorLiteral(embedding)],
-    );
-  }
-
   async getKnowledgeSourceTimeline(id: string): Promise<KnowledgeSourceTimeline | null> {
     const sourceResult = await query<KnowledgeSourceRow>(
       `
@@ -1380,23 +1187,6 @@ export class PostgresKnowledgeRepository implements KnowledgeRepository {
     );
     const source = sourceResult.rows[0] ? mapKnowledgeSource(sourceResult.rows[0]) : null;
     return source ? buildKnowledgeSourceTimeline(source) : null;
-  }
-
-  // Maps a knowledge block id to the compiled note it belongs to. Used to land
-  // agent-suggested links: the agent references blocks, but note_links connect
-  // compiled notes.
-  async compiledNoteIdForBlock(blockId: string): Promise<string | null> {
-    const result = await query<{ compiled_note_id: string | null }>(
-      `
-        select knowledge_versions.compiled_note_id
-        from knowledge_blocks
-        join knowledge_versions on knowledge_versions.id = knowledge_blocks.knowledge_version_id
-        where knowledge_blocks.id = $1
-        limit 1
-      `,
-      [blockId],
-    );
-    return result.rows[0]?.compiled_note_id ?? null;
   }
 
   async createEvidenceLink(input: {

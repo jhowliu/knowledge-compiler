@@ -15,47 +15,23 @@ import {
 } from "./repositories/extractionEval.repository.js";
 import type { KnowledgeRepository } from "./repositories/knowledge.repository.js";
 import { PostgresKnowledgeRepository } from "./repositories/knowledge.repository.js";
-import type { NoteLinkRepository } from "./repositories/noteLink.repository.js";
-import { PostgresNoteLinkRepository } from "./repositories/noteLink.repository.js";
-import type { NoteCardPositionRepository } from "./repositories/noteCardPosition.repository.js";
-import { PostgresNoteCardPositionRepository } from "./repositories/noteCardPosition.repository.js";
 import type { ProposalRepository } from "./repositories/proposal.repository.js";
 import { PostgresProposalRepository } from "./repositories/proposal.repository.js";
 import type { RawSourceRepository } from "./repositories/rawSource.repository.js";
 import { PostgresRawSourceRepository } from "./repositories/rawSource.repository.js";
-import type { TopicRepository } from "./repositories/topic.repository.js";
-import { PostgresTopicRepository } from "./repositories/topic.repository.js";
 import { createAskRoutes } from "./routes/ask.routes.js";
 import { createAgentRunRoutes } from "./routes/agentRun.routes.js";
 import { createDashboardRoutes } from "./routes/dashboard.routes.js";
-import { createNoteLinkRoutes } from "./routes/noteLink.routes.js";
-import { createNoteCardPositionRoutes } from "./routes/noteCardPosition.routes.js";
 import { createProposalRoutes } from "./routes/proposal.routes.js";
 import { createRawSourceRoutes } from "./routes/rawSource.routes.js";
-import { createTopicRoutes } from "./routes/topic.routes.js";
 import {
   AgentRunQueueService,
   type CompileAgentRunnerFactory,
 } from "./services/agentRunQueue.service.js";
 import { CompileRawNoteHandler } from "./services/agentRun/compileRawNoteHandler.js";
-import { ReindexLinksHandler } from "./services/agentRun/reindexLinksHandler.js";
-import type { LinkJudge } from "./services/agentRun/linkJudge.js";
 import { DashboardService } from "./services/dashboard.service.js";
-import {
-  NoopEmbeddingService,
-  OpenAIEmbeddingService,
-  type EmbeddingService,
-} from "./services/embedding.service.js";
-import {
-  NoopKnowledgeContextualizer,
-  OpenAIKnowledgeContextualizer,
-  type KnowledgeContextualizer,
-} from "./services/knowledgeContextualizer.service.js";
-import { NoteLinkService } from "./services/noteLink.service.js";
-import { NoteCardPositionService } from "./services/noteCardPosition.service.js";
 import { ProposalService } from "./services/proposal.service.js";
 import { RawSourceService } from "./services/rawSource.service.js";
-import { TopicService } from "./services/topic.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { AskService, type AskAnswerer } from "./services/ask.service.js";
 import type { WikiIndexer } from "./services/wikiIndexer.service.js";
@@ -63,22 +39,15 @@ import type { WikiIndexer } from "./services/wikiIndexer.service.js";
 export type AppDependencies = {
   rawSourceRepository?: RawSourceRepository | null;
   knowledgeRepository?: KnowledgeRepository;
-  noteLinkRepository?: NoteLinkRepository;
-  noteCardPositionRepository?: NoteCardPositionRepository;
   proposalRepository?: ProposalRepository;
   agentRunRepository?: AgentRunRepository;
   extractionEvalRepository?: ExtractionEvalRepository;
   agentToolReadRepository?: AgentToolReadRepository;
-  topicRepository?: TopicRepository;
   wikiIndexer?: WikiIndexer;
   /** Compile loop runner factory. Defaults to the deterministic scripted runner;
    * production wires the LLM-backed runner here. */
   compileAgentRunnerFactory?: CompileAgentRunnerFactory;
-  /** Link judge for reindex_links. Defaults to the LLM judge; tests inject a fake. */
-  linkJudge?: LinkJudge;
   askAnswerer?: AskAnswerer;
-  embeddingService?: EmbeddingService;
-  knowledgeContextualizer?: KnowledgeContextualizer;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -86,24 +55,16 @@ export function createApp(dependencies: AppDependencies = {}) {
   const usingDefaultRepositories =
     dependencies.rawSourceRepository === undefined &&
     !dependencies.knowledgeRepository &&
-    !dependencies.noteLinkRepository &&
-    !dependencies.noteCardPositionRepository &&
     !dependencies.proposalRepository &&
     !dependencies.agentRunRepository &&
-    !dependencies.agentToolReadRepository &&
-    !dependencies.topicRepository;
+    !dependencies.agentToolReadRepository;
   const rawSourceRepository =
     dependencies.rawSourceRepository === undefined
       ? usingDefaultRepositories
         ? new PostgresRawSourceRepository()
         : null
       : dependencies.rawSourceRepository;
-  const topicRepository = dependencies.topicRepository ?? new PostgresTopicRepository();
-  const topicService = new TopicService(topicRepository);
   const knowledgeRepository = dependencies.knowledgeRepository ?? new PostgresKnowledgeRepository();
-  const noteLinkRepository = dependencies.noteLinkRepository ?? new PostgresNoteLinkRepository();
-  const noteCardPositionRepository =
-    dependencies.noteCardPositionRepository ?? new PostgresNoteCardPositionRepository();
   const proposalRepository = dependencies.proposalRepository ?? new PostgresProposalRepository();
   const agentRunRepository = dependencies.agentRunRepository ?? new PostgresAgentRunRepository();
   const extractionEvalRepository =
@@ -116,33 +77,10 @@ export function createApp(dependencies: AppDependencies = {}) {
     (usingDefaultRepositories
       ? new PostgresAgentToolReadRepository()
       : new NoopAgentToolReadRepository());
-  const embeddingService =
-    dependencies.embeddingService ??
-    (usingDefaultRepositories ? new OpenAIEmbeddingService() : new NoopEmbeddingService());
-  const knowledgeContextualizer =
-    dependencies.knowledgeContextualizer ??
-    (usingDefaultRepositories
-      ? new OpenAIKnowledgeContextualizer()
-      : new NoopKnowledgeContextualizer());
-  const proposalService = new ProposalService(
-    proposalRepository,
-    knowledgeRepository,
-    noteLinkRepository,
-    embeddingService,
-    knowledgeContextualizer,
-  );
-  const dashboardService = new DashboardService(
-    knowledgeRepository,
-    embeddingService,
-    rawSourceRepository,
-  );
-  const noteLinkService = new NoteLinkService(noteLinkRepository);
-  const noteCardPositionService = new NoteCardPositionService(noteCardPositionRepository);
+  const proposalService = new ProposalService(proposalRepository, knowledgeRepository);
+  const dashboardService = new DashboardService(knowledgeRepository, rawSourceRepository);
   const askService = new AskService(
     knowledgeRepository,
-    noteLinkRepository,
-    embeddingService,
-    undefined,
     dependencies.askAnswerer,
     rawSourceRepository,
   );
@@ -156,15 +94,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     agentToolReadRepository,
     dependencies.compileAgentRunnerFactory,
   );
-  const reindexLinksHandler = new ReindexLinksHandler(
-    agentRunRepository,
-    knowledgeRepository,
-    noteLinkRepository,
-    dependencies.linkJudge,
-  );
   const agentRunQueueService = new AgentRunQueueService(
     agentRunRepository,
-    [compileRawNoteHandler, reindexLinksHandler],
+    [compileRawNoteHandler],
   );
   const rawSourceService = rawSourceRepository
     ? new RawSourceService(
@@ -172,7 +104,6 @@ export function createApp(dependencies: AppDependencies = {}) {
         agentRunQueueService,
         proposalRepository,
         agentRunRepository,
-        embeddingService,
       )
     : null;
 
@@ -183,7 +114,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     response.json({ ok: true });
   });
 
-  app.use("/topics", createTopicRoutes(topicService));
   app.use(createAskRoutes(askService));
   if (rawSourceService) {
     app.use("/sources", createRawSourceRoutes(rawSourceService));
@@ -193,8 +123,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     createAgentRunRoutes(agentRunRepository, agentRunQueueService, extractionEvalRepository),
   );
   app.use("/update-proposals", createProposalRoutes(proposalService));
-  app.use("/note-links", createNoteLinkRoutes(noteLinkService));
-  app.use("/note-card-positions", createNoteCardPositionRoutes(noteCardPositionService));
   app.use(createDashboardRoutes(dashboardService));
   app.use(errorHandler);
 
